@@ -1,0 +1,56 @@
+{
+  "name": "flowmastery-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise Workflow Automation Platform",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:frontend\" \"npm run dev:backend\"",
+    "dev:frontend": "npm run dev --workspace=@flowmastery/frontend",
+    "dev:backend": "cd packages/backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000",
+    "build": "npm run build:frontend",
+    "build:frontend": "npm run build --workspace=@flowmastery/frontend",
+    "test": "npm run test:frontend && npm run test:backend",
+    "test:frontend": "npm run test --workspace=@flowmastery/frontend",
+    "test:backend": "cd packages/backend && pytest",
+    "test:e2e": "npm run test:e2e --workspace=@flowmastery/frontend",
+    "test:coverage": "npm run test:coverage --workspace=@flowmastery/frontend",
+    "lint": "npm run lint:frontend && npm run lint:backend",
+    "lint:frontend": "npm run lint --workspace=@flowmastery/frontend",
+    "lint:backend": "cd packages/backend && pylint app tests",
+    "format": "npm run format:frontend && npm run format:backend",
+    "format:frontend": "npm run format --workspace=@flowmastery/frontend",
+    "format:backend": "cd packages/backend && black app tests",
+    "clean": "npm run clean:frontend && npm run clean:backend",
+    "clean:frontend": "npm run clean --workspace=@flowmastery/frontend",
+    "clean:backend": "cd packages/backend && find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true",
+    "docker:build": "docker-compose build",
+    "docker:up": "docker-compose up",
+    "docker:down": "docker-compose down",
+    "prepare": "husky install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "husky": "^9.0.11",
+    "lint-staged": "^15.2.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.py": [
+      "black",
+      "pylint"
+    ]
+  }
+}

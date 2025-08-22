@@ -1,0 +1,138 @@
+version: '3.9'
+
+services:
+  # Frontend Service
+  frontend:
+    build:
+      context: ./packages/frontend
+      dockerfile: Dockerfile
+    container_name: flowmastery-frontend
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://backend:8000
+    volumes:
+      - ./packages/frontend/src:/app/src
+      - ./packages/frontend/public:/app/public
+    depends_on:
+      - backend
+    networks:
+      - flowmastery-network
+
+  # Backend Service
+  backend:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    container_name: flowmastery-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://flowmastery:flowmastery@postgres:5432/flowmastery
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=${SECRET_KEY:-development-secret-key}
+      - N8N_API_URL=${N8N_API_URL}
+      - N8N_API_KEY=${N8N_API_KEY}
+    volumes:
+      - ./packages/backend/app:/app/app
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - flowmastery-network
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: flowmastery-postgres
+    environment:
+      - POSTGRES_USER=flowmastery
+      - POSTGRES_PASSWORD=flowmastery
+      - POSTGRES_DB=flowmastery
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - flowmastery-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flowmastery"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: flowmastery-redis
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - flowmastery-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx Reverse Proxy (optional)
+  nginx:
+    image: nginx:alpine
+    container_name: flowmastery-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/nginx/sites:/etc/nginx/sites-enabled
+      - ./config/ssl:/etc/nginx/ssl
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - flowmastery-network
+
+  # pgAdmin for Database Management (development only)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flowmastery-pgadmin
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@flowmastery.io
+      - PGADMIN_DEFAULT_PASSWORD=admin
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    networks:
+      - flowmastery-network
+    profiles:
+      - development
+
+  # Redis Commander for Redis Management (development only)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: flowmastery-redis-commander
+    environment:
+      - REDIS_HOSTS=local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - flowmastery-network
+    profiles:
+      - development
+
+networks:
+  flowmastery-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  pgadmin_data:
