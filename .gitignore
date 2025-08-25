@@ -108,3 +108,7 @@ site/
 # Config overrides
 *.local.*
 !.env.example
+
+# Old Directories
+/packages/backend-old
+/packages/frontend-deprecated

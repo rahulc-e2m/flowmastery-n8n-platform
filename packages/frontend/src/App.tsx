@@ -1,22 +1,28 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import Homepage from '@pages/Homepage';
-import ChatbotCategory from '@pages/ChatbotCategory';
-import AnimatedBackground from '@components/AnimatedBackground';
-import '@styles/App.css';
+import React from 'react'
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
+import { Toaster } from 'sonner'
+import HomePage from '@/pages/HomePage'
+import ChatbotsPage from '@/pages/ChatbotsPage'
+import MetricsPage from '@/pages/MetricsPage'
+import Layout from '@/layouts/Layout'
 
 function App() {
   return (
     <Router>
-      <div className="App">
-        <AnimatedBackground />
+      <Layout>
         <Routes>
-          <Route path="/" element={<Homepage />} />
-          <Route path="/chatbots" element={<ChatbotCategory />} />
+          <Route path="/" element={<HomePage />} />
+          <Route path="/chatbots" element={<ChatbotsPage />} />
+          <Route path="/metrics" element={<MetricsPage />} />
         </Routes>
-      </div>
+      </Layout>
+      <Toaster 
+        position="top-right" 
+        theme="dark"
+        richColors
+      />
     </Router>
-  );
+  )
 }
 
-export default App; 
+export default App

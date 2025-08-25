@@ -1,0 +1,38 @@
+export interface Chatbot {
+  id: string
+  name: string
+  description: string
+  webhookUrl: string
+  status: 'active' | 'inactive' | 'testing'
+  type: 'support' | 'sales' | 'faq' | 'custom'
+  analytics: {
+    totalMessages: number
+    activeUsers: number
+    avgResponseTime: string
+    satisfactionRate: number
+  }
+  lastUpdated: string
+  features: string[]
+}
+
+export interface Message {
+  id: string
+  text: string
+  sender: 'user' | 'bot'
+  timestamp: Date
+}
+
+export interface WorkflowShowcase {
+  icon: React.ReactNode
+  title: string
+  description: string
+  color: string
+}
+
+export interface MetricCard {
+  label: string
+  value: string
+  trend: number
+  isLoading?: boolean
+  icon: React.ReactNode
+}

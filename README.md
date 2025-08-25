@@ -24,31 +24,44 @@ FlowMastery is an enterprise-grade workflow automation platform that seamlessly 
 ## 🏗️ Architecture
 
 ```
-flowMastery/
+flowmastery-n8n-platform/
 ├── packages/
 │   ├── frontend/          # React TypeScript application
 │   │   ├── src/
 │   │   │   ├── components/   # Reusable UI components
+│   │   │   │   ├── AnimatedBackground/
+│   │   │   │   └── N8nMetricsDashboard/
 │   │   │   ├── pages/        # Page components
-│   │   │   ├── services/     # API and business logic
-│   │   │   ├── hooks/        # Custom React hooks
-│   │   │   └── ...
-│   │   └── tests/           # Frontend tests
+│   │   │   │   ├── ChatbotCategory/
+│   │   │   │   └── Homepage/
+│   │   │   ├── styles/       # Global styles
+│   │   │   └── tests/        # Component tests
+│   │   ├── Dockerfile
+│   │   ├── nginx.conf
+│   │   └── package.json
 │   │
-│   ├── backend/           # FastAPI Python application
-│   │   ├── app/
-│   │   │   ├── api/          # API endpoints
-│   │   │   ├── core/         # Business logic
-│   │   │   ├── domain/       # Domain models
-│   │   │   └── infrastructure/ # External services
-│   │   └── tests/           # Backend tests
-│   │
-│   └── shared/            # Shared utilities and types
+│   └── backend/           # FastAPI Python application
+│       ├── app/
+│       │   ├── main.py       # FastAPI application entry point
+│       │   ├── config.py     # Configuration settings
+│       │   ├── config_service.py # Configuration management
+│       │   ├── n8n_chatbot.py    # n8n chatbot integration
+│       │   ├── n8n_metrics.py    # n8n metrics collection
+│       │   └── data/         # Data storage
+│       │       └── n8n_config.json
+│       ├── tests/           # Backend tests
+│       ├── Dockerfile
+│       ├── requirements.txt
+│       └── pyproject.toml
 │
-├── docs/                  # Documentation
-├── scripts/               # Build and deployment scripts
-├── config/                # Configuration files
-└── .github/               # GitHub Actions workflows
+├── docker-compose.yml     # Container orchestration
+├── package.json          # Root workspace configuration
+├── start-dev.bat         # Windows dev script
+├── start-dev.ps1         # PowerShell dev script
+├── CONTRIBUTING.md       # Contribution guidelines
+├── INTEGRATION_GUIDE.md  # Integration documentation
+├── TROUBLESHOOTING.md    # Troubleshooting guide
+└── README.md            # This file
 ```
 
 ## 🛠️ Tech Stack
@@ -87,8 +100,8 @@ flowMastery/
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourusername/flowMastery.git
-cd flowMastery
+git clone https://github.com/yourusername/flowmastery-n8n-platform.git
+cd flowmastery-n8n-platform
 ```
 
 2. **Install dependencies**
@@ -112,7 +125,7 @@ cp packages/backend/.env.example packages/backend/.env
 
 4. **Start development servers**
 ```bash
-# Start both frontend and backend
+# Start both frontend and backend (from root)
 npm run dev
 
 # Or start individually:
