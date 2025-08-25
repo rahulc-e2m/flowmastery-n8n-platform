@@ -70,7 +70,11 @@ class ConfigService:
             if not api_url.endswith('/api/v1'):
                 if api_url.endswith('/api'):
                     api_url += '/v1'
-                elif not api_url.endswith('/v1'):
+                elif api_url.endswith('/v1'):
+                    # Already has /v1, just ensure it has /api before it
+                    if not api_url.endswith('/api/v1'):
+                        api_url = api_url.replace('/v1', '/api/v1')
+                else:
                     api_url += '/api/v1'
             
             # Encrypt sensitive data

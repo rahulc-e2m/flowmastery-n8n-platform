@@ -1,240 +1,119 @@
-"""Metrics endpoints"""
+"""Metrics endpoints for multi-tenant dashboard"""
 
-from fastapi import APIRouter, HTTPException, Query
-from datetime import datetime
-from typing import Dict, Any
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.services.n8n.metrics import metrics_service
-from app.services.n8n.client import n8n_client
-from app.config import settings
-from app.core.exceptions import N8nConnectionError
+from app.database import get_db
+from app.models.user import User
+from app.core.dependencies import (
+    get_current_admin_user, 
+    get_current_client_user,
+    get_current_user,
+    get_client_for_user,
+    verify_client_access
+)
+from app.services.metrics_service import MetricsService
+from app.schemas.metrics import (
+    ClientMetrics,
+    ClientWorkflowMetrics, 
+    AdminMetricsResponse
+)
 
 router = APIRouter()
 
 
-@router.get("/fast")
-async def get_fast_metrics() -> Dict[str, Any]:
-    """Get essential metrics with fast loading and caching"""
-    
-    # Check if n8n is configured
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        # Return mock data when not configured
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "response_time": 0.1,
-            "connection_healthy": True,
-            "workflows": {
-                "total_workflows": 5,
-                "active_workflows": 3,
-                "inactive_workflows": 2
-            },
-            "executions": {
-                "today_executions": 12,
-                "success_rate": 94.7,
-                "total_executions": 150,
-                "success_executions": 142,
-                "error_executions": 8
-            },
-            "users": {
-                "total_users": 2,
-                "admin_users": 1,
-                "member_users": 1
-            },
-            "system": {
-                "total_variables": 3,
-                "total_tags": 0
-            },
-            "derived_metrics": {
-                "time_saved_hours": 24.0,
-                "activity_score": 85,
-                "automation_efficiency": 94.7,
-                "workflows_per_user": 2.5,
-                "executions_per_workflow": 30.0
-            },
-            "mock_data": True
-        }
+@router.get("/all", response_model=AdminMetricsResponse)
+async def get_all_clients_metrics(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Get metrics for all clients (admin only)"""
+    return await MetricsService.get_all_clients_metrics(db)
+
+
+@router.get("/client/{client_id}", response_model=ClientMetrics)
+async def get_client_metrics(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get aggregated metrics for a specific client"""
+    # Verify client access
+    if current_user.role != "admin" and current_user.client_id != client_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this client's metrics"
+        )
     
     try:
-        metrics = await metrics_service.get_fast_metrics()
-        
-        if metrics.get("status") == "error":
-            raise HTTPException(status_code=500, detail=metrics.get("error"))
-        
-        return metrics
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get metrics: {str(e)}")
+        return await MetricsService.get_client_metrics(db, client_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 
-@router.get("/dashboard")
-async def get_dashboard_metrics(
-    execution_days: int = Query(7, ge=1, le=30, description="Number of days for execution metrics")
-) -> Dict[str, Any]:
-    """Get comprehensive dashboard metrics"""
-    
-    # Check if n8n is configured
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        # Return mock data when not configured
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "response_time": 0.1,
-            "connection_healthy": True,
-            "workflows": {
-                "total_workflows": 5,
-                "active_workflows": 3,
-                "inactive_workflows": 2,
-                "workflow_names": {
-                    "1": "Data Sync Workflow",
-                    "2": "Email Automation",
-                    "3": "Report Generator"
-                }
-            },
-            "executions": {
-                "total_executions": 150,
-                "success_executions": 142,
-                "error_executions": 8,
-                "waiting_executions": 0,
-                "success_rate": 94.7,
-                "today_executions": 12,
-                "daily_executions": {
-                    datetime.now().strftime('%Y-%m-%d'): 12
-                },
-                "period_days": execution_days
-            },
-            "users": {
-                "total_users": 2,
-                "admin_users": 1,
-                "member_users": 1
-            },
-            "system": {
-                "total_variables": 3,
-                "total_tags": 5
-            },
-            "derived_metrics": {
-                "time_saved_hours": 24.0,
-                "activity_score": 85,
-                "automation_efficiency": 94.7,
-                "workflows_per_user": 2.5,
-                "executions_per_workflow": 30.0
-            },
-            "mock_data": True
-        }
+@router.get("/client/{client_id}/workflows", response_model=ClientWorkflowMetrics)
+async def get_client_workflow_metrics(
+    client_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Get workflow-level metrics for a specific client"""
+    # Verify client access
+    if current_user.role != "admin" and current_user.client_id != client_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied to this client's metrics"
+        )
     
     try:
-        metrics = await metrics_service.get_comprehensive_metrics(execution_days)
-        
-        if metrics.get("status") == "error":
-            raise HTTPException(status_code=500, detail=metrics.get("error"))
-        
-        return metrics
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get dashboard metrics: {str(e)}")
+        return await MetricsService.get_client_workflow_metrics(db, client_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 
-@router.get("/workflows")
-async def get_workflow_metrics() -> Dict[str, Any]:
-    """Get workflow-specific metrics"""
-    
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        raise HTTPException(status_code=400, detail="n8n not configured")
-    
-    try:
-        metrics = await metrics_service.get_workflows_metrics()
-        
-        if "error" in metrics:
-            raise HTTPException(status_code=500, detail=metrics["error"])
-        
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "data": metrics
-        }
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get workflow metrics: {str(e)}")
-
-
-@router.get("/executions")
-async def get_execution_metrics(
-    days: int = Query(7, ge=1, le=30, description="Number of days for execution metrics")
-) -> Dict[str, Any]:
-    """Get execution-specific metrics"""
-    
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        raise HTTPException(status_code=400, detail="n8n not configured")
+@router.get("/my-metrics", response_model=ClientMetrics)
+async def get_my_metrics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_client_user)
+):
+    """Get metrics for the current client user"""
+    if not current_user.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No client associated with user"
+        )
     
     try:
-        metrics = await metrics_service.get_executions_metrics(days)
-        
-        if "error" in metrics:
-            raise HTTPException(status_code=500, detail=metrics["error"])
-        
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "data": metrics
-        }
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get execution metrics: {str(e)}")
+        return await MetricsService.get_client_metrics(db, current_user.client_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 
-@router.get("/users")
-async def get_user_metrics() -> Dict[str, Any]:
-    """Get user-specific metrics"""
-    
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        raise HTTPException(status_code=400, detail="n8n not configured")
+@router.get("/my-workflows", response_model=ClientWorkflowMetrics)
+async def get_my_workflow_metrics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_client_user)
+):
+    """Get workflow metrics for the current client user"""
+    if not current_user.client_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No client associated with user"
+        )
     
     try:
-        metrics = await metrics_service.get_users_metrics()
-        
-        if "error" in metrics:
-            raise HTTPException(status_code=500, detail=metrics["error"])
-        
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "data": metrics
-        }
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get user metrics: {str(e)}")
-
-
-@router.get("/system")
-async def get_system_metrics() -> Dict[str, Any]:
-    """Get system-specific metrics"""
-    
-    if not settings.N8N_API_URL or not settings.N8N_API_KEY:
-        raise HTTPException(status_code=400, detail="n8n not configured")
-    
-    try:
-        metrics = await metrics_service.get_system_metrics()
-        
-        if "error" in metrics:
-            raise HTTPException(status_code=500, detail=metrics["error"])
-        
-        return {
-            "status": "success",
-            "timestamp": datetime.now().isoformat(),
-            "data": metrics
-        }
-        
-    except N8nConnectionError as e:
-        raise HTTPException(status_code=503, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to get system metrics: {str(e)}")
+        return await MetricsService.get_client_workflow_metrics(db, current_user.client_id)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )

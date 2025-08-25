@@ -28,8 +28,19 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:5173,http://localhost:5176,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5176"
     
     # Database
-    DATABASE_URL: Optional[str] = None
+    DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/flowmastery"
     DB_ECHO: bool = False
+    
+    # Email
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_USE_TLS: bool = True
+    FROM_EMAIL: str = "noreply@flowmastery.com"
+    
+    # Frontend URL for invitation links
+    FRONTEND_URL: str = "http://localhost:3000"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

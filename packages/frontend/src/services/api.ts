@@ -1,3 +1,6 @@
+// Legacy API service - kept for backward compatibility
+// New multi-tenant APIs are in separate files: authApi.ts, clientApi.ts, metricsApi.ts
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export interface N8nApiResponse {
@@ -59,125 +62,58 @@ class ApiService {
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
     
+    // Add auth token if available
+    const token = localStorage.getItem('auth_token')
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    }
+    
+    if (token) {
+      headers.Authorization = `Bearer ${token}`
+    }
+    
     const response = await fetch(url, {
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
       ...options,
+      headers,
     })
 
     if (!response.ok) {
+      if (response.status === 401) {
+        // Handle unauthorized - redirect to login
+        localStorage.removeItem('auth_token')
+        localStorage.removeItem('user')
+        window.location.href = '/login'
+      }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
     return response.json()
   }
 
-  // Chat API
+  // Health check
+  static async checkHealth(): Promise<{
+    status: string
+    version: string
+  }> {
+    return this.request<{
+      status: string
+      version: string
+    }>('/health')
+  }
+
+  // Legacy chat API (if still needed)
   static async sendMessage(
     message: string,
     chatbotId?: string
   ): Promise<N8nApiResponse> {
-    return this.request<N8nApiResponse>('/api/chat/message', {
+    return this.request<N8nApiResponse>('/api/v1/chat/message', {
       method: 'POST',
       body: JSON.stringify({
         message,
         chatbot_id: chatbotId,
       }),
     })
-  }
-
-  // Metrics API
-  static async getMetrics(fast = false): Promise<N8nMetrics> {
-    const endpoint = fast ? '/api/metrics/fast' : '/api/metrics/dashboard'
-    return this.request<N8nMetrics>(endpoint)
-  }
-
-  // Configuration API
-  static async getConfigStatus(): Promise<ConfigStatus> {
-    return this.request<ConfigStatus>('/api/config/n8n/status')
-  }
-
-  static async updateConfig(config: {
-    api_url: string
-    api_key: string
-    instance_name: string
-  }): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>('/api/config/n8n', {
-      method: 'POST',
-      body: JSON.stringify(config),
-    })
-  }
-
-  static async testConfig(config: {
-    api_url: string
-    api_key: string
-    instance_name: string
-  }): Promise<{
-    connection: 'success' | 'failed'
-    message: string
-    workflows_found?: number
-  }> {
-    return this.request('/api/config/n8n/test', {
-      method: 'POST',
-      body: JSON.stringify(config),
-    })
-  }
-
-  // Health check
-  static async checkHealth(): Promise<{
-    status: string
-    n8n_integration: boolean
-  }> {
-    return this.request<{
-      status: string
-      n8n_integration: boolean
-    }>('/health')
-  }
-
-  // n8n Direct API
-  static async queryN8n(query: string): Promise<any> {
-    return this.request('/api/n8n/query', {
-      method: 'POST',
-      body: JSON.stringify({ query }),
-    })
-  }
-
-  static async getWorkflows(active?: boolean): Promise<{
-    workflows: Array<{
-      id: string
-      name: string
-      active: boolean
-      createdAt?: string
-      updatedAt?: string
-    }>
-  }> {
-    const params = new URLSearchParams()
-    if (active !== undefined) {
-      params.append('active', active.toString())
-    }
-    
-    return this.request(`/api/n8n/workflows?${params}`)
-  }
-
-  static async getExecutions(
-    status?: string,
-    workflowId?: string
-  ): Promise<{
-    executions: Array<{
-      id: string
-      status: 'success' | 'error' | 'waiting'
-      workflowId: string
-      startedAt: string
-      stoppedAt?: string
-    }>
-  }> {
-    const params = new URLSearchParams()
-    if (status) params.append('status', status)
-    if (workflowId) params.append('workflow_id', workflowId)
-    
-    return this.request(`/api/n8n/executions?${params}`)
   }
 }
 

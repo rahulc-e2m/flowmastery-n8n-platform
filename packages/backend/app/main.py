@@ -18,36 +18,45 @@ async def lifespan(app: FastAPI):
     # Startup
     setup_logging()
     
-    # Initialize services
-    from app.services.cache.redis import redis_client
-    from app.services.n8n.client import n8n_client
+    # Initialize database
+    from app.database import engine
+    from app.database.base import Base
     
     try:
+        # Test database connection
+        async with engine.begin() as conn:
+            # Create tables if they don't exist (for development)
+            # In production, use Alembic migrations
+            if settings.DEBUG:
+                await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database connection established")
+    except Exception as e:
+        print(f"⚠️  Database connection failed: {e}")
+    
+    # Initialize services
+    try:
+        from app.services.cache.redis import redis_client
         # Test Redis connection
         await redis_client.ping()
         print("✅ Redis connection established")
     except Exception as e:
         print(f"⚠️  Redis connection failed: {e}")
     
-    # Test n8n connection if configured
-    if settings.N8N_API_URL and settings.N8N_API_KEY:
-        try:
-            health = await n8n_client.health_check()
-            if health:
-                print("✅ n8n connection established")
-            else:
-                print("⚠️  n8n connection failed")
-        except Exception as e:
-            print(f"⚠️  n8n connection error: {e}")
-    
     yield
     
     # Shutdown
     try:
+        from app.services.cache.redis import redis_client
         await redis_client.close()
         print("✅ Redis connection closed")
     except Exception as e:
         print(f"⚠️  Redis shutdown error: {e}")
+    
+    try:
+        await engine.dispose()
+        print("✅ Database connection closed")
+    except Exception as e:
+        print(f"⚠️  Database shutdown error: {e}")
 
 
 def create_app() -> FastAPI:

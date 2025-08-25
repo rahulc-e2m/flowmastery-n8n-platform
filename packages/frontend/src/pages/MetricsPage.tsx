@@ -1,383 +1,507 @@
-import React, { useState, useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import React, { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { MetricsApi } from '@/services/metricsApi'
+import { ClientApi } from '@/services/clientApi'
+import { useAuth } from '@/contexts/AuthContext'
+import {
+  BarChart3,
+  Activity,
+  TrendingUp,
+  Clock,
+  CheckCircle,
+  XCircle,
+  Building2,
+  Zap,
+  Timer,
+  Target
+} from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { 
-  Bot, 
-  RefreshCw, 
-  Settings, 
-  Play, 
-  Pause, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
-  Users, 
-  TrendingUp,
-  Activity,
-  Zap,
-  Database
-} from 'lucide-react'
-import { useMetrics, useConfigStatus, useRefreshMetrics } from '@/hooks/useMetrics'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { formatDistanceToNow } from 'date-fns'
 
-interface MetricsData {
-  status: string
-  timestamp: string
-  response_time: number
-  connection_healthy: boolean
-  workflows: {
-    total_workflows: number
-    active_workflows: number
-    inactive_workflows: number
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
+
+export function MetricsPage() {
+  const { isAdmin, isClient } = useAuth()
+  const [selectedClientId, setSelectedClientId] = useState<string>('')
+
+  // Admin queries
+  const { data: adminMetrics, isLoading: adminLoading } = useQuery({
+    queryKey: ['admin-metrics'],
+    queryFn: MetricsApi.getAllClientsMetrics,
+    enabled: isAdmin,
+    refetchInterval: 30000,
+  })
+
+  const { data: clients } = useQuery({
+    queryKey: ['clients'],
+    queryFn: ClientApi.getClients,
+    enabled: isAdmin,
+  })
+
+  const { data: selectedClientMetrics, isLoading: selectedClientLoading } = useQuery({
+    queryKey: ['client-metrics', selectedClientId],
+    queryFn: () => MetricsApi.getClientMetrics(parseInt(selectedClientId)),
+    enabled: isAdmin && !!selectedClientId,
+    refetchInterval: 30000,
+  })
+
+  const { data: selectedClientWorkflows, isLoading: selectedClientWorkflowsLoading } = useQuery({
+    queryKey: ['client-workflows', selectedClientId],
+    queryFn: () => MetricsApi.getClientWorkflowMetrics(parseInt(selectedClientId)),
+    enabled: isAdmin && !!selectedClientId,
+    refetchInterval: 30000,
+  })
+
+  // Client queries
+  const { data: clientMetrics, isLoading: clientMetricsLoading } = useQuery({
+    queryKey: ['my-metrics'],
+    queryFn: MetricsApi.getMyMetrics,
+    enabled: isClient,
+    refetchInterval: 30000,
+  })
+
+  const { data: clientWorkflows, isLoading: clientWorkflowsLoading } = useQuery({
+    queryKey: ['my-workflows'],
+    queryFn: MetricsApi.getMyWorkflowMetrics,
+    enabled: isClient,
+    refetchInterval: 30000,
+  })
+
+  if (isAdmin) {
+    return (
+      <AdminMetricsView
+        adminMetrics={adminMetrics}
+        clients={clients}
+        selectedClientId={selectedClientId}
+        setSelectedClientId={setSelectedClientId}
+        selectedClientMetrics={selectedClientMetrics}
+        selectedClientWorkflows={selectedClientWorkflows}
+        isLoading={adminLoading}
+        selectedClientLoading={selectedClientLoading || selectedClientWorkflowsLoading}
+      />
+    )
   }
-  executions: {
-    total_executions: number
-    success_executions: number
-    error_executions: number
-    success_rate: number
-    today_executions: number
+
+  if (isClient) {
+    return (
+      <ClientMetricsView
+        metrics={clientMetrics}
+        workflows={clientWorkflows}
+        isLoading={clientMetricsLoading || clientWorkflowsLoading}
+      />
+    )
   }
-  users: {
-    total_users: number
-    admin_users: number
-    member_users: number
-  }
-  system: {
-    total_variables: number
-    total_tags: number
-  }
-  derived_metrics: {
-    time_saved_hours: number
-    activity_score: number
-    automation_efficiency: number
-    workflows_per_user: number
-    executions_per_workflow: number
-  }
+
+  return null
 }
 
-const MetricsPage: React.FC = () => {
-  const { data: configStatus } = useConfigStatus()
-  const { data: metrics, isLoading: loading, error, refetch } = useMetrics(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const { refreshFull } = useRefreshMetrics()
+function AdminMetricsView({
+  adminMetrics,
+  clients,
+  selectedClientId,
+  setSelectedClientId,
+  selectedClientMetrics,
+  selectedClientWorkflows,
+  isLoading,
+  selectedClientLoading
+}: any) {
+  if (isLoading) {
+    return <MetricsSkeleton />
+  }
 
-  // Mock data for demonstration
-  const mockMetrics: MetricsData = {
-    status: 'success',
-    timestamp: new Date().toISOString(),
-    response_time: 0.45,
-    connection_healthy: true,
-    workflows: {
-      total_workflows: 24,
-      active_workflows: 18,
-      inactive_workflows: 6
+  const overallStats = [
+    {
+      title: 'Total Clients',
+      value: adminMetrics?.total_clients || 0,
+      icon: Building2,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100',
     },
-    executions: {
-      total_executions: 15847,
-      success_executions: 14923,
-      error_executions: 924,
-      success_rate: 94.2,
-      today_executions: 156
+    {
+      title: 'Total Workflows',
+      value: adminMetrics?.total_workflows || 0,
+      icon: Activity,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100',
     },
-    users: {
-      total_users: 8,
-      admin_users: 2,
-      member_users: 6
+    {
+      title: 'Total Executions',
+      value: adminMetrics?.total_executions || 0,
+      icon: BarChart3,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
     },
-    system: {
-      total_variables: 45,
-      total_tags: 12
+    {
+      title: 'Overall Success Rate',
+      value: `${adminMetrics?.overall_success_rate || 0}%`,
+      icon: TrendingUp,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-100',
     },
-    derived_metrics: {
-      time_saved_hours: 342,
-      activity_score: 87,
-      automation_efficiency: 94.2,
-      workflows_per_user: 3.0,
-      executions_per_workflow: 660.3
-    }
-  }
+  ]
 
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await refetch()
-    setRefreshing(false)
-  }
+  const chartData = adminMetrics?.clients?.map((client: any) => ({
+    name: client.client_name,
+    workflows: client.total_workflows,
+    executions: client.total_executions,
+    successRate: client.success_rate,
+  })) || []
 
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center space-y-4">
-            <RefreshCw className="h-8 w-8 animate-spin text-primary mx-auto" />
-            <p className="text-muted-foreground">Loading n8n metrics...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (!configStatus?.configured) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-12">
-          <Settings className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">n8n Configuration Required</h3>
-          <p className="text-muted-foreground mb-4">
-            Configure your n8n instance to view metrics and analytics
-          </p>
-          <Button variant="gradient">
-            Configure n8n Instance
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
-  if (error || !metrics) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center py-12">
-          <XCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <h3 className="text-lg font-semibold mb-2">Failed to Load Metrics</h3>
-          <p className="text-muted-foreground mb-4">
-            {error instanceof Error ? error.message : 'Unknown error occurred'}
-          </p>
-          <Button onClick={handleRefresh} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
-          </Button>
-        </div>
-      </div>
-    )
-  }
+  const pieData = adminMetrics?.clients?.map((client: any, index: number) => ({
+    name: client.client_name,
+    value: client.total_executions,
+    color: COLORS[index % COLORS.length],
+  })) || []
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-3xl font-bold flex items-center gap-3">
-            <Bot className="h-8 w-8 text-primary" />
-            n8n Instance Metrics
-          </h1>
-          <div className="flex items-center gap-2 mt-2">
-            <span className="text-muted-foreground">
-              {configStatus?.instance_name || 'My n8n Instance'}
-            </span>
-            <Badge 
-              variant={metrics.connection_healthy ? 'success' : 'destructive'}
-              className="flex items-center gap-1"
-            >
-              <div className="w-2 h-2 rounded-full bg-current animate-pulse" />
-              {metrics.connection_healthy ? 'Connected' : 'Disconnected'}
-            </Badge>
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">Metrics Dashboard</h1>
+        <p className="text-gray-600 mt-2">Overview of all clients and their performance</p>
+      </div>
+
+      <Tabs defaultValue="overview" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="client-detail">Client Details</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="overview" className="space-y-6">
+          {/* Overall Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {overallStats.map((stat) => (
+              <Card key={stat.title}>
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+                    </div>
+                    <div className={`p-3 rounded-full ${stat.bgColor}`}>
+                      <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
-        
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Refreshing...' : 'Refresh'}
-          </Button>
-          <Button variant="outline" className="flex items-center gap-2">
-            <Settings className="h-4 w-4" />
-            Settings
-          </Button>
-        </div>
-      </div>
 
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <Card className="hover:shadow-lg transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Workflows</p>
-                <p className="text-3xl font-bold">{metrics.workflows.total_workflows}</p>
-              </div>
-              <div className="p-3 bg-primary/10 rounded-lg">
-                <Bot className="h-6 w-6 text-primary" />
-              </div>
-            </div>
-            <div className="flex items-center gap-4 mt-4 text-sm">
-              <div className="flex items-center gap-1 text-success-500">
-                <Play className="h-3 w-3" />
-                {metrics.workflows.active_workflows} Active
-              </div>
-              <div className="flex items-center gap-1 text-muted-foreground">
-                <Pause className="h-3 w-3" />
-                {metrics.workflows.inactive_workflows} Inactive
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Charts */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Client Workflows & Executions</CardTitle>
+                <CardDescription>Comparison across all clients</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={chartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="name" />
+                    <YAxis />
+                    <Tooltip />
+                    <Bar dataKey="workflows" fill="#3B82F6" name="Workflows" />
+                    <Bar dataKey="executions" fill="#10B981" name="Executions" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
 
-        <Card className="hover:shadow-lg transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Today's Executions</p>
-                <p className="text-3xl font-bold">{metrics.executions.today_executions}</p>
-              </div>
-              <div className="p-3 bg-success-500/10 rounded-lg">
-                <Activity className="h-6 w-6 text-success-500" />
-              </div>
-            </div>
-            <div className="flex items-center gap-1 mt-4 text-sm text-success-500">
-              <CheckCircle className="h-3 w-3" />
-              {metrics.executions.success_rate}% Success Rate
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Time Saved</p>
-                <p className="text-3xl font-bold">{metrics.derived_metrics.time_saved_hours}h</p>
-              </div>
-              <div className="p-3 bg-warning-500/10 rounded-lg">
-                <Clock className="h-6 w-6 text-warning-500" />
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-4">Last 7 days</p>
-          </CardContent>
-        </Card>
-
-        <Card className="hover:shadow-lg transition-all duration-300">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">Total Users</p>
-                <p className="text-3xl font-bold">{metrics.users.total_users}</p>
-              </div>
-              <div className="p-3 bg-blue-500/10 rounded-lg">
-                <Users className="h-6 w-6 text-blue-500" />
-              </div>
-            </div>
-            <p className="text-sm text-muted-foreground mt-4">
-              {metrics.users.admin_users} Admins, {metrics.users.member_users} Members
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Detailed Analytics */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Execution Breakdown */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <TrendingUp className="h-5 w-5" />
-              Execution Breakdown
-            </CardTitle>
-            <CardDescription>Last 7 days execution statistics</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <CheckCircle className="h-4 w-4 text-success-500" />
-                  Successful
-                </span>
-                <span className="font-medium">{metrics.executions.success_executions.toLocaleString()}</span>
-              </div>
-              <Progress 
-                value={(metrics.executions.success_executions / metrics.executions.total_executions) * 100} 
-                className="h-2"
-              />
-            </div>
-            
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="flex items-center gap-2">
-                  <XCircle className="h-4 w-4 text-destructive" />
-                  Failed
-                </span>
-                <span className="font-medium">{metrics.executions.error_executions.toLocaleString()}</span>
-              </div>
-              <Progress 
-                value={(metrics.executions.error_executions / metrics.executions.total_executions) * 100} 
-                className="h-2"
-              />
-            </div>
-
-            <div className="pt-2 border-t text-sm text-muted-foreground">
-              Total: {metrics.executions.total_executions.toLocaleString()} executions
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* System Performance */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Zap className="h-5 w-5" />
-              System Performance
-            </CardTitle>
-            <CardDescription>Activity score: {metrics.derived_metrics.activity_score}/100</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Variables</p>
-                <p className="text-2xl font-bold">{metrics.system.total_variables}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Tags</p>
-                <p className="text-2xl font-bold">{metrics.system.total_tags}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Workflows/User</p>
-                <p className="text-2xl font-bold">{metrics.derived_metrics.workflows_per_user}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm text-muted-foreground">Efficiency</p>
-                <p className="text-2xl font-bold">{metrics.derived_metrics.automation_efficiency}%</p>
-              </div>
-            </div>
-            
-            <div className="pt-2 border-t text-sm text-muted-foreground">
-              Response time: {metrics.response_time}s
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Time Saved Highlight */}
-      <Card className="bg-gradient-primary/10 border-primary/20">
-        <CardContent className="p-8">
-          <div className="flex items-center justify-center gap-8">
-            <div className="p-6 bg-primary/20 rounded-full">
-              <Clock className="h-12 w-12 text-primary" />
-            </div>
-            <div className="text-center">
-              <h3 className="text-2xl font-bold mb-2">Time Saved This Week</h3>
-              <div className="text-5xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-2">
-                {metrics.derived_metrics.time_saved_hours} Hours
-              </div>
-              <p className="text-muted-foreground">
-                Your automation workflows have saved significant time this week
-              </p>
-            </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Execution Distribution</CardTitle>
+                <CardDescription>Total executions by client</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={pieData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                      outerRadius={80}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {pieData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              </CardContent>
+            </Card>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Footer */}
-      <div className="mt-8 text-center text-sm text-muted-foreground">
-        Last updated: {new Date(metrics.timestamp).toLocaleString()} • 
-        Data refreshed automatically every 5 minutes
-      </div>
+          {/* Client List */}
+          <Card>
+            <CardHeader>
+              <CardTitle>All Clients</CardTitle>
+              <CardDescription>Detailed metrics for each client</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {adminMetrics?.clients?.map((client: any) => (
+                  <div key={client.client_id} className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
+                        <Building2 className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-medium text-gray-900">{client.client_name}</h3>
+                        <p className="text-sm text-gray-500">
+                          {client.total_workflows} workflows • {client.total_executions} executions
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <Badge variant={client.success_rate >= 90 ? 'default' : client.success_rate >= 70 ? 'secondary' : 'destructive'}>
+                        {client.success_rate}% success
+                      </Badge>
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900">{client.active_workflows} active</p>
+                        <p className="text-xs text-gray-500">
+                          {client.last_activity ? formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }) : 'No activity'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="client-detail" className="space-y-6">
+          <div className="flex items-center space-x-4">
+            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+              <SelectTrigger className="w-64">
+                <SelectValue placeholder="Select a client" />
+              </SelectTrigger>
+              <SelectContent>
+                {clients?.map((client: any) => (
+                  <SelectItem key={client.id} value={client.id.toString()}>
+                    {client.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {selectedClientId && (
+            <ClientDetailView
+              metrics={selectedClientMetrics}
+              workflows={selectedClientWorkflows}
+              isLoading={selectedClientLoading}
+            />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
 
-export default MetricsPage
+function ClientMetricsView({ metrics, workflows, isLoading }: any) {
+  if (isLoading) {
+    return <MetricsSkeleton />
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <h1 className="text-3xl font-bold text-gray-900">My Metrics</h1>
+        <p className="text-gray-600 mt-2">Your workflow performance and analytics</p>
+      </div>
+
+      <ClientDetailView metrics={metrics} workflows={workflows} isLoading={false} />
+    </div>
+  )
+}
+
+function ClientDetailView({ metrics, workflows, isLoading }: any) {
+  if (isLoading) {
+    return <MetricsSkeleton />
+  }
+
+  if (!metrics) {
+    return (
+      <div className="text-center py-12">
+        <BarChart3 className="w-12 h-12 mx-auto text-gray-300 mb-4" />
+        <p className="text-gray-500">No metrics available</p>
+      </div>
+    )
+  }
+
+  const stats = [
+    {
+      title: 'Total Workflows',
+      value: metrics.total_workflows || 0,
+      icon: Activity,
+      color: 'text-blue-600',
+      bgColor: 'bg-blue-100',
+    },
+    {
+      title: 'Active Workflows',
+      value: metrics.active_workflows || 0,
+      icon: CheckCircle,
+      color: 'text-green-600',
+      bgColor: 'bg-green-100',
+    },
+    {
+      title: 'Total Executions',
+      value: metrics.total_executions || 0,
+      icon: BarChart3,
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
+    },
+    {
+      title: 'Success Rate',
+      value: `${metrics.success_rate || 0}%`,
+      icon: TrendingUp,
+      color: 'text-emerald-600',
+      bgColor: 'bg-emerald-100',
+    },
+  ]
+
+  return (
+    <div className="space-y-6">
+      {/* Stats Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {stats.map((stat) => (
+          <Card key={stat.title}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+                </div>
+                <div className={`p-3 rounded-full ${stat.bgColor}`}>
+                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Workflows Detail */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Workflow Details</CardTitle>
+          <CardDescription>Individual workflow performance metrics</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {workflows?.workflows?.map((workflow: any) => (
+              <div key={workflow.workflow_id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center space-x-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                    workflow.status === 'active' ? 'bg-green-100' : 
+                    workflow.status === 'error' ? 'bg-red-100' : 'bg-gray-100'
+                  }`}>
+                    {workflow.status === 'active' ? (
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                    ) : workflow.status === 'error' ? (
+                      <XCircle className="w-5 h-5 text-red-600" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-gray-600" />
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">{workflow.workflow_name}</h3>
+                    <p className="text-sm text-gray-500">
+                      {workflow.total_executions} executions • {workflow.success_rate}% success
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-6">
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-900">{workflow.successful_executions}</p>
+                    <p className="text-xs text-green-600">Success</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-900">{workflow.failed_executions}</p>
+                    <p className="text-xs text-red-600">Failed</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-gray-900">
+                      {workflow.avg_execution_time ? `${workflow.avg_execution_time}s` : 'N/A'}
+                    </p>
+                    <p className="text-xs text-gray-500">Avg Time</p>
+                  </div>
+                  <Badge variant={workflow.status === 'active' ? 'default' : workflow.status === 'error' ? 'destructive' : 'secondary'}>
+                    {workflow.status}
+                  </Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function MetricsSkeleton() {
+  return (
+    <div className="p-6 space-y-6">
+      <div>
+        <Skeleton className="h-8 w-64" />
+        <Skeleton className="h-4 w-96 mt-2" />
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Card key={i}>
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-8 w-16" />
+                </div>
+                <Skeleton className="w-12 h-12 rounded-full" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <Card>
+        <CardHeader>
+          <Skeleton className="h-6 w-32" />
+          <Skeleton className="h-4 w-48" />
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="flex items-center justify-between p-4 border rounded-lg">
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="w-10 h-10 rounded-lg" />
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-48" />
+                  </div>
+                </div>
+                <div className="flex items-center space-x-4">
+                  <Skeleton className="h-6 w-16 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

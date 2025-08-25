@@ -1,39 +1,24 @@
-# Multi-stage build for optimized production image
-FROM node:18-alpine AS builder
+FROM node:18-alpine
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
 
-# Install all dependencies (including devDependencies for build)
+# Install dependencies
 RUN npm install
 
 # Copy source code
 COPY . .
 
-# Build the application
-RUN npm run build
-
-# Production stage
-FROM nginx:alpine
-
-# Install wget for health checks
-RUN apk add --no-cache wget
-
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
-
-# Copy built application from builder stage
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Create non-root user
+RUN addgroup -g 1001 -S nodejs
+RUN adduser -S reactuser -u 1001
+RUN chown -R reactuser:nodejs /app
+USER reactuser
 
 # Expose port
-EXPOSE 80
+EXPOSE 3000
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD ["wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"]
+# Start the React development server
+CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "3000"]

@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "start": "node start-dev.js",
     "build": "vite build --mode production",
     "build:check": "tsc && vite build",
     "preview": "vite preview",
@@ -17,9 +18,9 @@
     "format:check": "prettier --check \"src/**/*.{ts,tsx,js,jsx,json,css,md}\"",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf dist coverage .turbo",
-    "docker:build": "docker build -t flowmastery-frontend-new .",
-    "docker:run": "docker run -p 3000:80 flowmastery-frontend-new",
-    "docker:dev": "docker run -p 3000:80 --name flowmastery-frontend-new-dev flowmastery-frontend-new",
+    "docker:build": "docker build -t flowmastery-frontend .",
+    "docker:run": "docker run -p 3000:80 flowmastery-frontend",
+    "docker:dev": "docker run -p 3000:80 --name flowmastery-frontend-dev flowmastery-frontend",
     "docker:compose:up": "docker-compose up -d",
     "docker:compose:down": "docker-compose down",
     "docker:compose:dev": "docker-compose --profile dev up -d",
@@ -51,9 +52,10 @@
     "@radix-ui/react-alert-dialog": "^1.0.5",
     "@radix-ui/react-switch": "^1.0.3",
     "@radix-ui/react-label": "^2.0.2",
-    "@radix-ui/react-tooltip": "^1.0.7",
+    "@radix-ui/react-avatar": "^1.0.4",
     "recharts": "^2.12.0",
-    "framer-motion": "^11.0.0"
+    "framer-motion": "^11.0.0",
+    "jwt-decode": "^4.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.55",
