@@ -1,6 +1,6 @@
 """Metrics schemas"""
 
-from datetime import datetime
+from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
@@ -30,6 +30,7 @@ class ClientMetrics(BaseModel):
     success_rate: float
     avg_execution_time: Optional[float] = None
     last_activity: Optional[datetime] = None
+    last_updated: Optional[datetime] = None  # When metrics were last computed
 
 
 class ClientWorkflowMetrics(BaseModel):
@@ -47,6 +48,7 @@ class AdminMetricsResponse(BaseModel):
     total_workflows: int
     total_executions: int
     overall_success_rate: float
+    last_updated: Optional[datetime] = None  # When admin metrics were last computed
 
 
 class MetricsError(BaseModel):
@@ -55,3 +57,29 @@ class MetricsError(BaseModel):
     client_id: int
     client_name: str
     details: Optional[str] = None
+
+
+class MetricsTrend(BaseModel):
+    """Schema for metrics trend indicators"""
+    execution_trend: float  # Percentage change in executions
+    success_rate_trend: float  # Change in success rate
+    performance_trend: float  # Performance improvement (negative is slower)
+
+
+class HistoricalMetrics(BaseModel):
+    """Schema for historical metrics data"""
+    client_id: int
+    workflow_id: Optional[int] = None
+    period_type: str  # 'daily', 'weekly', 'monthly'
+    start_date: date
+    end_date: date
+    metrics_data: List[Dict[str, Any]]  # Time series data
+    trends: MetricsTrend
+
+
+class ProductionExecutionFilter(BaseModel):
+    """Schema for production execution filtering criteria"""
+    exclude_manual: bool = True
+    exclude_test_workflows: bool = True
+    include_workflow_patterns: Optional[List[str]] = None
+    exclude_workflow_patterns: Optional[List[str]] = None

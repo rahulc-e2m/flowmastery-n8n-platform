@@ -1,42 +1,11 @@
 services:
-  # Database
-  postgres:
-    image: postgres:15
-    environment:
-      POSTGRES_DB: metrics_dashboard
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Redis for caching and sessions
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  # Backend API
+  # Backend API (Database removed)
   backend:
     build:
       context: ./packages/backend
       dockerfile: Dockerfile
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
-      - REDIS_URL=redis://redis:6379
       - SECRET_KEY=your-secret-key-change-in-production
       - ENCRYPTION_KEY=your-32-char-encryption-key-here
       - SMTP_SERVER=smtp.gmail.com
@@ -46,11 +15,6 @@ services:
       - FRONTEND_URL=http://localhost:3000
     ports:
       - "8000:8000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
     volumes:
       - ./packages/backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -70,6 +34,64 @@ services:
       - ./packages/frontend:/app
       - /app/node_modules
     command: npm run dev -- --host 0.0.0.0 --port 3000
+
+  # Celery Worker for background tasks
+  celery-worker:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - ENCRYPTION_KEY=your-32-char-encryption-key-here
+      - N8N_BASE_URL=http://host.docker.internal:5678
+      - N8N_API_KEY=your-n8n-api-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app
+    command: celery -A app.core.celery_app worker --loglevel=info
+
+  # Celery Beat Scheduler
+  celery-beat:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
+      - REDIS_URL=redis://redis:6379
+      - SECRET_KEY=your-secret-key-change-in-production
+      - ENCRYPTION_KEY=your-32-char-encryption-key-here
+      - N8N_BASE_URL=http://host.docker.internal:5678
+      - N8N_API_KEY=your-n8n-api-key
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app
+    command: celery -A app.core.celery_app beat --loglevel=info
+
+  # Celery Flower - Task Monitoring
+  celery-flower:
+    build:
+      context: ./packages/backend
+      dockerfile: Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6379
+    ports:
+      - "5555:5555"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./packages/backend:/app
+    command: celery -A app.core.celery_app flower --port=5555
 
 volumes:
   postgres_data:

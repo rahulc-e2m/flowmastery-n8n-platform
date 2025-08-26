@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AnimatedCard } from '@/components/ui/animated-card'
+import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 import { 
@@ -200,21 +201,10 @@ function AdminMetricsView({
           <h1 className="text-4xl font-bold text-gradient mb-2">Analytics Dashboard</h1>
           <p className="text-muted-foreground text-lg">Comprehensive workflow analytics across all clients</p>
         </div>
-        <motion.div 
-          className="flex items-center space-x-3"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.3, type: 'spring' }}
-        >
-          <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30">
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-green-700 dark:text-green-400">Real-time</span>
-          </div>
-          <Badge variant="outline" className="px-3 py-1">
-            <Eye className="w-3 h-3 mr-1" />
-            Live Analytics
-          </Badge>
-        </motion.div>
+        <DataSourceIndicator 
+          lastUpdated={adminMetrics?.last_updated} 
+          variant="full"
+        />
       </motion.div>
 
       <Tabs defaultValue="overview" className="space-y-6">

@@ -1,6 +1,7 @@
 import React from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
+import { useNavigate } from 'react-router-dom'
 import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
 import { motion } from 'framer-motion'
@@ -21,6 +22,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AnimatedCard } from '@/components/ui/animated-card'
+import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
+import { ClientMetricsCard } from '@/components/dashboard/ClientMetricsCard'
 import { formatDistanceToNow } from 'date-fns'
 import { 
   fadeInUp, 
@@ -31,6 +34,7 @@ import {
 
 export function DashboardPage() {
   const { user, isAdmin, isClient } = useAuth()
+  const navigate = useNavigate()
 
   // Admin dashboard data
   const { data: adminMetrics, isLoading: adminLoading } = useQuery({
@@ -81,6 +85,8 @@ export function DashboardPage() {
 }
 
 function AdminDashboard({ metrics, clients, isLoading }: any) {
+  const navigate = useNavigate()
+
   if (isLoading) {
     return <DashboardSkeleton />
   }
@@ -137,15 +143,10 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
           <h1 className="text-4xl font-bold text-gradient mb-2">Admin Dashboard</h1>
           <p className="text-muted-foreground text-lg">Complete overview of all clients and workflows</p>
         </div>
-        <motion.div 
-          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30"
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.3, type: 'spring' }}
-        >
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-          <span className="text-sm font-medium text-green-700 dark:text-green-400">Live Data</span>
-        </motion.div>
+        <DataSourceIndicator 
+          lastUpdated={metrics?.last_updated} 
+          variant="full"
+        />
       </motion.div>
 
       {/* Stats Grid */}
@@ -162,71 +163,34 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
         ))}
       </motion.div>
 
-      {/* Clients Overview */}
+      {/* Clients Grid */}
       <motion.div variants={fadeInUp}>
-        <AnimatedCard className="p-6">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h3 className="text-xl font-semibold text-foreground mb-1">Client Performance</h3>
-              <p className="text-muted-foreground">Real-time metrics across all organizations</p>
-            </div>
-            <Badge variant="outline" className="px-3 py-1">
-              {metrics?.clients?.length || 0} Active
-            </Badge>
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-2xl font-semibold text-foreground mb-1">Client Performance</h3>
+            <p className="text-muted-foreground">Click on any client to view detailed analytics</p>
           </div>
-          
-          <div className="space-y-4">
-            {metrics?.clients?.map((client: any, index: number) => (
-              <motion.div 
-                key={client.client_id}
-                className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.01, x: 4 }}
-              >
-                <div className="flex items-center space-x-4">
-                  <motion.div 
-                    className="w-12 h-12 bg-gradient-to-br from-primary/20 to-accent/20 rounded-xl flex items-center justify-center"
-                    whileHover={{ rotate: 5, scale: 1.1 }}
-                  >
-                    <Building2 className="w-6 h-6 text-primary" />
-                  </motion.div>
-                  <div>
-                    <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
-                      {client.client_name}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      {client.total_workflows} workflows • {client.total_executions} executions
-                    </p>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-4">
-                  <Badge 
-                    variant={client.success_rate >= 90 ? 'default' : client.success_rate >= 70 ? 'secondary' : 'destructive'}
-                    className="font-medium"
-                  >
-                    {client.success_rate}% success
-                  </Badge>
-                  <div className="text-right">
-                    <div className="flex items-center space-x-1 text-sm font-medium text-foreground">
-                      <CheckCircle className="w-4 h-4 text-green-500" />
-                      <span>{client.active_workflows} active</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {client.last_activity ? 
-                        formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }) : 
-                        'No recent activity'
-                      }
-                    </p>
-                  </div>
-                  <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
-                </div>
-              </motion.div>
-            ))}
-          </div>
-        </AnimatedCard>
+          <Badge variant="outline" className="px-3 py-1">
+            {metrics?.clients?.length || 0} Active
+          </Badge>
+        </div>
+        
+        <motion.div 
+          className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+          variants={staggerContainer}
+          initial="initial"
+          animate="animate"
+        >
+          {metrics?.clients?.map((client: any, index: number) => (
+            <motion.div key={client.client_id} variants={staggerItem}>
+              <ClientMetricsCard
+                client={client}
+                index={index}
+                onClick={() => navigate(`/client/${client.client_id}`)}
+              />
+            </motion.div>
+          ))}
+        </motion.div>
       </motion.div>
     </motion.div>
   )

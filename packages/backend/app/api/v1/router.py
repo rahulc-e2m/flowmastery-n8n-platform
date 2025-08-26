@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.endpoints import health, chat, metrics, config, auth, clients, cache
+from app.api.v1.endpoints import health, chat, metrics, config, auth, clients, cache, tasks
 
 api_router = APIRouter()
 
@@ -14,3 +14,4 @@ api_router.include_router(metrics.router, prefix="/metrics", tags=["metrics"])
 api_router.include_router(chat.router, prefix="/chat", tags=["chat"])
 api_router.include_router(config.router, prefix="/config", tags=["config"])
 api_router.include_router(cache.router, prefix="/cache", tags=["cache"])
+api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])

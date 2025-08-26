@@ -9,6 +9,7 @@ import { LoginForm } from '@/components/auth/LoginForm'
 import { AcceptInvitationForm } from '@/components/auth/AcceptInvitationForm'
 import { DashboardLayout } from '@/components/layout/DashboardLayout'
 import { DashboardPage } from '@/pages/DashboardPage'
+import { ClientDashboardPage } from '@/pages/ClientDashboardPage'
 import { MetricsPage } from '@/pages/MetricsPage'
 import { ClientsPage } from '@/pages/admin/ClientsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
@@ -66,6 +67,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <MetricsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:clientId"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ClientDashboardPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

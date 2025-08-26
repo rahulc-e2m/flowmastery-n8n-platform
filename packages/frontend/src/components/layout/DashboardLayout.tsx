@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useQuery } from '@tanstack/react-query'
 import {
   BarChart3,
   Building2,
@@ -18,6 +19,7 @@ import {
   ChevronRight
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { MetricsApi } from '@/services/metricsApi'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
@@ -28,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { ThemeToggle } from '@/components/ui/theme-toggle'
+import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { 
   fadeInLeft, 
   fadeInRight, 
@@ -48,6 +51,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, logout, isAdmin, isClient } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+
+  // Fetch metrics data to get last_updated timestamp
+  const { data: metricsData } = useQuery({
+    queryKey: isAdmin ? ['admin-metrics'] : ['my-metrics'],
+    queryFn: isAdmin ? MetricsApi.getAllClientsMetrics : MetricsApi.getMyMetrics,
+    refetchInterval: 300000, // 5 minutes
+    staleTime: 240000, // 4 minutes
+  })
 
   const handleLogout = () => {
     logout()
@@ -268,12 +279,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               <Menu className="w-6 h-6" />
             </motion.button>
             
-            <div className="flex items-center space-x-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-              <span className="text-sm text-muted-foreground font-medium">
-                Live Dashboard
-              </span>
-            </div>
+            <DataSourceIndicator 
+              compact={true} 
+              lastUpdated={metricsData?.last_updated}
+              className=""
+            />
           </div>
 
           <div className="flex items-center space-x-4">

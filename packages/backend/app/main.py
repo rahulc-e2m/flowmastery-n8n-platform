@@ -42,6 +42,9 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Redis connection failed: {e}")
     
+    # Note: Celery workers are started separately via docker-compose
+    print("✅ Application startup complete")
+    
     yield
     
     # Shutdown

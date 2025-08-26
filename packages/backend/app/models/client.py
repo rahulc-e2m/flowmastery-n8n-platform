@@ -29,6 +29,7 @@ class Client(Base, TimestampMixin):
     # Relationships
     user = relationship("User", back_populates="client", foreign_keys="User.client_id")
     created_by_admin = relationship("User", foreign_keys=[created_by_admin_id])
+    workflows = relationship("Workflow", back_populates="client", cascade="all, delete-orphan")
     
     def __repr__(self) -> str:
         return f"<Client(id={self.id}, name='{self.name}')>"

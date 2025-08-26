@@ -2,6 +2,7 @@
 
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import Session
 from sqlalchemy import select
 from fastapi import HTTPException, status
 
@@ -95,6 +96,16 @@ class ClientService:
         """Get decrypted n8n API key for a client"""
         result = await db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()
+        
+        if not client or not client.n8n_api_key_encrypted:
+            return None
+        
+        return encryption_manager.decrypt(client.n8n_api_key_encrypted)
+    
+    @staticmethod
+    def get_n8n_api_key_sync(db: Session, client_id: int) -> Optional[str]:
+        """Get decrypted n8n API key for a client (synchronous version for Celery)"""
+        client = db.query(Client).filter(Client.id == client_id).first()
         
         if not client or not client.n8n_api_key_encrypted:
             return None
