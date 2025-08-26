@@ -84,10 +84,15 @@ export function UsersPage() {
     createInvitationMutation.mutate(invitationData)
   }
 
-  const copyInvitationLink = (token: string) => {
-    const link = `${window.location.origin}/accept-invitation?token=${token}`
-    navigator.clipboard.writeText(link)
-    toast.success('Invitation link copied to clipboard')
+  const copyInvitationLink = async (invitationId: number) => {
+    try {
+      const { invitation_link } = await AuthApi.getInvitationLink(invitationId)
+      await navigator.clipboard.writeText(invitation_link)
+      toast.success('Invitation link copied to clipboard')
+    } catch (error) {
+      console.error('Error copying invitation link:', error)
+      toast.error('Failed to copy invitation link')
+    }
   }
 
   const getStatusBadge = (status: string) => {
@@ -279,7 +284,7 @@ export function UsersPage() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => copyInvitationLink(invitation.id.toString())}
+                            onClick={() => copyInvitationLink(invitation.id)}
                           >
                             <Copy className="w-4 h-4 mr-2" />
                             Copy Link

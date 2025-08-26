@@ -84,6 +84,45 @@ async def list_invitations(
     return [InvitationResponse.model_validate(inv) for inv in invitations]
 
 
+@router.get("/invitations/{invitation_id}/link")
+async def get_invitation_link(
+    invitation_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Get invitation link by invitation ID (admin only)"""
+    result = await db.execute(select(Invitation).where(Invitation.id == invitation_id))
+    invitation = result.scalar_one_or_none()
+    
+    if not invitation:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Invitation not found"
+        )
+    
+    if invitation.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation is not pending"
+        )
+    
+    if invitation.is_expired:
+        invitation.status = "expired"
+        await db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invitation has expired"
+        )
+    
+    # Return the invitation link
+    invitation_link = f"{settings.FRONTEND_URL}/accept-invitation?token={invitation.token}"
+    
+    return {
+        "invitation_link": invitation_link,
+        "token": invitation.token
+    }
+
+
 @router.get("/invitations/{token}")
 async def get_invitation_details(
     token: str,

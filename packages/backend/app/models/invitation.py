@@ -1,6 +1,6 @@
 """Invitation model"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, DateTime, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -22,7 +22,7 @@ class Invitation(Base, TimestampMixin):
     # Expiry date (default 7 days from creation)
     expiry_date: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
-        default=lambda: datetime.utcnow() + timedelta(days=7),
+        default=lambda: datetime.now(timezone.utc) + timedelta(days=7),
         nullable=False
     )
     
@@ -58,7 +58,16 @@ class Invitation(Base, TimestampMixin):
     @property
     def is_expired(self) -> bool:
         """Check if invitation is expired"""
-        return datetime.utcnow() > self.expiry_date
+        # Ensure both datetimes are timezone-aware for proper comparison
+        current_time = datetime.now(timezone.utc)
+        
+        # If expiry_date is naive, assume it's UTC
+        if self.expiry_date.tzinfo is None:
+            expiry_time = self.expiry_date.replace(tzinfo=timezone.utc)
+        else:
+            expiry_time = self.expiry_date
+            
+        return current_time > expiry_time
     
     def __repr__(self) -> str:
         return f"<Invitation(id={self.id}, email='{self.email}', role='{self.role}', status='{self.status}')>"

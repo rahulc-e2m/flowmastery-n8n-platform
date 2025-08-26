@@ -1,6 +1,6 @@
 """Authentication service"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -31,7 +31,7 @@ class AuthService:
             return None
         
         # Update last login
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(timezone.utc)
         await db.commit()
         
         return user
@@ -58,7 +58,7 @@ class AuthService:
         # Update invitation
         invitation.status = "accepted"
         invitation.accepted_user_id = user.id
-        invitation.accepted_at = datetime.utcnow()
+        invitation.accepted_at = datetime.now(timezone.utc)
         
         await db.commit()
         await db.refresh(user)

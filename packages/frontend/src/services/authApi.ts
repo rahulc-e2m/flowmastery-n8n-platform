@@ -62,6 +62,11 @@ export class AuthApi {
     return response.data
   }
 
+  static async getInvitationLink(invitationId: number): Promise<{ invitation_link: string; token: string }> {
+    const response = await api.get<{ invitation_link: string; token: string }>(`/auth/invitations/${invitationId}/link`)
+    return response.data
+  }
+
   static async getInvitationDetails(token: string): Promise<InvitationDetails> {
     const response = await api.get<InvitationDetails>(`/auth/invitations/${token}`)
     return response.data
