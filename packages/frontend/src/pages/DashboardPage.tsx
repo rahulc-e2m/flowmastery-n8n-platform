@@ -25,12 +25,15 @@ import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { ClientMetricsCard } from '@/components/dashboard/ClientMetricsCard'
 import { formatDistanceToNow } from 'date-fns'
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import { 
   fadeInUp, 
   staggerContainer, 
   staggerItem, 
   pageTransition 
 } from '@/lib/animations'
+
+const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
 
 export function DashboardPage() {
   const { user, isAdmin, isClient } = useAuth()
@@ -304,7 +307,15 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       icon: Zap,
       color: 'purple',
       trend: { value: 15, isPositive: true },
-      description: 'Last 30 days'
+      description: 'All time'
+    },
+    {
+      title: 'Hours Saved',
+      value: metrics?.time_saved_hours ? `${metrics.time_saved_hours}h` : '0h',
+      icon: Clock,
+      color: 'orange',
+      trend: { value: 18, isPositive: true },
+      description: 'Time saved by automation'
     },
     {
       title: 'Success Rate',
@@ -316,6 +327,37 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
     },
   ]
 
+  // Sort workflows by most recent activity first, then by total executions
+  const sortedWorkflows = workflows?.workflows?.sort((a: any, b: any) => {
+    // First sort by last execution time (most recent first)
+    const aTime = a.last_execution ? new Date(a.last_execution).getTime() : 0
+    const bTime = b.last_execution ? new Date(b.last_execution).getTime() : 0
+    if (aTime !== bTime) return bTime - aTime
+    
+    // Then by total executions (highest first)
+    return b.total_executions - a.total_executions
+  }) || []
+
+  // Prepare chart data from sorted workflows
+  const chartData = sortedWorkflows.slice(0, 8).map((workflow: any) => ({
+    name: workflow.workflow_name.length > 15 ? 
+      workflow.workflow_name.substring(0, 15) + '...' : 
+      workflow.workflow_name,
+    executions: workflow.total_executions,
+    success_rate: workflow.success_rate,
+    successful: workflow.successful_executions,
+    failed: workflow.failed_executions,
+    last_execution: workflow.last_execution
+  })) || []
+
+  const pieData = sortedWorkflows.slice(0, 6).map((workflow: any, index: number) => ({
+    name: workflow.workflow_name.length > 20 ? 
+      workflow.workflow_name.substring(0, 20) + '...' : 
+      workflow.workflow_name,
+    value: workflow.total_executions,
+    color: COLORS[index % COLORS.length],
+  })) || []
+
   return (
     <motion.div 
       className="p-6 space-y-8"
@@ -325,14 +367,23 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       exit="exit"
     >
       {/* Header */}
-      <motion.div variants={fadeInUp}>
-        <h1 className="text-4xl font-bold text-gradient mb-2">Your Dashboard</h1>
-        <p className="text-muted-foreground text-lg">Monitor your workflow performance and analytics</p>
+      <motion.div 
+        variants={fadeInUp}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-4xl font-bold text-gradient mb-2">Your Dashboard</h1>
+          <p className="text-muted-foreground text-lg">Monitor your workflow performance and analytics</p>
+        </div>
+        <DataSourceIndicator 
+          lastUpdated={metrics?.last_updated || workflows?.last_updated} 
+          variant="compact"
+        />
       </motion.div>
 
       {/* Stats Grid */}
       <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
@@ -344,6 +395,79 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
         ))}
       </motion.div>
 
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div variants={fadeInUp}>
+          <AnimatedCard className="p-6">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-foreground mb-1">Workflow Executions</h3>
+              <p className="text-sm text-muted-foreground">Total executions by workflow</p>
+            </div>
+            <div className="h-80 chart-container">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
+                  <Bar dataKey="executions" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </AnimatedCard>
+        </motion.div>
+
+        <motion.div variants={fadeInUp}>
+          <AnimatedCard className="p-6">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-foreground mb-1">Execution Distribution</h3>
+              <p className="text-sm text-muted-foreground">Workflow execution breakdown</p>
+            </div>
+            <div className="h-80 chart-container">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={120}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </AnimatedCard>
+        </motion.div>
+      </div>
+
       {/* Recent Workflows */}
       <motion.div variants={fadeInUp}>
         <AnimatedCard className="p-6">
@@ -353,67 +477,78 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
               <p className="text-muted-foreground">Latest execution status and performance</p>
             </div>
             <Badge variant="outline" className="px-3 py-1">
-              {workflows?.length || 0} Total
+              {workflows?.workflows?.length || 0} Total
             </Badge>
           </div>
           
           <div className="space-y-4">
-            {workflows?.slice(0, 5).map((workflow: any, index: number) => (
-              <motion.div 
-                key={workflow.workflow_id}
-                className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ scale: 1.01, x: 4 }}
-              >
-                <div className="flex items-center space-x-4">
-                  <motion.div 
-                    className="w-10 h-10 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center"
-                    whileHover={{ rotate: 5, scale: 1.1 }}
-                  >
-                    <Activity className="w-5 h-5 text-primary" />
-                  </motion.div>
-                  <div>
-                    <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
-                      {workflow.workflow_name}
-                    </h4>
-                    <p className="text-sm text-muted-foreground">
-                      {workflow.total_executions} executions
-                    </p>
+            {sortedWorkflows.slice(0, 5).map((workflow: any, index: number) => {
+              const isRecentlyActive = workflow.last_execution && 
+                new Date(workflow.last_execution).getTime() > Date.now() - (24 * 60 * 60 * 1000) // Last 24 hours
+              
+              return (
+                <motion.div 
+                  key={workflow.workflow_id}
+                  className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: index * 0.1 }}
+                  whileHover={{ scale: 1.01, x: 4 }}
+                >
+                  <div className="flex items-center space-x-4">
+                    <motion.div 
+                      className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                        isRecentlyActive 
+                          ? 'bg-gradient-to-br from-green-500/20 to-emerald-500/20' 
+                          : 'bg-gradient-to-br from-primary/20 to-accent/20'
+                      }`}
+                      whileHover={{ rotate: 5, scale: 1.1 }}
+                    >
+                      <Activity className={`w-5 h-5 ${isRecentlyActive ? 'text-green-600' : 'text-primary'}`} />
+                    </motion.div>
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                          {workflow.workflow_name}
+                        </h4>
+                        {isRecentlyActive && (
+                          <Badge variant="outline" className="text-xs px-2 py-0 text-green-600 border-green-200">
+                            Active
+                          </Badge>
+                        )}
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        {workflow.total_executions} executions • {workflow.success_rate}% success
+                      </p>
+                    </div>
                   </div>
-                </div>
-                
-                <div className="flex items-center space-x-4">
-                  <Badge 
-                    variant={workflow.success_rate >= 90 ? 'default' : workflow.success_rate >= 70 ? 'secondary' : 'destructive'}
-                  >
-                    {workflow.success_rate}%
-                  </Badge>
-                  <div className="text-right">
-                    <p className="text-sm font-medium text-foreground">
-                      {workflow.last_execution_status === 'success' ? (
-                        <span className="flex items-center text-green-600">
-                          <CheckCircle className="w-4 h-4 mr-1" />
-                          Success
-                        </span>
-                      ) : (
-                        <span className="flex items-center text-red-600">
-                          <XCircle className="w-4 h-4 mr-1" />
-                          Failed
-                        </span>
-                      )}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {workflow.last_execution_time ? 
-                        formatDistanceToNow(new Date(workflow.last_execution_time), { addSuffix: true }) : 
-                        'No recent runs'
-                      }
-                    </p>
+                  
+                  <div className="flex items-center space-x-4">
+                    <div className="text-right">
+                      <p className="text-sm font-medium text-foreground">
+                        {workflow.last_execution ? (
+                          <span className="flex items-center text-green-600">
+                            <CheckCircle className="w-4 h-4 mr-1" />
+                            Last run
+                          </span>
+                        ) : (
+                          <span className="flex items-center text-muted-foreground">
+                            <Clock className="w-4 h-4 mr-1" />
+                            No runs
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {workflow.last_execution ? 
+                          formatDistanceToNow(new Date(workflow.last_execution), { addSuffix: true }) : 
+                          'Never executed'
+                        }
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              )
+            })}
           </div>
         </AnimatedCard>
       </motion.div>
@@ -430,8 +565,8 @@ function DashboardSkeleton() {
         <Skeleton className="h-4 w-96 mt-2" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">

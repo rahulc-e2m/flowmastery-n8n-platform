@@ -15,14 +15,12 @@ import {
   Building2,
   Zap,
   Timer,
-  Target,
-  Eye,
-  Filter
+  Eye
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+
 import { Skeleton } from '@/components/ui/skeleton'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
@@ -40,8 +38,6 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'
 
 export function MetricsPage() {
   const { isAdmin, isClient } = useAuth()
-  const [selectedClientId, setSelectedClientId] = useState<string>('')
-  const [selectedTab, setSelectedTab] = useState('overview')
 
   // Admin queries
   const { data: adminMetrics, isLoading: adminLoading } = useQuery({
@@ -57,19 +53,7 @@ export function MetricsPage() {
     enabled: isAdmin,
   })
 
-  const { data: selectedClientMetrics, isLoading: selectedClientLoading } = useQuery({
-    queryKey: ['client-metrics', selectedClientId],
-    queryFn: () => MetricsApi.getClientMetrics(parseInt(selectedClientId)),
-    enabled: isAdmin && !!selectedClientId,
-    refetchInterval: 30000,
-  })
 
-  const { data: selectedClientWorkflows, isLoading: selectedClientWorkflowsLoading } = useQuery({
-    queryKey: ['client-workflows', selectedClientId],
-    queryFn: () => MetricsApi.getClientWorkflowMetrics(parseInt(selectedClientId)),
-    enabled: isAdmin && !!selectedClientId,
-    refetchInterval: 30000,
-  })
 
   // Client queries
   const { data: clientMetrics, isLoading: clientMetricsLoading } = useQuery({
@@ -97,12 +81,7 @@ export function MetricsPage() {
         <AdminMetricsView
           adminMetrics={adminMetrics}
           clients={clients}
-          selectedClientId={selectedClientId}
-          setSelectedClientId={setSelectedClientId}
-          selectedClientMetrics={selectedClientMetrics}
-          selectedClientWorkflows={selectedClientWorkflows}
           isLoading={adminLoading}
-          selectedClientLoading={selectedClientLoading || selectedClientWorkflowsLoading}
         />
       </motion.div>
     )
@@ -131,12 +110,7 @@ export function MetricsPage() {
 function AdminMetricsView({
   adminMetrics,
   clients,
-  selectedClientId,
-  setSelectedClientId,
-  selectedClientMetrics,
-  selectedClientWorkflows,
-  isLoading,
-  selectedClientLoading
+  isLoading
 }: any) {
   if (isLoading) {
     return <MetricsSkeleton />
@@ -217,14 +191,10 @@ function AdminMetricsView({
 
       <Tabs defaultValue="overview" className="space-y-6">
         <motion.div variants={scaleIn}>
-          <TabsList className="grid w-full grid-cols-2 lg:w-96">
+          <TabsList className="grid w-full grid-cols-1 lg:w-48">
             <TabsTrigger value="overview" className="flex items-center gap-2">
               <BarChart3 className="w-4 h-4" />
               Overview
-            </TabsTrigger>
-            <TabsTrigger value="client-detail" className="flex items-center gap-2">
-              <Building2 className="w-4 h-4" />
-              Client Analysis
             </TabsTrigger>
           </TabsList>
         </motion.div>
@@ -358,79 +328,60 @@ function AdminMetricsView({
               </AnimatedCard>
             </motion.div>
           </div>
-        </TabsContent>
 
-        <TabsContent value="client-detail" className="space-y-6">
+          {/* Client Quick Access */}
           <motion.div variants={fadeInUp}>
             <AnimatedCard className="p-6">
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground mb-1">Client Analysis</h3>
-                  <p className="text-sm text-muted-foreground">Detailed metrics for individual clients</p>
-                </div>
-                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-                  <SelectTrigger className="w-64">
-                    <Filter className="w-4 h-4 mr-2" />
-                    <SelectValue placeholder="Select a client" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {clients?.map((client: any) => (
-                      <SelectItem key={client.id} value={client.id.toString()}>
-                        {client.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold text-foreground mb-1">Client Details</h3>
+                <p className="text-sm text-muted-foreground">Access detailed analytics for individual clients</p>
               </div>
-              
-              <AnimatePresence mode="wait">
-                {selectedClientLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {adminMetrics?.clients?.map((client: any) => (
                   <motion.div
-                    key="loading"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
+                    key={client.client_id}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                   >
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                        {Array.from({ length: 4 }).map((_, i) => (
-                          <div key={i} className="animate-pulse">
-                            <div className="bg-muted/50 h-24 rounded-lg" />
+                    <Card 
+                      className="cursor-pointer hover:shadow-md transition-all duration-200 border-2 hover:border-primary/20"
+                      onClick={() => window.location.href = `/client/${client.client_id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between mb-3">
+                          <div className="flex items-center space-x-3">
+                            <div className="p-2 rounded-lg bg-primary/10">
+                              <Building2 className="w-5 h-5 text-primary" />
+                            </div>
+                            <div>
+                              <h4 className="font-semibold text-foreground">{client.client_name}</h4>
+                              <p className="text-xs text-muted-foreground">
+                                {client.total_workflows} workflows
+                              </p>
+                            </div>
                           </div>
-                        ))}
-                      </div>
-                      <div className="bg-muted/50 h-64 rounded-lg animate-pulse" />
-                    </div>
+                          <Eye className="w-4 h-4 text-muted-foreground" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-muted-foreground">Executions</p>
+                            <p className="font-semibold">{client.total_executions.toLocaleString()}</p>
+                          </div>
+                          <div>
+                            <p className="text-muted-foreground">Success Rate</p>
+                            <p className="font-semibold text-green-600">{client.success_rate}%</p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
                   </motion.div>
-                ) : selectedClientMetrics ? (
-                  <motion.div
-                    key="data"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <ClientDetailView 
-                      metrics={selectedClientMetrics}
-                      workflows={selectedClientWorkflows}
-                    />
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="empty"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="text-center py-12 text-muted-foreground"
-                  >
-                    <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>Select a client to view detailed analytics</p>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                ))}
+              </div>
             </AnimatedCard>
           </motion.div>
         </TabsContent>
+
+
       </Tabs>
     </div>
   )
@@ -442,139 +393,353 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
     return <MetricsSkeleton />
   }
 
+  const stats = [
+    {
+      title: 'Total Workflows',
+      value: metrics?.total_workflows || 0,
+      icon: Activity,
+      color: 'blue',
+      trend: { value: 5, isPositive: true },
+      description: 'Automated processes'
+    },
+    {
+      title: 'Active Workflows',
+      value: metrics?.active_workflows || 0,
+      icon: CheckCircle,
+      color: 'green',
+      trend: { value: 2, isPositive: true },
+      description: 'Currently running'
+    },
+    {
+      title: 'Total Executions',
+      value: (metrics?.total_executions || 0).toLocaleString(),
+      icon: Zap,
+      color: 'purple',
+      trend: { value: 15, isPositive: true },
+      description: 'All time'
+    },
+    {
+      title: 'Hours Saved',
+      value: metrics?.time_saved_hours ? `${metrics.time_saved_hours}h` : '0h',
+      icon: Timer,
+      color: 'orange',
+      trend: { value: 18, isPositive: true },
+      description: 'Time saved by automation'
+    },
+    {
+      title: 'Success Rate',
+      value: `${metrics?.success_rate || 0}%`,
+      icon: TrendingUp,
+      color: 'green',
+      trend: { value: 3, isPositive: true },
+      description: 'Performance metric'
+    },
+  ]
+
+  // Sort workflows by most recent activity first, then by total executions
+  const sortedWorkflows = workflows?.workflows?.sort((a: any, b: any) => {
+    // First sort by last execution time (most recent first)
+    const aTime = a.last_execution ? new Date(a.last_execution).getTime() : 0
+    const bTime = b.last_execution ? new Date(b.last_execution).getTime() : 0
+    if (aTime !== bTime) return bTime - aTime
+    
+    // Then by total executions (highest first)
+    return b.total_executions - a.total_executions
+  }) || []
+
+  // Prepare chart data from sorted workflows
+  const chartData = sortedWorkflows.slice(0, 8).map((workflow: any) => ({
+    name: workflow.workflow_name.length > 15 ? 
+      workflow.workflow_name.substring(0, 15) + '...' : 
+      workflow.workflow_name,
+    executions: workflow.total_executions,
+    success_rate: workflow.success_rate,
+    successful: workflow.successful_executions,
+    failed: workflow.failed_executions,
+    last_execution: workflow.last_execution
+  })) || []
+
+  const pieData = sortedWorkflows.slice(0, 6).map((workflow: any, index: number) => ({
+    name: workflow.workflow_name.length > 20 ? 
+      workflow.workflow_name.substring(0, 20) + '...' : 
+      workflow.workflow_name,
+    value: workflow.total_executions,
+    color: COLORS[index % COLORS.length],
+  })) || []
+
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">My Metrics</h1>
-        <p className="text-gray-600 mt-2">Your workflow performance and analytics</p>
+    <div className="p-6 space-y-8">
+      {/* Header */}
+      <motion.div 
+        variants={fadeInUp}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-4xl font-bold text-gradient mb-2">My Analytics</h1>
+          <p className="text-muted-foreground text-lg">Your workflow performance and analytics</p>
+        </div>
+        <DataSourceIndicator 
+          lastUpdated={metrics?.last_updated || workflows?.last_updated} 
+          variant="compact"
+        />
+      </motion.div>
+
+      {/* Stats Grid */}
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        {stats.map((stat, index) => (
+          <motion.div key={stat.title} variants={staggerItem}>
+            <AnimatedCard key={stat.title} className="overflow-hidden">
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
+                    <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+                    {stat.trend && (
+                      <div className={`flex items-center space-x-1 text-sm ${
+                        stat.trend.isPositive ? 'text-green-600' : 'text-red-600'
+                      }`}>
+                        {stat.trend.isPositive ? (
+                          <TrendingUp className="w-3 h-3" />
+                        ) : (
+                          <TrendingDown className="w-3 h-3" />
+                        )}
+                        <span>{stat.trend.value}%</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className={`p-3 rounded-xl bg-gradient-to-br ${
+                    stat.color === 'blue' ? 'from-blue-500 to-blue-600' :
+                    stat.color === 'green' ? 'from-green-500 to-green-600' :
+                    stat.color === 'purple' ? 'from-purple-500 to-purple-600' :
+                    stat.color === 'orange' ? 'from-orange-500 to-orange-600' :
+                    'from-gray-500 to-gray-600'
+                  }`}>
+                    <stat.icon className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <p className="text-xs text-muted-foreground">{stat.description}</p>
+                </div>
+              </CardContent>
+            </AnimatedCard>
+          </motion.div>
+        ))}
+      </motion.div>
+
+      {/* Charts Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <motion.div variants={fadeInUp}>
+          <AnimatedCard className="p-6">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-foreground mb-1">Workflow Executions</h3>
+              <p className="text-sm text-muted-foreground">Total executions by workflow</p>
+            </div>
+            <div className="h-80 chart-container">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                  />
+                  <Bar dataKey="executions" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </AnimatedCard>
+        </motion.div>
+
+        <motion.div variants={fadeInUp}>
+          <AnimatedCard className="p-6">
+            <div className="mb-6">
+              <h3 className="text-lg font-semibold text-foreground mb-1">Success Rate Trends</h3>
+              <p className="text-sm text-muted-foreground">Performance by workflow</p>
+            </div>
+            <div className="h-80 chart-container">
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id="colorSuccessRate" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10B981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10B981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis 
+                    dataKey="name" 
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    angle={-45}
+                    textAnchor="end"
+                    height={80}
+                  />
+                  <YAxis 
+                    stroke="hsl(var(--muted-foreground))" 
+                    fontSize={12}
+                    domain={[0, 100]}
+                  />
+                  <Tooltip 
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                    }}
+                    formatter={(value: any) => [`${value}%`, 'Success Rate']}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="success_rate" 
+                    stroke="#10B981" 
+                    fillOpacity={1} 
+                    fill="url(#colorSuccessRate)"
+                    strokeWidth={2}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </AnimatedCard>
+        </motion.div>
       </div>
 
-      <ClientDetailView metrics={metrics} workflows={workflows} isLoading={false} />
+      <ClientDetailView metrics={metrics} workflows={workflows} sortedWorkflows={sortedWorkflows} isLoading={false} />
     </div>
   )
 }
 
-function ClientDetailView({ metrics, workflows, isLoading }: any) {
+function ClientDetailView({ metrics, workflows, sortedWorkflows, isLoading }: any) {
   if (isLoading) {
     return <MetricsSkeleton />
   }
 
   if (!metrics) {
     return (
-      <div className="text-center py-12">
-        <BarChart3 className="w-12 h-12 mx-auto text-gray-300 mb-4" />
-        <p className="text-gray-500">No metrics available</p>
-      </div>
+      <motion.div 
+        className="text-center py-12"
+        variants={fadeInUp}
+      >
+        <BarChart3 className="w-12 h-12 mx-auto text-muted-foreground mb-4" />
+        <p className="text-muted-foreground">No metrics available</p>
+      </motion.div>
     )
   }
 
-  const stats = [
-    {
-      title: 'Total Workflows',
-      value: metrics.total_workflows || 0,
-      icon: Activity,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
-    },
-    {
-      title: 'Active Workflows',
-      value: metrics.active_workflows || 0,
-      icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
-    },
-    {
-      title: 'Total Executions',
-      value: metrics.total_executions || 0,
-      icon: BarChart3,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
-    },
-    {
-      title: 'Success Rate',
-      value: `${metrics.success_rate || 0}%`,
-      icon: TrendingUp,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
-    },
-  ]
-
   return (
-    <div className="space-y-6">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {/* Workflows Detail */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Workflow Details</CardTitle>
-          <CardDescription>Individual workflow performance metrics</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {workflows?.workflows?.map((workflow: any) => (
-              <div key={workflow.workflow_id} className="flex items-center justify-between p-4 border rounded-lg">
+    <motion.div 
+      className="space-y-6"
+      variants={fadeInUp}
+    >
+      {/* Recent Workflows */}
+      <AnimatedCard className="p-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <h3 className="text-xl font-semibold text-foreground mb-1">Workflow Performance</h3>
+            <p className="text-muted-foreground">Individual workflow metrics and status</p>
+          </div>
+          <Badge variant="outline" className="px-3 py-1">
+            {workflows?.workflows?.length || 0} Total
+          </Badge>
+        </div>
+        
+        <div className="space-y-4">
+          {sortedWorkflows.map((workflow: any, index: number) => {
+            const isRecentlyActive = workflow.last_execution && 
+              new Date(workflow.last_execution).getTime() > Date.now() - (24 * 60 * 60 * 1000) // Last 24 hours
+            
+            return (
+              <motion.div 
+                key={workflow.workflow_id}
+                className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.01, x: 4 }}
+              >
                 <div className="flex items-center space-x-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    workflow.status === 'active' ? 'bg-green-100' : 
-                    workflow.status === 'error' ? 'bg-red-100' : 'bg-gray-100'
-                  }`}>
-                    {workflow.status === 'active' ? (
-                      <CheckCircle className="w-5 h-5 text-green-600" />
+                  <motion.div 
+                    className={`w-10 h-10 rounded-lg flex items-center justify-center ${
+                      isRecentlyActive 
+                        ? 'bg-green-100 dark:bg-green-950/50' 
+                        : workflow.status === 'error' 
+                        ? 'bg-red-100 dark:bg-red-950/50' 
+                        : 'bg-gray-100 dark:bg-gray-950/50'
+                    }`}
+                    whileHover={{ rotate: 5, scale: 1.1 }}
+                  >
+                    {isRecentlyActive ? (
+                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
                     ) : workflow.status === 'error' ? (
-                      <XCircle className="w-5 h-5 text-red-600" />
+                      <XCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
                     ) : (
-                      <Clock className="w-5 h-5 text-gray-600" />
+                      <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
                     )}
-                  </div>
+                  </motion.div>
                   <div>
-                    <h3 className="font-medium text-gray-900">{workflow.workflow_name}</h3>
-                    <p className="text-sm text-gray-500">
+                    <div className="flex items-center space-x-2">
+                      <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                        {workflow.workflow_name}
+                      </h4>
+                      {isRecentlyActive && (
+                        <Badge variant="outline" className="text-xs px-2 py-0 text-green-600 border-green-200">
+                          Active
+                        </Badge>
+                      )}
+                    </div>
+                    <p className="text-sm text-muted-foreground">
                       {workflow.total_executions} executions • {workflow.success_rate}% success
                     </p>
                   </div>
                 </div>
+                
                 <div className="flex items-center space-x-6">
                   <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{workflow.successful_executions}</p>
-                    <p className="text-xs text-green-600">Success</p>
+                    <p className="text-sm font-medium text-foreground">{workflow.successful_executions}</p>
+                    <p className="text-xs text-green-600 dark:text-green-400">Success</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">{workflow.failed_executions}</p>
-                    <p className="text-xs text-red-600">Failed</p>
+                    <p className="text-sm font-medium text-foreground">{workflow.failed_executions}</p>
+                    <p className="text-xs text-red-600 dark:text-red-400">Failed</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-sm font-medium text-gray-900">
+                    <p className="text-sm font-medium text-foreground">
                       {workflow.avg_execution_time ? `${workflow.avg_execution_time}s` : 'N/A'}
                     </p>
-                    <p className="text-xs text-gray-500">Avg Time</p>
+                    <p className="text-xs text-muted-foreground">Avg Time</p>
                   </div>
-                  <Badge variant={workflow.status === 'active' ? 'default' : workflow.status === 'error' ? 'destructive' : 'secondary'}>
-                    {workflow.status}
-                  </Badge>
+                  <div className="text-center">
+                    <p className="text-xs text-muted-foreground">Last run</p>
+                    <p className="text-sm font-medium text-foreground">
+                      {workflow.last_execution ? 
+                        formatDistanceToNow(new Date(workflow.last_execution), { addSuffix: true }) : 
+                        'Never'
+                      }
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-    </div>
+              </motion.div>
+            )
+          })}
+        </div>
+      </AnimatedCard>
+    </motion.div>
   )
 }
 
@@ -586,8 +751,8 @@ function MetricsSkeleton() {
         <Skeleton className="h-4 w-96 mt-2" />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">

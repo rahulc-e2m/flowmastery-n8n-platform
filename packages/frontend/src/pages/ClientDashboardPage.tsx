@@ -17,7 +17,8 @@ import {
   Timer,
   Calendar,
   RefreshCw,
-  Building2
+  Building2,
+  BarChart3
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -145,6 +146,14 @@ export function ClientDashboardPage() {
       description: 'All time'
     },
     {
+      title: 'Hours Saved',
+      value: clientMetrics?.time_saved_hours ? `${clientMetrics.time_saved_hours}h` : '0h',
+      icon: Timer,
+      color: 'orange',
+      trend: { value: 18, isPositive: true },
+      description: 'Time saved by automation'
+    },
+    {
       title: 'Success Rate',
       value: `${clientMetrics?.success_rate || 0}%`,
       icon: TrendingUp,
@@ -178,15 +187,26 @@ export function ClientDashboardPage() {
         className="flex items-center justify-between"
       >
         <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center space-x-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            <span>Back</span>
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center space-x-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              <span>Dashboard</span>
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => navigate('/metrics')}
+              className="flex items-center space-x-2"
+            >
+              <BarChart3 className="w-4 h-4" />
+              <span>Metrics</span>
+            </Button>
+          </div>
           <div>
             <div className="flex items-center space-x-3 mb-2">
               <Building2 className="w-8 h-8 text-primary" />
@@ -223,7 +243,7 @@ export function ClientDashboardPage() {
 
       {/* Stats Grid */}
       <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
         variants={staggerContainer}
         initial="initial"
         animate="animate"
@@ -468,8 +488,8 @@ function ClientDashboardSkeleton() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {Array.from({ length: 4 }).map((_, i) => (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
+        {Array.from({ length: 5 }).map((_, i) => (
           <Card key={i}>
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
