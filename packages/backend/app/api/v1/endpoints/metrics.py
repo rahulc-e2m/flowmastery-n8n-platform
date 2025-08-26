@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from app.database import get_db
@@ -175,6 +175,66 @@ async def get_my_historical_metrics(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=str(e)
+        )
+
+
+@router.post("/admin/quick-sync")
+async def quick_sync_all_metrics(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Force immediate sync of all client metrics (admin only)"""
+    try:
+        # Import here to avoid circular imports
+        from app.services.persistent_metrics import persistent_metrics_collector
+        
+        # Sync all clients immediately
+        results = []
+        from sqlalchemy import select
+        from app.models import Client
+        
+        # Get all clients with n8n configuration
+        stmt = select(Client).where(
+            Client.n8n_api_url.isnot(None)
+        )
+        result = await db.execute(stmt)
+        clients = result.scalars().all()
+        
+        for client in clients:
+            try:
+                sync_result = await persistent_metrics_collector.sync_client_data(db, client.id)
+                results.append({
+                    "client_id": client.id,
+                    "client_name": client.name,
+                    "status": "success",
+                    "result": sync_result
+                })
+            except Exception as e:
+                results.append({
+                    "client_id": client.id,
+                    "client_name": client.name,
+                    "status": "error",
+                    "error": str(e)
+                })
+        
+        # Commit all changes
+        await db.commit()
+        
+        successful = [r for r in results if r["status"] == "success"]
+        failed = [r for r in results if r["status"] == "error"]
+        
+        return {
+            "message": f"Quick sync completed: {len(successful)} successful, {len(failed)} failed",
+            "successful": len(successful),
+            "failed": len(failed),
+            "results": results,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Quick sync failed: {str(e)}"
         )
 
 

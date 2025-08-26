@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from contextlib import contextmanager
 from app.config.settings import get_settings
 
 settings = get_settings()
@@ -18,5 +19,18 @@ def get_sync_db():
     db = SyncSessionLocal()
     try:
         yield db
+    finally:
+        db.close()
+
+@contextmanager
+def get_sync_db_session():
+    """Get synchronous database session as context manager for Celery tasks"""
+    db = SyncSessionLocal()
+    try:
+        yield db
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()

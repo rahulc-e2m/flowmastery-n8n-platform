@@ -260,9 +260,19 @@ class EnhancedMetricsService:
         # Get the most recent update timestamp across all clients
         last_updated = None
         if client_metrics:
+            # First try to get from client-specific last_updated timestamps
             client_update_times = [c.last_updated for c in client_metrics if c.last_updated]
             if client_update_times:
                 last_updated = max(client_update_times)
+            
+            # If no aggregation timestamps, get the most recent sync timestamp from raw data
+            if not last_updated:
+                # Get the most recent last_synced_at from any workflow execution
+                sync_stmt = select(func.max(WorkflowExecution.last_synced_at))
+                sync_result = await db.execute(sync_stmt)
+                sync_timestamp = sync_result.scalar_one_or_none()
+                if sync_timestamp:
+                    last_updated = sync_timestamp
         
         return AdminMetricsResponse(
             clients=client_metrics,
@@ -350,6 +360,13 @@ class EnhancedMetricsService:
             last_exec = max(executions, key=lambda x: x.started_at or datetime.min)
             last_activity = last_exec.started_at
         
+        # Get the most recent sync timestamp for this client
+        sync_stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
+            WorkflowExecution.client_id == client.id
+        )
+        sync_result = await db.execute(sync_stmt)
+        last_sync_time = sync_result.scalar_one_or_none()
+        
         return ClientMetrics(
             client_id=client.id,
             client_name=client.name,
@@ -361,7 +378,7 @@ class EnhancedMetricsService:
             success_rate=round(success_rate, 2),
             avg_execution_time=round(avg_time, 2) if avg_time else None,
             last_activity=last_activity,
-            last_updated=datetime.utcnow()  # Current time since computed from raw data
+            last_updated=last_sync_time or datetime.utcnow()  # Use sync time or current time
         )
     
     async def _calculate_trends(self, aggregations: List[MetricsAggregation]) -> MetricsTrend:

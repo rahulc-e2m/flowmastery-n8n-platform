@@ -1,6 +1,7 @@
 """Database connection and session management"""
 
 from typing import AsyncGenerator
+from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -29,6 +30,20 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         try:
             yield session
+        except Exception:
+            await session.rollback()
+            raise
+        finally:
+            await session.close()
+
+
+@asynccontextmanager
+async def get_db_session():
+    """Get async database session as context manager"""
+    async with SessionLocal() as session:
+        try:
+            yield session
+            await session.commit()
         except Exception:
             await session.rollback()
             raise

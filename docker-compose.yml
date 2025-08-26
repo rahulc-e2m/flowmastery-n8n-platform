@@ -1,4 +1,33 @@
 services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=metrics_dashboard
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Redis Cache and Message Broker
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
   # Backend API (Database removed)
   backend:
@@ -6,6 +35,8 @@ services:
       context: ./packages/backend
       dockerfile: Dockerfile
     environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
+      - REDIS_URL=redis://redis:6379
       - SECRET_KEY=your-secret-key-change-in-production
       - ENCRYPTION_KEY=your-32-char-encryption-key-here
       - SMTP_SERVER=smtp.gmail.com
@@ -13,8 +44,15 @@ services:
       - SMTP_USERNAME=your-email@gmail.com
       - SMTP_PASSWORD=your-app-password
       - FRONTEND_URL=http://localhost:3000
+      - N8N_BASE_URL=http://host.docker.internal:5678
+      - N8N_API_KEY=your-n8n-api-key
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     volumes:
       - ./packages/backend:/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload

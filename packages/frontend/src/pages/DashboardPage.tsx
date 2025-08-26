@@ -146,6 +146,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
         <DataSourceIndicator 
           lastUpdated={metrics?.last_updated} 
           variant="full"
+          debug={true}
         />
       </motion.div>
 

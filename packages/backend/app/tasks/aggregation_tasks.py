@@ -10,7 +10,7 @@ import concurrent.futures
 from celery import Task
 
 from app.core.celery_app import celery_app
-from app.database.connection import get_db_session
+from app.database.sync_connection import get_sync_db_session
 from app.services.metrics_aggregator import metrics_aggregator
 
 
@@ -39,7 +39,7 @@ def compute_daily_aggregations(self, target_date: str = None) -> Dict[str, Any]:
             computation_date = date.today() - timedelta(days=1)
         
         async def _compute():
-            async with get_db_session() as db:
+            async with get_sync_db_session() as db:
                 return await metrics_aggregator.compute_daily_aggregations(
                     db, computation_date
                 )
@@ -83,7 +83,7 @@ def compute_weekly_aggregations(self, target_week: str = None) -> Dict[str, Any]
             week_start = today - timedelta(days=days_since_monday + 7)
         
         async def _compute():
-            async with get_db_session() as db:
+            async with get_sync_db_session() as db:
                 return await metrics_aggregator.compute_weekly_aggregations(
                     db, week_start
                 )
@@ -130,7 +130,7 @@ def compute_monthly_aggregations(self, target_month: str = None) -> Dict[str, An
                 month_start = date(today.year, today.month - 1, 1)
         
         async def _compute():
-            async with get_db_session() as db:
+            async with get_sync_db_session() as db:
                 return await metrics_aggregator.compute_monthly_aggregations(
                     db, month_start
                 )
@@ -168,7 +168,7 @@ def cleanup_old_data(self, retention_days: int = 365) -> Dict[str, Any]:
         cutoff_date = date.today() - timedelta(days=retention_days)
         
         async def _cleanup():
-            async with get_db_session() as db:
+            async with get_sync_db_session() as db:
                 return await metrics_aggregator.cleanup_old_data(
                     db, cutoff_date
                 )
@@ -214,7 +214,7 @@ def recompute_aggregations(
         end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
         
         async def _recompute():
-            async with get_db_session() as db:
+            async with get_sync_db_session() as db:
                 return await metrics_aggregator.recompute_client_aggregations(
                     db, client_id, start_dt, end_dt
                 )
