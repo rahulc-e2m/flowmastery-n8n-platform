@@ -117,6 +117,14 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       description: 'Last 30 days'
     },
     {
+      title: 'Hours Saved',
+      value: metrics?.total_time_saved_hours ? `${metrics.total_time_saved_hours}h` : '0h',
+      icon: Clock,
+      color: 'orange',
+      trend: { value: 18, isPositive: true },
+      description: 'Time saved by automation'
+    },
+    {
       title: 'Success Rate',
       value: `${metrics?.overall_success_rate || 0}%`,
       icon: TrendingUp,
@@ -152,7 +160,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
 
       {/* Stats Grid */}
       <motion.div 
-        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
         variants={staggerContainer}
         initial="initial"
         animate="animate"

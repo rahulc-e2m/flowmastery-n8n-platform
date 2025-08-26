@@ -46,6 +46,7 @@ export interface AdminMetricsResponse {
   overall_success_rate: number
   total_production_executions?: number
   overall_productivity_score?: number
+  total_time_saved_hours?: number  // Overall time saved across all clients
   last_updated?: string  // When admin metrics were last computed
 }
 

@@ -168,6 +168,14 @@ function AdminMetricsView({
       description: 'Last 30 days'
     },
     {
+      title: 'Hours Saved',
+      value: adminMetrics?.total_time_saved_hours ? `${adminMetrics.total_time_saved_hours}h` : '0h',
+      icon: Timer,
+      color: 'orange',
+      trend: { value: 18, isPositive: true },
+      description: 'Time saved by automation'
+    },
+    {
       title: 'Overall Success Rate',
       value: `${adminMetrics?.overall_success_rate || 0}%`,
       icon: TrendingUp,
@@ -224,7 +232,7 @@ function AdminMetricsView({
         <TabsContent value="overview" className="space-y-6">
           {/* Overall Stats */}
           <motion.div 
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6"
             variants={staggerContainer}
             initial="initial"
             animate="animate"

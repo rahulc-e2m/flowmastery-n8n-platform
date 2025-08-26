@@ -70,6 +70,7 @@ class EnhancedMetricsService:
                 success_rate=recent_metrics.success_rate,
                 avg_execution_time=recent_metrics.avg_execution_time_seconds,
                 last_activity=await self._get_last_activity(db, client_id),
+                time_saved_hours=recent_metrics.time_saved_hours,
                 last_updated=recent_metrics.computed_at  # Add timestamp from aggregation
             )
         else:
@@ -230,6 +231,7 @@ class EnhancedMetricsService:
         total_workflows = 0
         total_executions = 0
         total_successful = 0
+        total_time_saved = 0.0
         
         for client in clients:
             try:
@@ -238,6 +240,8 @@ class EnhancedMetricsService:
                 total_workflows += metrics.total_workflows
                 total_executions += metrics.total_executions
                 total_successful += metrics.successful_executions
+                if metrics.time_saved_hours:
+                    total_time_saved += metrics.time_saved_hours
             except Exception as e:
                 logger.error(f"Error getting metrics for client {client.id}: {e}")
                 # Add empty metrics for failed clients
@@ -252,6 +256,7 @@ class EnhancedMetricsService:
                     success_rate=0.0,
                     avg_execution_time=None,
                     last_activity=None,
+                    time_saved_hours=None,
                     last_updated=None  # No update time for failed clients
                 ))
         
@@ -280,6 +285,7 @@ class EnhancedMetricsService:
             total_workflows=total_workflows,
             total_executions=total_executions,
             overall_success_rate=round(overall_success_rate, 2),
+            total_time_saved_hours=round(total_time_saved, 1) if total_time_saved > 0 else None,
             last_updated=last_updated
         )
     
@@ -367,6 +373,9 @@ class EnhancedMetricsService:
         sync_result = await db.execute(sync_stmt)
         last_sync_time = sync_result.scalar_one_or_none()
         
+        # Calculate time saved (estimate 30 minutes per successful execution)
+        time_saved_hours = round(successful * 0.5, 1) if successful > 0 else None
+        
         return ClientMetrics(
             client_id=client.id,
             client_name=client.name,
@@ -378,6 +387,7 @@ class EnhancedMetricsService:
             success_rate=round(success_rate, 2),
             avg_execution_time=round(avg_time, 2) if avg_time else None,
             last_activity=last_activity,
+            time_saved_hours=time_saved_hours,
             last_updated=last_sync_time or datetime.utcnow()  # Use sync time or current time
         )
     

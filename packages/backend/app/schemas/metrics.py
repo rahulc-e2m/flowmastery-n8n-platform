@@ -30,6 +30,7 @@ class ClientMetrics(BaseModel):
     success_rate: float
     avg_execution_time: Optional[float] = None
     last_activity: Optional[datetime] = None
+    time_saved_hours: Optional[float] = None  # Time saved through automation
     last_updated: Optional[datetime] = None  # When metrics were last computed
 
 
@@ -48,6 +49,7 @@ class AdminMetricsResponse(BaseModel):
     total_workflows: int
     total_executions: int
     overall_success_rate: float
+    total_time_saved_hours: Optional[float] = None  # Overall time saved across all clients
     last_updated: Optional[datetime] = None  # When admin metrics were last computed
 
 
