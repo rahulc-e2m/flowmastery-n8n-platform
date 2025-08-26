@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Text, JSON
+from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Text, JSON, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -12,6 +12,9 @@ class Workflow(Base, TimestampMixin):
     """Workflow model for storing n8n workflow data"""
     
     __tablename__ = "workflows"
+    __table_args__ = (
+        UniqueConstraint('client_id', 'n8n_workflow_id', name='uq_workflows_client_n8n_id'),
+    )
     
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     

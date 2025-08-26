@@ -232,11 +232,7 @@ export function DataSourceIndicator({
         </motion.div>
       )}
       
-      {debug && (
-        <div className="text-xs text-muted-foreground font-mono">
-          {typeof lastUpdated === 'string' ? lastUpdated : lastUpdated?.toISOString()}
-        </div>
-      )}
+
     </motion.div>
   )
 }

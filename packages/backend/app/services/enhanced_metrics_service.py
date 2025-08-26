@@ -1,6 +1,6 @@
 """Enhanced metrics service using persistent data storage"""
 
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import List, Optional, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, desc, or_
@@ -173,7 +173,7 @@ class EnhancedMetricsService:
         workflow_metrics = []
         for workflow in workflows:
             # Get recent executions (last 7 days)
-            recent_date = datetime.utcnow() - timedelta(days=7)
+            recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=7)
             recent_executions = [
                 e for e in workflow.executions 
                 if e.is_production and e.started_at and e.started_at > recent_date
@@ -332,7 +332,7 @@ class EnhancedMetricsService:
         total_workflows, active_workflows = workflows_result.one()
         
         # Get recent executions (last 7 days)
-        recent_date = datetime.utcnow() - timedelta(days=7)
+        recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=7)
         executions_stmt = select(WorkflowExecution).where(
             and_(
                 WorkflowExecution.client_id == client.id,

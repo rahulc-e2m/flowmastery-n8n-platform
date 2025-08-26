@@ -282,7 +282,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <DataSourceIndicator 
               compact={true} 
               lastUpdated={metricsData?.last_updated}
-              debug={true}
               className=""
             />
           </div>

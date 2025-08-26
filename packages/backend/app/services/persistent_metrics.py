@@ -85,63 +85,69 @@ class PersistentMetricsCollector:
             for n8n_workflow in n8n_workflows:
                 workflow_id = str(n8n_workflow.get("id", ""))
                 
-                # Check if workflow exists
-                stmt = select(Workflow).where(
-                    and_(
-                        Workflow.client_id == client.id,
-                        Workflow.n8n_workflow_id == workflow_id
+                try:
+                    # Try to get existing workflow
+                    stmt = select(Workflow).where(
+                        and_(
+                            Workflow.client_id == client.id,
+                            Workflow.n8n_workflow_id == workflow_id
+                        )
                     )
-                )
-                result = await db.execute(stmt)
-                existing_workflow = result.scalar_one_or_none()
-                
-                if existing_workflow:
-                    # Update existing workflow
-                    existing_workflow.name = n8n_workflow.get("name", "Unnamed Workflow")
-                    existing_workflow.active = n8n_workflow.get("active", False)
-                    existing_workflow.last_synced_at = datetime.utcnow()
+                    result = await db.execute(stmt)
+                    existing_workflow = result.scalar_one_or_none()
                     
-                    # Update metadata if available
-                    if "updatedAt" in n8n_workflow:
-                        try:
-                            existing_workflow.n8n_updated_at = datetime.fromisoformat(
-                                n8n_workflow["updatedAt"].replace("Z", "+00:00")
-                            )
-                        except:
-                            pass
-                else:
-                    # Create new workflow
-                    current_time = datetime.utcnow()
-                    new_workflow = Workflow(
-                        n8n_workflow_id=workflow_id,
-                        client_id=client.id,
-                        name=n8n_workflow.get("name", "Unnamed Workflow"),
-                        active=n8n_workflow.get("active", False),
-                        last_synced_at=current_time,
-                        created_at=current_time,  # Explicitly set created_at
-                        updated_at=current_time   # Explicitly set updated_at
-                    )
+                    if existing_workflow:
+                        # Update existing workflow
+                        existing_workflow.name = n8n_workflow.get("name", "Unnamed Workflow")
+                        existing_workflow.active = n8n_workflow.get("active", False)
+                        existing_workflow.last_synced_at = datetime.utcnow()
+                        
+                        # Update metadata if available
+                        if "updatedAt" in n8n_workflow:
+                            try:
+                                existing_workflow.n8n_updated_at = datetime.fromisoformat(
+                                    n8n_workflow["updatedAt"].replace("Z", "+00:00")
+                                )
+                            except:
+                                pass
+                    else:
+                        # Create new workflow
+                        current_time = datetime.utcnow()
+                        new_workflow = Workflow(
+                            n8n_workflow_id=workflow_id,
+                            client_id=client.id,
+                            name=n8n_workflow.get("name", "Unnamed Workflow"),
+                            active=n8n_workflow.get("active", False),
+                            last_synced_at=current_time,
+                            created_at=current_time,  # Explicitly set created_at
+                            updated_at=current_time   # Explicitly set updated_at
+                        )
+                        
+                        # Set timestamps if available
+                        if "createdAt" in n8n_workflow:
+                            try:
+                                new_workflow.n8n_created_at = datetime.fromisoformat(
+                                    n8n_workflow["createdAt"].replace("Z", "+00:00")
+                                )
+                            except:
+                                pass
+                        
+                        if "updatedAt" in n8n_workflow:
+                            try:
+                                new_workflow.n8n_updated_at = datetime.fromisoformat(
+                                    n8n_workflow["updatedAt"].replace("Z", "+00:00")
+                                )
+                            except:
+                                pass
+                        
+                        db.add(new_workflow)
                     
-                    # Set timestamps if available
-                    if "createdAt" in n8n_workflow:
-                        try:
-                            new_workflow.n8n_created_at = datetime.fromisoformat(
-                                n8n_workflow["createdAt"].replace("Z", "+00:00")
-                            )
-                        except:
-                            pass
+                    synced_count += 1
                     
-                    if "updatedAt" in n8n_workflow:
-                        try:
-                            new_workflow.n8n_updated_at = datetime.fromisoformat(
-                                n8n_workflow["updatedAt"].replace("Z", "+00:00")
-                            )
-                        except:
-                            pass
-                    
-                    db.add(new_workflow)
-                
-                synced_count += 1
+                except Exception as workflow_error:
+                    # Log individual workflow sync errors but continue with others
+                    self.logger.warning(f"Failed to sync workflow {workflow_id} for client {client.id}: {workflow_error}")
+                    continue
             
             await db.commit()
             self.logger.info(f"Synced {synced_count} workflows for client {client.id}")
