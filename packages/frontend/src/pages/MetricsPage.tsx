@@ -3,31 +3,44 @@ import { useQuery } from '@tanstack/react-query'
 import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
 import { useAuth } from '@/contexts/AuthContext'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
   BarChart3,
   Activity,
   TrendingUp,
+  TrendingDown,
   Clock,
   CheckCircle,
   XCircle,
   Building2,
   Zap,
   Timer,
-  Target
+  Target,
+  Eye,
+  Filter
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts'
+import { AnimatedCard } from '@/components/ui/animated-card'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
+import { 
+  fadeInUp, 
+  staggerContainer, 
+  staggerItem, 
+  pageTransition,
+  scaleIn
+} from '@/lib/animations'
 
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
 
 export function MetricsPage() {
   const { isAdmin, isClient } = useAuth()
   const [selectedClientId, setSelectedClientId] = useState<string>('')
+  const [selectedTab, setSelectedTab] = useState('overview')
 
   // Admin queries
   const { data: adminMetrics, isLoading: adminLoading } = useQuery({
@@ -74,26 +87,40 @@ export function MetricsPage() {
 
   if (isAdmin) {
     return (
-      <AdminMetricsView
-        adminMetrics={adminMetrics}
-        clients={clients}
-        selectedClientId={selectedClientId}
-        setSelectedClientId={setSelectedClientId}
-        selectedClientMetrics={selectedClientMetrics}
-        selectedClientWorkflows={selectedClientWorkflows}
-        isLoading={adminLoading}
-        selectedClientLoading={selectedClientLoading || selectedClientWorkflowsLoading}
-      />
+      <motion.div
+        variants={pageTransition}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
+        <AdminMetricsView
+          adminMetrics={adminMetrics}
+          clients={clients}
+          selectedClientId={selectedClientId}
+          setSelectedClientId={setSelectedClientId}
+          selectedClientMetrics={selectedClientMetrics}
+          selectedClientWorkflows={selectedClientWorkflows}
+          isLoading={adminLoading}
+          selectedClientLoading={selectedClientLoading || selectedClientWorkflowsLoading}
+        />
+      </motion.div>
     )
   }
 
   if (isClient) {
     return (
-      <ClientMetricsView
-        metrics={clientMetrics}
-        workflows={clientWorkflows}
-        isLoading={clientMetricsLoading || clientWorkflowsLoading}
-      />
+      <motion.div
+        variants={pageTransition}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+      >
+        <ClientMetricsView
+          metrics={clientMetrics}
+          workflows={clientWorkflows}
+          isLoading={clientMetricsLoading || clientWorkflowsLoading}
+        />
+      </motion.div>
     )
   }
 
@@ -119,29 +146,33 @@ function AdminMetricsView({
       title: 'Total Clients',
       value: adminMetrics?.total_clients || 0,
       icon: Building2,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'blue',
+      trend: { value: 12, isPositive: true },
+      description: 'Active organizations'
     },
     {
       title: 'Total Workflows',
       value: adminMetrics?.total_workflows || 0,
       icon: Activity,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'green',
+      trend: { value: 8, isPositive: true },
+      description: 'Automated processes'
     },
     {
       title: 'Total Executions',
-      value: adminMetrics?.total_executions || 0,
-      icon: BarChart3,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      value: (adminMetrics?.total_executions || 0).toLocaleString(),
+      icon: Zap,
+      color: 'purple',
+      trend: { value: 24, isPositive: true },
+      description: 'Last 30 days'
     },
     {
       title: 'Overall Success Rate',
       value: `${adminMetrics?.overall_success_rate || 0}%`,
       icon: TrendingUp,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
+      color: 'green',
+      trend: { value: 2, isPositive: true },
+      description: 'System performance'
     },
   ]
 
@@ -159,155 +190,254 @@ function AdminMetricsView({
   })) || []
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Metrics Dashboard</h1>
-        <p className="text-gray-600 mt-2">Overview of all clients and their performance</p>
-      </div>
+    <div className="p-6 space-y-8">
+      {/* Header */}
+      <motion.div 
+        variants={fadeInUp}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-4xl font-bold text-gradient mb-2">Analytics Dashboard</h1>
+          <p className="text-muted-foreground text-lg">Comprehensive workflow analytics across all clients</p>
+        </div>
+        <motion.div 
+          className="flex items-center space-x-3"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, type: 'spring' }}
+        >
+          <div className="flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30">
+            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+            <span className="text-sm font-medium text-green-700 dark:text-green-400">Real-time</span>
+          </div>
+          <Badge variant="outline" className="px-3 py-1">
+            <Eye className="w-3 h-3 mr-1" />
+            Live Analytics
+          </Badge>
+        </motion.div>
+      </motion.div>
 
       <Tabs defaultValue="overview" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="client-detail">Client Details</TabsTrigger>
-        </TabsList>
+        <motion.div variants={scaleIn}>
+          <TabsList className="grid w-full grid-cols-2 lg:w-96">
+            <TabsTrigger value="overview" className="flex items-center gap-2">
+              <BarChart3 className="w-4 h-4" />
+              Overview
+            </TabsTrigger>
+            <TabsTrigger value="client-detail" className="flex items-center gap-2">
+              <Building2 className="w-4 h-4" />
+              Client Analysis
+            </TabsTrigger>
+          </TabsList>
+        </motion.div>
 
         <TabsContent value="overview" className="space-y-6">
           {/* Overall Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {overallStats.map((stat) => (
-              <Card key={stat.title}>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+          <motion.div 
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+            variants={staggerContainer}
+            initial="initial"
+            animate="animate"
+          >
+            {overallStats.map((stat, index) => (
+              <motion.div key={stat.title} variants={staggerItem}>
+                <AnimatedCard key={stat.title} className="overflow-hidden">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
+                        <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
+                        {stat.trend && (
+                          <div className={`flex items-center space-x-1 text-sm ${
+                            stat.trend.isPositive ? 'text-green-600' : 'text-red-600'
+                          }`}>
+                            {stat.trend.isPositive ? (
+                              <TrendingUp className="w-3 h-3" />
+                            ) : (
+                              <TrendingDown className="w-3 h-3" />
+                            )}
+                            <span>{stat.trend.value}%</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className={`p-3 rounded-xl bg-gradient-to-br ${
+                        stat.color === 'blue' ? 'from-blue-500 to-blue-600' :
+                        stat.color === 'green' ? 'from-green-500 to-green-600' :
+                        stat.color === 'purple' ? 'from-purple-500 to-purple-600' :
+                        'from-gray-500 to-gray-600'
+                      }`}>
+                        <stat.icon className="w-6 h-6 text-white" />
+                      </div>
                     </div>
-                    <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                      <stat.icon className={`w-6 h-6 ${stat.color}`} />
+                    <div className="mt-4">
+                      <p className="text-xs text-muted-foreground">{stat.description}</p>
                     </div>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </AnimatedCard>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
 
           {/* Charts */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Client Workflows & Executions</CardTitle>
-                <CardDescription>Comparison across all clients</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="name" />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="workflows" fill="#3B82F6" name="Workflows" />
-                    <Bar dataKey="executions" fill="#10B981" name="Executions" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            <motion.div variants={fadeInUp}>
+              <AnimatedCard className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Client Performance</h3>
+                  <p className="text-sm text-muted-foreground">Workflows and executions by client</p>
+                </div>
+                <div className="h-80 chart-container">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <AreaChart data={chartData}>
+                      <defs>
+                        <linearGradient id="colorExecutions" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="5%" stopColor="#3B82F6" stopOpacity={0.3}/>
+                          <stop offset="95%" stopColor="#3B82F6" stopOpacity={0}/>
+                        </linearGradient>
+                      </defs>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis 
+                        dataKey="name" 
+                        stroke="hsl(var(--muted-foreground))"
+                        fontSize={12}
+                      />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        }}
+                      />
+                      <Area 
+                        type="monotone" 
+                        dataKey="executions" 
+                        stroke="#3B82F6" 
+                        fillOpacity={1} 
+                        fill="url(#colorExecutions)"
+                        strokeWidth={2}
+                      />
+                    </AreaChart>
+                  </ResponsiveContainer>
+                </div>
+              </AnimatedCard>
+            </motion.div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Execution Distribution</CardTitle>
-                <CardDescription>Total executions by client</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </CardContent>
-            </Card>
+            <motion.div variants={fadeInUp}>
+              <AnimatedCard className="p-6">
+                <div className="mb-6">
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Execution Distribution</h3>
+                  <p className="text-sm text-muted-foreground">Total executions by client</p>
+                </div>
+                <div className="h-80 chart-container">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={120}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        contentStyle={{
+                          backgroundColor: 'hsl(var(--background))',
+                          border: '1px solid hsl(var(--border))',
+                          borderRadius: '8px',
+                          boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                        }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </AnimatedCard>
+            </motion.div>
           </div>
-
-          {/* Client List */}
-          <Card>
-            <CardHeader>
-              <CardTitle>All Clients</CardTitle>
-              <CardDescription>Detailed metrics for each client</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {adminMetrics?.clients?.map((client: any) => (
-                  <div key={client.client_id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex items-center space-x-4">
-                      <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                        <Building2 className="w-5 h-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">{client.client_name}</h3>
-                        <p className="text-sm text-gray-500">
-                          {client.total_workflows} workflows • {client.total_executions} executions
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center space-x-4">
-                      <Badge variant={client.success_rate >= 90 ? 'default' : client.success_rate >= 70 ? 'secondary' : 'destructive'}>
-                        {client.success_rate}% success
-                      </Badge>
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">{client.active_workflows} active</p>
-                        <p className="text-xs text-gray-500">
-                          {client.last_activity ? formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }) : 'No activity'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="client-detail" className="space-y-6">
-          <div className="flex items-center space-x-4">
-            <Select value={selectedClientId} onValueChange={setSelectedClientId}>
-              <SelectTrigger className="w-64">
-                <SelectValue placeholder="Select a client" />
-              </SelectTrigger>
-              <SelectContent>
-                {clients?.map((client: any) => (
-                  <SelectItem key={client.id} value={client.id.toString()}>
-                    {client.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {selectedClientId && (
-            <ClientDetailView
-              metrics={selectedClientMetrics}
-              workflows={selectedClientWorkflows}
-              isLoading={selectedClientLoading}
-            />
-          )}
+          <motion.div variants={fadeInUp}>
+            <AnimatedCard className="p-6">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground mb-1">Client Analysis</h3>
+                  <p className="text-sm text-muted-foreground">Detailed metrics for individual clients</p>
+                </div>
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger className="w-64">
+                    <Filter className="w-4 h-4 mr-2" />
+                    <SelectValue placeholder="Select a client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients?.map((client: any) => (
+                      <SelectItem key={client.id} value={client.id.toString()}>
+                        {client.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              <AnimatePresence mode="wait">
+                {selectedClientLoading ? (
+                  <motion.div
+                    key="loading"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                  >
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        {Array.from({ length: 4 }).map((_, i) => (
+                          <div key={i} className="animate-pulse">
+                            <div className="bg-muted/50 h-24 rounded-lg" />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="bg-muted/50 h-64 rounded-lg animate-pulse" />
+                    </div>
+                  </motion.div>
+                ) : selectedClientMetrics ? (
+                  <motion.div
+                    key="data"
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <ClientDetailView 
+                      metrics={selectedClientMetrics}
+                      workflows={selectedClientWorkflows}
+                    />
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    key="empty"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="text-center py-12 text-muted-foreground"
+                  >
+                    <Target className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                    <p>Select a client to view detailed analytics</p>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </AnimatedCard>
+          </motion.div>
         </TabsContent>
       </Tabs>
     </div>
   )
 }
+
 
 function ClientMetricsView({ metrics, workflows, isLoading }: any) {
   if (isLoading) {

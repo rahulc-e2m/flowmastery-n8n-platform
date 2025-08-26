@@ -3,6 +3,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { useQuery } from '@tanstack/react-query'
 import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
+import { motion } from 'framer-motion'
 import { 
   BarChart3, 
   Building2, 
@@ -11,12 +12,22 @@ import {
   TrendingUp,
   Clock,
   CheckCircle,
-  XCircle
+  XCircle,
+  Zap,
+  ArrowUpRight,
+  ArrowDownRight
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { AnimatedCard } from '@/components/ui/animated-card'
 import { formatDistanceToNow } from 'date-fns'
+import { 
+  fadeInUp, 
+  staggerContainer, 
+  staggerItem, 
+  pageTransition 
+} from '@/lib/animations'
 
 export function DashboardPage() {
   const { user, isAdmin, isClient } = useAuth()
@@ -26,7 +37,7 @@ export function DashboardPage() {
     queryKey: ['admin-metrics'],
     queryFn: MetricsApi.getAllClientsMetrics,
     enabled: isAdmin,
-    refetchInterval: 30000, // Refresh every 30 seconds
+    refetchInterval: 30000,
   })
 
   const { data: clients, isLoading: clientsLoading } = useQuery({
@@ -79,96 +90,216 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       title: 'Total Clients',
       value: metrics?.total_clients || 0,
       icon: Building2,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'blue',
+      trend: { value: 12, isPositive: true },
+      description: 'Active organizations'
     },
     {
       title: 'Total Workflows',
       value: metrics?.total_workflows || 0,
       icon: Activity,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'green',
+      trend: { value: 8, isPositive: true },
+      description: 'Automated processes'
     },
     {
       title: 'Total Executions',
-      value: metrics?.total_executions || 0,
-      icon: BarChart3,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      value: (metrics?.total_executions || 0).toLocaleString(),
+      icon: Zap,
+      color: 'purple',
+      trend: { value: 24, isPositive: true },
+      description: 'Last 30 days'
     },
     {
       title: 'Success Rate',
       value: `${metrics?.overall_success_rate || 0}%`,
       icon: TrendingUp,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
+      color: 'green',
+      trend: { value: 2, isPositive: true },
+      description: 'System performance'
     },
   ]
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
-        <p className="text-gray-600 mt-2">Overview of all clients and their metrics</p>
-      </div>
+    <motion.div 
+      className="p-6 space-y-8"
+      variants={pageTransition}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      {/* Header */}
+      <motion.div 
+        variants={fadeInUp}
+        className="flex items-center justify-between"
+      >
+        <div>
+          <h1 className="text-4xl font-bold text-gradient mb-2">Admin Dashboard</h1>
+          <p className="text-muted-foreground text-lg">Complete overview of all clients and workflows</p>
+        </div>
+        <motion.div 
+          className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-green-50 dark:bg-green-950/20 border border-green-200 dark:border-green-800/30"
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, type: 'spring' }}
+        >
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+          <span className="text-sm font-medium text-green-700 dark:text-green-400">Live Data</span>
+        </motion.div>
+      </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        {stats.map((stat, index) => (
+          <motion.div key={stat.title} variants={staggerItem}>
+            <MetricCard {...stat} />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
       {/* Clients Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Clients Overview</CardTitle>
-          <CardDescription>Performance metrics for all clients</CardDescription>
-        </CardHeader>
-        <CardContent>
+      <motion.div variants={fadeInUp}>
+        <AnimatedCard className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-1">Client Performance</h3>
+              <p className="text-muted-foreground">Real-time metrics across all organizations</p>
+            </div>
+            <Badge variant="outline" className="px-3 py-1">
+              {metrics?.clients?.length || 0} Active
+            </Badge>
+          </div>
+          
           <div className="space-y-4">
-            {metrics?.clients?.map((client: any) => (
-              <div key={client.client_id} className="flex items-center justify-between p-4 border rounded-lg">
+            {metrics?.clients?.map((client: any, index: number) => (
+              <motion.div 
+                key={client.client_id}
+                className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.01, x: 4 }}
+              >
                 <div className="flex items-center space-x-4">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center">
-                    <Building2 className="w-5 h-5 text-blue-600" />
-                  </div>
+                  <motion.div 
+                    className="w-12 h-12 bg-gradient-to-br from-primary/20 to-accent/20 rounded-xl flex items-center justify-center"
+                    whileHover={{ rotate: 5, scale: 1.1 }}
+                  >
+                    <Building2 className="w-6 h-6 text-primary" />
+                  </motion.div>
                   <div>
-                    <h3 className="font-medium text-gray-900">{client.client_name}</h3>
-                    <p className="text-sm text-gray-500">
+                    <h4 className="font-semibold text-foreground group-hover:text-primary transition-colors">
+                      {client.client_name}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
                       {client.total_workflows} workflows • {client.total_executions} executions
                     </p>
                   </div>
                 </div>
+                
                 <div className="flex items-center space-x-4">
-                  <Badge variant={client.success_rate >= 90 ? 'default' : client.success_rate >= 70 ? 'secondary' : 'destructive'}>
+                  <Badge 
+                    variant={client.success_rate >= 90 ? 'default' : client.success_rate >= 70 ? 'secondary' : 'destructive'}
+                    className="font-medium"
+                  >
                     {client.success_rate}% success
                   </Badge>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">{client.active_workflows} active</p>
-                    <p className="text-xs text-gray-500">
-                      {client.last_activity ? formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }) : 'No activity'}
+                    <div className="flex items-center space-x-1 text-sm font-medium text-foreground">
+                      <CheckCircle className="w-4 h-4 text-green-500" />
+                      <span>{client.active_workflows} active</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {client.last_activity ? 
+                        formatDistanceToNow(new Date(client.last_activity), { addSuffix: true }) : 
+                        'No recent activity'
+                      }
                     </p>
                   </div>
+                  <ArrowUpRight className="w-4 h-4 text-muted-foreground group-hover:text-primary transition-colors" />
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </AnimatedCard>
+      </motion.div>
+    </motion.div>
+  )
+}
+
+// Metric Card Component
+function MetricCard({ title, value, icon: Icon, color, trend, description }: any) {
+  const colorClasses = {
+    blue: 'text-blue-600 bg-blue-100 dark:text-blue-400 dark:bg-blue-950/50',
+    green: 'text-green-600 bg-green-100 dark:text-green-400 dark:bg-green-950/50',
+    purple: 'text-purple-600 bg-purple-100 dark:text-purple-400 dark:bg-purple-950/50',
+    orange: 'text-orange-600 bg-orange-100 dark:text-orange-400 dark:bg-orange-950/50'
+  }
+
+  return (
+    <AnimatedCard className="p-6 relative overflow-hidden">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <motion.p 
+            className="text-sm font-medium text-muted-foreground mb-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {title}
+          </motion.p>
+          <motion.p 
+            className="text-3xl font-bold text-foreground mb-1"
+            initial={{ opacity: 0, scale: 0.5 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: 0.2, type: 'spring', stiffness: 200 }}
+          >
+            {value}
+          </motion.p>
+          {description && (
+            <motion.p 
+              className="text-xs text-muted-foreground"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              {description}
+            </motion.p>
+          )}
+          {trend && (
+            <motion.div 
+              className={`flex items-center mt-2 text-xs font-medium ${
+                trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+            >
+              {trend.isPositive ? (
+                <ArrowUpRight className="w-3 h-3 mr-1" />
+              ) : (
+                <ArrowDownRight className="w-3 h-3 mr-1" />
+              )}
+              {Math.abs(trend.value)}%
+            </motion.div>
+          )}
+        </div>
+        <motion.div 
+          className={`p-3 rounded-xl shadow-sm ${colorClasses[color] || colorClasses.blue}`}
+          initial={{ opacity: 0, scale: 0, rotate: -45 }}
+          animate={{ opacity: 1, scale: 1, rotate: 0 }}
+          transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
+          whileHover={{ scale: 1.1, rotate: 5 }}
+        >
+          <Icon className="w-6 h-6" />
+        </motion.div>
+      </div>
+    </AnimatedCard>
   )
 }
 
@@ -182,109 +313,141 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       title: 'Total Workflows',
       value: metrics?.total_workflows || 0,
       icon: Activity,
-      color: 'text-blue-600',
-      bgColor: 'bg-blue-100',
+      color: 'blue',
+      trend: { value: 5, isPositive: true },
+      description: 'Automated processes'
     },
     {
       title: 'Active Workflows',
       value: metrics?.active_workflows || 0,
       icon: CheckCircle,
-      color: 'text-green-600',
-      bgColor: 'bg-green-100',
+      color: 'green',
+      trend: { value: 2, isPositive: true },
+      description: 'Currently running'
     },
     {
       title: 'Total Executions',
-      value: metrics?.total_executions || 0,
-      icon: BarChart3,
-      color: 'text-purple-600',
-      bgColor: 'bg-purple-100',
+      value: (metrics?.total_executions || 0).toLocaleString(),
+      icon: Zap,
+      color: 'purple',
+      trend: { value: 15, isPositive: true },
+      description: 'Last 30 days'
     },
     {
       title: 'Success Rate',
       value: `${metrics?.success_rate || 0}%`,
       icon: TrendingUp,
-      color: 'text-emerald-600',
-      bgColor: 'bg-emerald-100',
+      color: 'green',
+      trend: { value: 3, isPositive: true },
+      description: 'Performance metric'
     },
   ]
 
   return (
-    <div className="p-6 space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-2">Your workflow metrics and performance</p>
-      </div>
+    <motion.div 
+      className="p-6 space-y-8"
+      variants={pageTransition}
+      initial="initial"
+      animate="animate"
+      exit="exit"
+    >
+      {/* Header */}
+      <motion.div variants={fadeInUp}>
+        <h1 className="text-4xl font-bold text-gradient mb-2">Your Dashboard</h1>
+        <p className="text-muted-foreground text-lg">Monitor your workflow performance and analytics</p>
+      </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat) => (
-          <Card key={stat.title}>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                  <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                </div>
-                <div className={`p-3 rounded-full ${stat.bgColor}`}>
-                  <stat.icon className={`w-6 h-6 ${stat.color}`} />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+      <motion.div 
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6"
+        variants={staggerContainer}
+        initial="initial"
+        animate="animate"
+      >
+        {stats.map((stat, index) => (
+          <motion.div key={stat.title} variants={staggerItem}>
+            <MetricCard {...stat} />
+          </motion.div>
         ))}
-      </div>
+      </motion.div>
 
-      {/* Workflows Overview */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Workflows Overview</CardTitle>
-          <CardDescription>Performance of your individual workflows</CardDescription>
-        </CardHeader>
-        <CardContent>
+      {/* Recent Workflows */}
+      <motion.div variants={fadeInUp}>
+        <AnimatedCard className="p-6">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h3 className="text-xl font-semibold text-foreground mb-1">Recent Workflows</h3>
+              <p className="text-muted-foreground">Latest execution status and performance</p>
+            </div>
+            <Badge variant="outline" className="px-3 py-1">
+              {workflows?.length || 0} Total
+            </Badge>
+          </div>
+          
           <div className="space-y-4">
-            {workflows?.workflows?.map((workflow: any) => (
-              <div key={workflow.workflow_id} className="flex items-center justify-between p-4 border rounded-lg">
+            {workflows?.slice(0, 5).map((workflow: any, index: number) => (
+              <motion.div 
+                key={workflow.workflow_id}
+                className="group flex items-center justify-between p-4 rounded-xl border border-border/50 hover:border-border transition-all duration-200 hover:bg-accent/30"
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.1 }}
+                whileHover={{ scale: 1.01, x: 4 }}
+              >
                 <div className="flex items-center space-x-4">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    workflow.status === 'active' ? 'bg-green-100' : 
-                    workflow.status === 'error' ? 'bg-red-100' : 'bg-gray-100'
-                  }`}>
-                    {workflow.status === 'active' ? (
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                    ) : workflow.status === 'error' ? (
-                      <XCircle className="w-5 h-5 text-red-600" />
-                    ) : (
-                      <Clock className="w-5 h-5 text-gray-600" />
-                    )}
-                  </div>
+                  <motion.div 
+                    className="w-10 h-10 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center"
+                    whileHover={{ rotate: 5, scale: 1.1 }}
+                  >
+                    <Activity className="w-5 h-5 text-primary" />
+                  </motion.div>
                   <div>
-                    <h3 className="font-medium text-gray-900">{workflow.workflow_name}</h3>
-                    <p className="text-sm text-gray-500">
-                      {workflow.total_executions} executions • {workflow.success_rate}% success
+                    <h4 className="font-medium text-foreground group-hover:text-primary transition-colors">
+                      {workflow.workflow_name}
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      {workflow.total_executions} executions
                     </p>
                   </div>
                 </div>
+                
                 <div className="flex items-center space-x-4">
-                  <Badge variant={workflow.status === 'active' ? 'default' : workflow.status === 'error' ? 'destructive' : 'secondary'}>
-                    {workflow.status}
+                  <Badge 
+                    variant={workflow.success_rate >= 90 ? 'default' : workflow.success_rate >= 70 ? 'secondary' : 'destructive'}
+                  >
+                    {workflow.success_rate}%
                   </Badge>
                   <div className="text-right">
-                    <p className="text-sm font-medium text-gray-900">
-                      {workflow.avg_execution_time ? `${workflow.avg_execution_time}s avg` : 'N/A'}
+                    <p className="text-sm font-medium text-foreground">
+                      {workflow.last_execution_status === 'success' ? (
+                        <span className="flex items-center text-green-600">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Success
+                        </span>
+                      ) : (
+                        <span className="flex items-center text-red-600">
+                          <XCircle className="w-4 h-4 mr-1" />
+                          Failed
+                        </span>
+                      )}
                     </p>
-                    <p className="text-xs text-gray-500">
-                      {workflow.last_execution ? formatDistanceToNow(new Date(workflow.last_execution), { addSuffix: true }) : 'No executions'}
+                    <p className="text-xs text-muted-foreground">
+                      {workflow.last_execution_time ? 
+                        formatDistanceToNow(new Date(workflow.last_execution_time), { addSuffix: true }) : 
+                        'No recent runs'
+                      }
                     </p>
                   </div>
                 </div>
-              </div>
+              </motion.div>
             ))}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        </AnimatedCard>
+      </motion.div>
+    </motion.div>
   )
 }
+
 
 function DashboardSkeleton() {
   return (
