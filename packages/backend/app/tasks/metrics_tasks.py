@@ -17,7 +17,9 @@ logger = logging.getLogger(__name__)
     bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={'max_retries': 3, 'countdown': 60},
-    name='app.tasks.metrics_tasks.sync_client_metrics'
+    name='app.tasks.metrics_tasks.sync_client_metrics',
+    acks_late=True,
+    reject_on_worker_lost=True
 )
 def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
     """
@@ -38,6 +40,38 @@ def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
             result = sync_metrics_collector.sync_client_data(db, client_id)
         
         logger.info(f"Completed metrics sync for client {client_id}: {result}")
+        
+        # Invalidate cache for this client after successful sync
+        try:
+            from app.services.cache.redis import redis_client
+            import asyncio
+            
+            # Clear client-specific cache
+            cache_keys = [
+                f"enhanced_client_metrics:{client_id}",
+                f"client_metrics:{client_id}",
+                f"client_workflows:{client_id}"
+            ]
+            
+            # Run cache clearing in async context
+            async def clear_cache():
+                for key in cache_keys:
+                    await redis_client.delete(key)
+                # Also clear admin metrics cache since it includes this client
+                await redis_client.clear_pattern("admin_metrics:*")
+                await redis_client.clear_pattern("enhanced_client_metrics:*")
+            
+            # Execute cache clearing
+            try:
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(clear_cache())
+            except RuntimeError:
+                # If no event loop, create one
+                asyncio.run(clear_cache())
+                
+        except Exception as cache_error:
+            logger.warning(f"Failed to clear cache after sync: {cache_error}")
+        
         return {
             'status': 'success',
             'client_id': client_id,
@@ -66,7 +100,9 @@ def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
     bind=True,
     autoretry_for=(Exception,),
     retry_kwargs={'max_retries': 2, 'countdown': 120},
-    name='app.tasks.metrics_tasks.sync_all_clients_metrics'
+    name='app.tasks.metrics_tasks.sync_all_clients_metrics',
+    acks_late=True,
+    reject_on_worker_lost=True
 )
 def sync_all_clients_metrics(self) -> Dict[str, Any]:
     """
@@ -88,6 +124,29 @@ def sync_all_clients_metrics(self) -> Dict[str, Any]:
         # Schedule individual client syncs for failed clients if any
         if result.get('errors'):
             logger.warning(f"Scheduling retry for failed clients: {len(result['errors'])} errors")
+        
+        # Clear all metrics cache after successful sync
+        try:
+            from app.services.cache.redis import redis_client
+            import asyncio
+            
+            async def clear_all_cache():
+                # Clear all metrics-related cache
+                await redis_client.clear_pattern("enhanced_client_metrics:*")
+                await redis_client.clear_pattern("client_metrics:*")
+                await redis_client.clear_pattern("client_workflows:*")
+                await redis_client.clear_pattern("admin_metrics:*")
+                logger.info("Cleared all metrics cache after sync")
+            
+            # Execute cache clearing
+            try:
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(clear_all_cache())
+            except RuntimeError:
+                asyncio.run(clear_all_cache())
+                
+        except Exception as cache_error:
+            logger.warning(f"Failed to clear cache after all clients sync: {cache_error}")
             
         return {
             'status': 'success',

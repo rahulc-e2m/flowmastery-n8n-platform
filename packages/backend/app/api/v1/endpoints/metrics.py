@@ -187,6 +187,12 @@ async def quick_sync_all_metrics(
     try:
         # Import here to avoid circular imports
         from app.services.persistent_metrics import persistent_metrics_collector
+        from app.services.cache.redis import redis_client
+        
+        # Clear all cache first
+        await redis_client.clear_pattern("enhanced_client_metrics:*")
+        await redis_client.clear_pattern("client_metrics:*")
+        await redis_client.clear_pattern("admin_metrics:*")
         
         # Sync all clients immediately
         results = []
@@ -209,6 +215,13 @@ async def quick_sync_all_metrics(
                     "status": "success",
                     "result": sync_result
                 })
+                
+                # Warm cache for this client immediately after sync
+                try:
+                    await enhanced_metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                except Exception as cache_error:
+                    logger.warning(f"Failed to warm cache for client {client.id}: {cache_error}")
+                    
             except Exception as e:
                 results.append({
                     "client_id": client.id,
@@ -220,6 +233,12 @@ async def quick_sync_all_metrics(
         # Commit all changes
         await db.commit()
         
+        # Warm admin metrics cache
+        try:
+            await enhanced_metrics_service.get_admin_metrics(db)
+        except Exception as cache_error:
+            logger.warning(f"Failed to warm admin metrics cache: {cache_error}")
+        
         successful = [r for r in results if r["status"] == "success"]
         failed = [r for r in results if r["status"] == "error"]
         
@@ -228,7 +247,8 @@ async def quick_sync_all_metrics(
             "successful": len(successful),
             "failed": len(failed),
             "results": results,
-            "timestamp": datetime.utcnow().isoformat()
+            "timestamp": datetime.utcnow().isoformat(),
+            "cache_warmed": True
         }
         
     except Exception as e:
@@ -496,6 +516,135 @@ async def get_my_execution_stats(
         db=db,
         current_user=current_user
     )
+
+
+@router.post("/admin/refresh-cache")
+async def refresh_metrics_cache(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Refresh metrics cache without syncing from n8n (admin only)"""
+    try:
+        from app.services.cache.redis import redis_client
+        from sqlalchemy import select
+        from app.models import Client
+        
+        # Clear all metrics cache
+        await redis_client.clear_pattern("enhanced_client_metrics:*")
+        await redis_client.clear_pattern("client_metrics:*")
+        await redis_client.clear_pattern("admin_metrics:*")
+        
+        # Get all clients
+        stmt = select(Client)
+        result = await db.execute(stmt)
+        clients = result.scalars().all()
+        
+        # Warm cache for all clients
+        warmed_clients = []
+        for client in clients:
+            try:
+                await enhanced_metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                warmed_clients.append(client.id)
+            except Exception as e:
+                logger.warning(f"Failed to warm cache for client {client.id}: {e}")
+        
+        # Warm admin metrics cache
+        await enhanced_metrics_service.get_admin_metrics(db)
+        
+        return {
+            "message": "Cache refreshed successfully",
+            "warmed_clients": len(warmed_clients),
+            "total_clients": len(clients),
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cache refresh failed: {str(e)}"
+        )
+
+
+@router.get("/admin/data-freshness")
+async def get_data_freshness(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Get data freshness information for all clients (admin only)"""
+    try:
+        from sqlalchemy import select, func
+        from app.models import Client, WorkflowExecution, MetricsAggregation
+        from app.services.cache.redis import redis_client
+        
+        # Get all clients
+        clients_stmt = select(Client)
+        clients_result = await db.execute(clients_stmt)
+        clients = clients_result.scalars().all()
+        
+        freshness_data = []
+        
+        for client in clients:
+            # Get last sync time from executions
+            last_sync_stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
+                WorkflowExecution.client_id == client.id
+            )
+            last_sync_result = await db.execute(last_sync_stmt)
+            last_sync = last_sync_result.scalar_one_or_none()
+            
+            # Get last aggregation time
+            last_agg_stmt = select(func.max(MetricsAggregation.computed_at)).where(
+                MetricsAggregation.client_id == client.id
+            )
+            last_agg_result = await db.execute(last_agg_stmt)
+            last_aggregation = last_agg_result.scalar_one_or_none()
+            
+            # Check cache status
+            cache_key = f"enhanced_client_metrics:{client.id}"
+            has_cache = await redis_client.exists(cache_key)
+            
+            # Calculate freshness scores
+            now = datetime.utcnow()
+            sync_age_minutes = None
+            agg_age_minutes = None
+            
+            if last_sync:
+                if last_sync.tzinfo is None:
+                    last_sync = last_sync.replace(tzinfo=timezone.utc)
+                sync_age_minutes = (now.replace(tzinfo=timezone.utc) - last_sync).total_seconds() / 60
+            
+            if last_aggregation:
+                if last_aggregation.tzinfo is None:
+                    last_aggregation = last_aggregation.replace(tzinfo=timezone.utc)
+                agg_age_minutes = (now.replace(tzinfo=timezone.utc) - last_aggregation).total_seconds() / 60
+            
+            freshness_data.append({
+                "client_id": client.id,
+                "client_name": client.name,
+                "last_sync": last_sync.isoformat() if last_sync else None,
+                "last_aggregation": last_aggregation.isoformat() if last_aggregation else None,
+                "sync_age_minutes": round(sync_age_minutes, 1) if sync_age_minutes else None,
+                "aggregation_age_minutes": round(agg_age_minutes, 1) if agg_age_minutes else None,
+                "has_cache": has_cache,
+                "sync_status": "fresh" if sync_age_minutes and sync_age_minutes < 15 else "stale" if sync_age_minutes else "never",
+                "overall_health": "healthy" if (sync_age_minutes and sync_age_minutes < 15 and has_cache) else "degraded"
+            })
+        
+        return {
+            "clients": freshness_data,
+            "summary": {
+                "total_clients": len(clients),
+                "healthy_clients": len([c for c in freshness_data if c["overall_health"] == "healthy"]),
+                "degraded_clients": len([c for c in freshness_data if c["overall_health"] == "degraded"]),
+                "cached_clients": len([c for c in freshness_data if c["has_cache"]]),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get data freshness: {str(e)}"
+        )
 
 
 @router.get("/admin/scheduler-status")

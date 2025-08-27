@@ -16,11 +16,14 @@ import {
   XCircle,
   Zap,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  RefreshCw
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Button } from '@/components/ui/button'
+import { toast } from 'sonner'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { ClientMetricsCard } from '@/components/dashboard/ClientMetricsCard'
@@ -44,7 +47,18 @@ export function DashboardPage() {
     queryKey: ['admin-metrics'],
     queryFn: MetricsApi.getAllClientsMetrics,
     enabled: isAdmin,
-    refetchInterval: 30000,
+    refetchInterval: (data) => {
+      // More frequent polling if data is stale
+      if (!data?.last_updated) return 15000 // 15 seconds if no timestamp
+      
+      const lastUpdate = new Date(data.last_updated)
+      const now = new Date()
+      const ageMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60)
+      
+      // If data is older than 10 minutes, poll more frequently
+      return ageMinutes > 10 ? 15000 : 30000
+    },
+    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
   })
 
   const { data: clients, isLoading: clientsLoading } = useQuery({
@@ -58,7 +72,18 @@ export function DashboardPage() {
     queryKey: ['my-metrics'],
     queryFn: MetricsApi.getMyMetrics,
     enabled: isClient,
-    refetchInterval: 30000,
+    refetchInterval: (data) => {
+      // More frequent polling if data is stale
+      if (!data?.last_updated) return 15000 // 15 seconds if no timestamp
+      
+      const lastUpdate = new Date(data.last_updated)
+      const now = new Date()
+      const ageMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60)
+      
+      // If data is older than 10 minutes, poll more frequently
+      return ageMinutes > 10 ? 15000 : 30000
+    },
+    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
   })
 
   const { data: clientWorkflows, isLoading: clientWorkflowsLoading } = useQuery({
@@ -66,6 +91,7 @@ export function DashboardPage() {
     queryFn: MetricsApi.getMyWorkflowMetrics,
     enabled: isClient,
     refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000,
   })
 
   if (isAdmin) {
@@ -89,6 +115,22 @@ export function DashboardPage() {
 
 function AdminDashboard({ metrics, clients, isLoading }: any) {
   const navigate = useNavigate()
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await MetricsApi.refreshCache()
+      toast.success('Dashboard data refreshed successfully')
+      // Trigger a refetch of the data
+      window.location.reload()
+    } catch (error) {
+      toast.error('Failed to refresh dashboard data')
+      console.error('Refresh error:', error)
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   if (isLoading) {
     return <DashboardSkeleton />
@@ -154,11 +196,23 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
           <h1 className="text-4xl font-bold text-gradient mb-2">Admin Dashboard</h1>
           <p className="text-muted-foreground text-lg">Complete overview of all clients and workflows</p>
         </div>
-        <DataSourceIndicator 
-          lastUpdated={metrics?.last_updated} 
-          variant="full"
-          debug={true}
-        />
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </Button>
+          <DataSourceIndicator 
+            lastUpdated={metrics?.last_updated} 
+            variant="full"
+            debug={true}
+          />
+        </div>
       </motion.div>
 
       {/* Stats Grid */}
@@ -280,6 +334,21 @@ function MetricCard({ title, value, icon: Icon, color, trend, description }: any
 }
 
 function ClientDashboard({ metrics, workflows, isLoading }: any) {
+  const [isRefreshing, setIsRefreshing] = React.useState(false)
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      // For client users, we can't refresh cache directly, so just reload
+      window.location.reload()
+      toast.success('Dashboard refreshed')
+    } catch (error) {
+      toast.error('Failed to refresh dashboard')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
   if (isLoading) {
     return <DashboardSkeleton />
   }
@@ -375,10 +444,22 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
           <h1 className="text-4xl font-bold text-gradient mb-2">Your Dashboard</h1>
           <p className="text-muted-foreground text-lg">Monitor your workflow performance and analytics</p>
         </div>
-        <DataSourceIndicator 
-          lastUpdated={metrics?.last_updated || workflows?.last_updated} 
-          variant="compact"
-        />
+        <div className="flex items-center space-x-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center space-x-2"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+          </Button>
+          <DataSourceIndicator 
+            lastUpdated={metrics?.last_updated || workflows?.last_updated} 
+            variant="compact"
+          />
+        </div>
       </motion.div>
 
       {/* Stats Grid */}

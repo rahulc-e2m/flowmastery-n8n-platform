@@ -33,7 +33,7 @@ class EnhancedMetricsService:
     """Enhanced metrics service using persistent database storage"""
     
     def __init__(self):
-        self.cache_ttl = 300  # 5 minutes cache for aggregated data
+        self.cache_ttl = 900  # 15 minutes cache to match Celery schedule
         
     async def get_client_metrics(
         self, 
@@ -77,9 +77,17 @@ class EnhancedMetricsService:
             # Fallback to computing from raw data
             metrics = await self._compute_client_metrics_from_raw_data(db, client)
         
-        # Cache the result
+        # Cache the result with extended TTL if data is fresh
         if use_cache:
-            await redis_client.set(cache_key, metrics.model_dump(), expire=self.cache_ttl)
+            # Use longer cache TTL if we have recent aggregation data
+            cache_ttl = self.cache_ttl
+            if recent_metrics and recent_metrics.computed_at:
+                # If aggregation is less than 5 minutes old, cache for longer
+                age_minutes = (datetime.utcnow().replace(tzinfo=timezone.utc) - recent_metrics.computed_at).total_seconds() / 60
+                if age_minutes < 5:
+                    cache_ttl = self.cache_ttl * 2  # Double cache time for fresh data
+            
+            await redis_client.set(cache_key, metrics.model_dump(), expire=cache_ttl)
         
         return metrics
     

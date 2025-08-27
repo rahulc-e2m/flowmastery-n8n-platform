@@ -68,10 +68,10 @@ celery_app.conf.update(
     
     # Beat schedule for periodic tasks
     beat_schedule={
-        'sync-metrics-every-15-minutes': {
+        'sync-metrics-every-10-minutes': {
             'task': 'app.tasks.metrics_tasks.sync_all_clients_metrics',
-            'schedule': 15 * 60,  # 15 minutes in seconds
-            'options': {'queue': 'metrics', 'expires': 10 * 60}  # Expire if not run within 10 min
+            'schedule': 10 * 60,  # 10 minutes in seconds
+            'options': {'queue': 'metrics', 'expires': 8 * 60}  # Expire if not run within 8 min
         },
         'daily-aggregation': {
             'task': 'app.tasks.aggregation_tasks.compute_daily_aggregations',

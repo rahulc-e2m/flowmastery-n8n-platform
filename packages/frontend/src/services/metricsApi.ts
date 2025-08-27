@@ -73,6 +73,16 @@ export class MetricsApi {
     }
   }
 
+  static async quickSync(): Promise<{ message: string; successful: number; failed: number }> {
+    const response = await api.post('/metrics/admin/quick-sync')
+    return response.data
+  }
+
+  static async refreshCache(): Promise<{ message: string; warmed_clients: number }> {
+    const response = await api.post('/metrics/admin/refresh-cache')
+    return response.data
+  }
+
   static async getSchedulerStatus(): Promise<any> {
     const response = await api.get('/metrics/admin/scheduler-status')
     return response.data
