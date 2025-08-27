@@ -4,21 +4,12 @@ Celery tasks for metrics aggregation and data maintenance
 
 from datetime import datetime, timedelta, date
 from typing import Dict, Any
-import asyncio
-import concurrent.futures
 
 from celery import Task
 
 from app.core.celery_app import celery_app
 from app.database.sync_connection import get_sync_db_session
 from app.services.metrics_aggregator import metrics_aggregator
-
-
-def run_async_task(coro):
-    """Run an async coroutine in a thread-safe manner for Celery"""
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(asyncio.run, coro)
-        return future.result()
 
 
 @celery_app.task(bind=True, name="app.tasks.aggregation_tasks.compute_daily_aggregations")
@@ -38,13 +29,13 @@ def compute_daily_aggregations(self, target_date: str = None) -> Dict[str, Any]:
         else:
             computation_date = date.today() - timedelta(days=1)
         
-        async def _compute():
-            async with get_sync_db_session() as db:
-                return await metrics_aggregator.compute_daily_aggregations(
+        def _compute():
+            with get_sync_db_session() as db:
+                return metrics_aggregator.compute_daily_aggregations_sync(
                     db, computation_date
                 )
         
-        result = run_async_task(_compute())
+        result = _compute()
         
         return {
             "status": "success",
@@ -82,13 +73,13 @@ def compute_weekly_aggregations(self, target_week: str = None) -> Dict[str, Any]
             days_since_monday = today.weekday()
             week_start = today - timedelta(days=days_since_monday + 7)
         
-        async def _compute():
-            async with get_sync_db_session() as db:
-                return await metrics_aggregator.compute_weekly_aggregations(
+        def _compute():
+            with get_sync_db_session() as db:
+                return metrics_aggregator.compute_weekly_aggregations_sync(
                     db, week_start
                 )
         
-        result = run_async_task(_compute())
+        result = _compute()
         
         return {
             "status": "success",
@@ -129,13 +120,13 @@ def compute_monthly_aggregations(self, target_month: str = None) -> Dict[str, An
             else:
                 month_start = date(today.year, today.month - 1, 1)
         
-        async def _compute():
-            async with get_sync_db_session() as db:
-                return await metrics_aggregator.compute_monthly_aggregations(
+        def _compute():
+            with get_sync_db_session() as db:
+                return metrics_aggregator.compute_monthly_aggregations_sync(
                     db, month_start
                 )
         
-        result = run_async_task(_compute())
+        result = _compute()
         
         return {
             "status": "success",
@@ -167,13 +158,13 @@ def cleanup_old_data(self, retention_days: int = 365) -> Dict[str, Any]:
     try:
         cutoff_date = date.today() - timedelta(days=retention_days)
         
-        async def _cleanup():
-            async with get_sync_db_session() as db:
-                return await metrics_aggregator.cleanup_old_data(
+        def _cleanup():
+            with get_sync_db_session() as db:
+                return metrics_aggregator.cleanup_old_data_sync(
                     db, cutoff_date
                 )
         
-        result = run_async_task(_cleanup())
+        result = _cleanup()
         
         return {
             "status": "success",
@@ -213,13 +204,13 @@ def recompute_aggregations(
         start_dt = datetime.strptime(start_date, "%Y-%m-%d").date()
         end_dt = datetime.strptime(end_date, "%Y-%m-%d").date()
         
-        async def _recompute():
-            async with get_sync_db_session() as db:
-                return await metrics_aggregator.recompute_client_aggregations(
+        def _recompute():
+            with get_sync_db_session() as db:
+                return metrics_aggregator.recompute_client_aggregations_sync(
                     db, client_id, start_dt, end_dt
                 )
         
-        result = run_async_task(_recompute())
+        result = _recompute()
         
         return {
             "status": "success",
