@@ -193,7 +193,7 @@ class EnhancedMetricsService:
             # Get last execution
             last_execution = None
             if recent_executions:
-                last_exec = max(recent_executions, key=lambda x: x.started_at or datetime.min)
+                last_exec = max(recent_executions, key=lambda x: x.started_at or datetime.min.replace(tzinfo=timezone.utc))
                 last_execution = last_exec.started_at
             
             # Determine status
@@ -268,7 +268,15 @@ class EnhancedMetricsService:
             # First try to get from client-specific last_updated timestamps
             client_update_times = [c.last_updated for c in client_metrics if c.last_updated]
             if client_update_times:
-                last_updated = max(client_update_times)
+                # Ensure all timestamps are timezone-aware for comparison
+                from datetime import timezone
+                normalized_times = []
+                for dt in client_update_times:
+                    if dt.tzinfo is None:
+                        # Make timezone-naive datetime timezone-aware (assume UTC)
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    normalized_times.append(dt)
+                last_updated = max(normalized_times)
             
             # If no aggregation timestamps, get the most recent sync timestamp from raw data
             if not last_updated:
@@ -363,7 +371,7 @@ class EnhancedMetricsService:
         # Get last activity
         last_activity = None
         if executions:
-            last_exec = max(executions, key=lambda x: x.started_at or datetime.min)
+            last_exec = max(executions, key=lambda x: x.started_at or datetime.min.replace(tzinfo=timezone.utc))
             last_activity = last_exec.started_at
         
         # Get the most recent sync timestamp for this client
