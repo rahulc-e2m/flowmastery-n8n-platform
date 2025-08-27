@@ -68,13 +68,33 @@ class ProductionExecutionFilter:
         Returns:
             True if execution is production, False otherwise
         """
+        # Must be a completed execution (finished, regardless of success/failure)
+        # Also include executions with definitive status even if finished=false
+        finished = execution.get('finished')
+        status = execution.get('status', '').lower()
+        started_at = execution.get('startedAt')
+        stopped_at = execution.get('stoppedAt')
+        
+        # Consider execution completed if:
+        # 1. finished=true, OR
+        # 2. has definitive status (success/error), OR  
+        # 3. has both start and stop times (execution ran and completed)
+        is_completed = (
+            finished or 
+            status in ['success', 'error', 'crashed', 'canceled', 'cancelled'] or
+            (started_at and stopped_at)
+        )
+        
+        if not is_completed:
+            return False
+        
         # Apply custom filters if provided
         if custom_filters:
             custom_result = self._apply_custom_filters(execution, workflow, custom_filters)
             if custom_result is not None:
                 return custom_result
         
-        # Check execution mode
+        # Check execution mode (primary filter)
         if not self._is_production_mode(execution):
             return False
         
@@ -87,11 +107,13 @@ class ProductionExecutionFilter:
         if not self._is_production_timing(execution):
             return False
         
-        # Check for test/debug indicators in execution data
+        # Check for explicit test/debug indicators in execution data
+        # Note: We're more conservative here to avoid excluding legitimate production errors
         if self._has_test_indicators(execution):
             return False
         
-        # Default to production if no test indicators found
+        # Include both successful AND failed production executions
+        # Production errors are important for monitoring and should be tracked
         return True
     
     def _apply_custom_filters(
@@ -138,15 +160,18 @@ class ProductionExecutionFilter:
         """Check if execution mode indicates production usage"""
         execution_mode = execution.get("mode", "").lower()
         
-        # Manual executions are typically for testing
+        # Explicitly non-production modes
         if execution_mode in self.non_production_modes:
             return False
         
-        # Webhook and trigger executions are typically production
-        if execution_mode in ["webhook", "trigger"]:
+        # Explicitly production modes (automated executions)
+        production_modes = ["webhook", "trigger", "integrated"]
+        if execution_mode in production_modes:
             return True
         
-        return True  # Default to production for unknown modes
+        # Other modes (cli, error, internal) - default to production
+        # These could be legitimate production executions or system operations
+        return True
     
     def _is_production_workflow(self, workflow: Dict[str, Any]) -> bool:
         """Check if workflow indicates production usage"""
@@ -208,20 +233,22 @@ class ProductionExecutionFilter:
     def _has_test_indicators(self, execution: Dict[str, Any]) -> bool:
         """Check for test indicators in execution data"""
         
-        # Check for test-related error messages
+        # Check for test-related error messages (but be more selective)
         error_message = execution.get("error", {}).get("message", "") if execution.get("error") else ""
         if error_message:
             error_lower = error_message.lower()
-            test_keywords = ["test", "debug", "sample", "demo", "example"]
-            if any(keyword in error_lower for keyword in test_keywords):
+            # Only exclude if error message explicitly mentions testing context
+            explicit_test_keywords = ["test mode", "testing environment", "debug mode", "sample data", "demo execution"]
+            if any(keyword in error_lower for keyword in explicit_test_keywords):
                 return True
         
-        # Check execution data for test indicators
+        # Check execution data for test indicators (but avoid false positives)
         execution_data = execution.get("data", {})
         if isinstance(execution_data, dict):
-            # Look for test-related keys or values
+            # Only look for explicit test indicators, not just the word "test"
             data_str = str(execution_data).lower()
-            if "test" in data_str or "debug" in data_str:
+            explicit_indicators = ["test_mode", "debug_mode", "sample_data", "demo_run"]
+            if any(indicator in data_str for indicator in explicit_indicators):
                 return True
         
         return False
@@ -229,10 +256,12 @@ class ProductionExecutionFilter:
     def get_production_filter_config(self, client_id: int) -> Dict[str, Any]:
         """Get production filter configuration for a client"""
         # This could be customized per client in the future
-        # For now, return default configuration
+        # For now, return default configuration that includes both success and error executions
         return {
             "exclude_manual": True,
             "exclude_test_workflows": True,
+            "include_error_executions": True,  # Important: include production errors
+            "include_success_executions": True,
             "test_workflow_patterns": self.test_workflow_patterns,
             "production_workflow_patterns": self.production_workflow_patterns,
             "test_tags": list(self.test_tags),
@@ -265,9 +294,37 @@ class ProductionExecutionFilter:
             if self.is_production_execution(execution, workflow, custom_filters):
                 production_executions.append(execution)
         
+        # Count execution types for better logging
+        def is_success_execution(e):
+            status = e.get('status', '').lower()
+            if status:
+                return status == 'success'
+            # If finished=True and no error field, it's successful
+            return e.get('finished') and not e.get('error')
+        
+        def is_error_execution(e):
+            status = e.get('status', '').lower()
+            if status:
+                return status in ['error', 'crashed', 'canceled', 'cancelled']
+            # If finished=False but has start and stop times, likely failed
+            # Or if finished=True but has error field
+            started_at = e.get('startedAt')
+            stopped_at = e.get('stoppedAt')
+            finished = e.get('finished')
+            has_error = 'error' in e
+            
+            return (
+                (finished and has_error) or  # Finished with error
+                (not finished and started_at and stopped_at)  # Started and stopped but not finished
+            )
+        
+        success_count = len([e for e in production_executions if is_success_execution(e)])
+        error_count = len([e for e in production_executions if is_error_execution(e)])
+        
         logger.info(
             f"Filtered {len(executions)} executions to {len(production_executions)} production executions "
-            f"({len(production_executions)/len(executions)*100:.1f}% production rate)"
+            f"({len(production_executions)/max(1, len(executions))*100:.1f}% production rate) - "
+            f"Success: {success_count}, Errors: {error_count}"
         )
         
         return production_executions

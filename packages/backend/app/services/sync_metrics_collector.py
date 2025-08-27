@@ -201,11 +201,26 @@ class SyncMetricsCollector:
                     
                 page += 1
             
-            # Filter production executions (exclude testing)
-            production_executions = [
-                ex for ex in executions 
-                if ex.get('mode') not in ['manual', 'test'] and ex.get('finished')
-            ]
+            # Filter production executions using sophisticated filtering
+            from app.services.production_filter import production_filter
+            from app.models import Workflow
+            
+            # Get workflows for context from database
+            workflows_dict = {}
+            db_workflows = db.query(Workflow).filter(Workflow.client_id == client.id).all()
+            for workflow in db_workflows:
+                workflows_dict[str(workflow.n8n_workflow_id)] = {
+                    'id': workflow.n8n_workflow_id,
+                    'name': workflow.name,
+                    'active': workflow.active,
+                    'tags': []  # Could be enhanced to include actual tags if available
+                }
+            
+            # Apply production filtering with workflow context
+            custom_filters = production_filter.get_production_filter_config(client.id)
+            production_executions = production_filter.validate_execution_batch(
+                executions, workflows_dict, custom_filters
+            )
             
             logger.info(f"Filtered {len(executions)} executions to {len(production_executions)} production executions ({len(production_executions)/max(1, len(executions))*100:.1f}% production rate)")
             
@@ -242,26 +257,39 @@ class SyncMetricsCollector:
                     'unknown': ExecutionStatus.NEW
                 }
                 
-                # n8n API doesn't return 'status' field, infer from execution data
-                finished = exec_data.get('finished')
-                started_at = exec_data.get('startedAt')
-                stopped_at = exec_data.get('stoppedAt')
-                
-                if finished and started_at and stopped_at:
-                    # Execution completed successfully
-                    raw_status = 'success'
-                elif finished == False and started_at and not stopped_at:
-                    # Currently running
-                    raw_status = 'running'
-                elif finished == False and not started_at and stopped_at:
-                    # Failed to start or was cancelled
-                    raw_status = 'error'
-                elif finished == False and not started_at and not stopped_at:
-                    # Waiting to start
-                    raw_status = 'waiting'
+                # Check if n8n provides a status field directly
+                n8n_status = exec_data.get('status')
+                if n8n_status:
+                    raw_status = n8n_status.lower()
                 else:
-                    # Unknown state
-                    raw_status = 'unknown'
+                    # Infer from execution data when no status field
+                    finished = exec_data.get('finished')
+                    started_at = exec_data.get('startedAt')
+                    stopped_at = exec_data.get('stoppedAt')
+                    has_error = 'error' in exec_data
+                    
+                    if finished and started_at and stopped_at:
+                        # Execution completed - check if it has an error
+                        if has_error:
+                            raw_status = 'error'
+                        else:
+                            raw_status = 'success'
+                    elif finished == False and started_at and stopped_at:
+                        # Started and stopped but not finished - likely failed
+                        # This is the key case for executions like 6481
+                        raw_status = 'error'
+                    elif finished == False and started_at and not stopped_at:
+                        # Currently running
+                        raw_status = 'running'
+                    elif finished == False and not started_at and stopped_at:
+                        # Failed to start or was cancelled
+                        raw_status = 'error'
+                    elif finished == False and not started_at and not stopped_at:
+                        # Waiting to start
+                        raw_status = 'waiting'
+                    else:
+                        # Unknown state
+                        raw_status = 'unknown'
                 
                 status = status_mapping.get(raw_status, ExecutionStatus.NEW)
                 

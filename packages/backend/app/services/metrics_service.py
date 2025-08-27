@@ -66,8 +66,8 @@ class MetricsService:
             active_workflows = len([w for w in workflows if w.get('active', False)])
             
             total_executions = len(executions)
-            successful_executions = len([e for e in executions if e.get('finished', False) and not e.get('stoppedAt')])
-            failed_executions = total_executions - successful_executions
+            successful_executions = len([e for e in executions if e.get('finished', False) and not e.get('error')])
+            failed_executions = len([e for e in executions if e.get('finished', False) and e.get('error')])
             success_rate = (successful_executions / total_executions * 100) if total_executions > 0 else 0.0
             
             # Calculate average execution time
@@ -166,8 +166,8 @@ class MetricsService:
                 workflow_execs = workflow_executions.get(workflow_id, [])
                 
                 total_executions = len(workflow_execs)
-                successful_executions = len([e for e in workflow_execs if e.get('finished', False) and not e.get('stoppedAt')])
-                failed_executions = total_executions - successful_executions
+                successful_executions = len([e for e in workflow_execs if e.get('finished', False) and not e.get('error')])
+                failed_executions = len([e for e in workflow_execs if e.get('finished', False) and e.get('error')])
                 success_rate = (successful_executions / total_executions * 100) if total_executions > 0 else 0.0
                 
                 # Calculate average execution time for this workflow

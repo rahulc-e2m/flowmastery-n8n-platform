@@ -200,7 +200,7 @@ class PersistentMetricsCollector:
                 
                 if existing_execution:
                     # Update if status changed
-                    new_status = self._map_execution_status(n8n_execution.get("status", ""))
+                    new_status = self._map_execution_status(n8n_execution)
                     if existing_execution.status != new_status:
                         existing_execution.status = new_status
                         existing_execution.last_synced_at = datetime.utcnow()
@@ -224,7 +224,7 @@ class PersistentMetricsCollector:
                         n8n_execution_id=execution_id,
                         workflow_id=workflow_id_map[workflow_n8n_id],
                         client_id=client.id,
-                        status=self._map_execution_status(n8n_execution.get("status", "")),
+                        status=self._map_execution_status(n8n_execution),
                         mode=self._map_execution_mode(n8n_execution.get("mode", "")),
                         is_production=True,  # Already filtered for production
                         last_synced_at=datetime.utcnow()
@@ -374,19 +374,50 @@ class PersistentMetricsCollector:
         
         return all_executions
     
-    def _map_execution_status(self, n8n_status: str) -> ExecutionStatus:
-        """Map n8n execution status to our enum"""
-        status_mapping = {
-            "success": ExecutionStatus.SUCCESS,
-            "error": ExecutionStatus.ERROR,
-            "waiting": ExecutionStatus.WAITING,
-            "running": ExecutionStatus.RUNNING,
-            "canceled": ExecutionStatus.CANCELED,
-            "cancelled": ExecutionStatus.CANCELED,
-            "crashed": ExecutionStatus.CRASHED,
-            "new": ExecutionStatus.NEW
-        }
-        return status_mapping.get(n8n_status.lower(), ExecutionStatus.NEW)
+    def _map_execution_status(self, n8n_execution: dict) -> ExecutionStatus:
+        """Map n8n execution data to our status enum"""
+        # Check if n8n provides a status field directly
+        n8n_status = n8n_execution.get('status')
+        if n8n_status:
+            status_mapping = {
+                "success": ExecutionStatus.SUCCESS,
+                "error": ExecutionStatus.ERROR,
+                "waiting": ExecutionStatus.WAITING,
+                "running": ExecutionStatus.RUNNING,
+                "canceled": ExecutionStatus.CANCELED,
+                "cancelled": ExecutionStatus.CANCELED,
+                "crashed": ExecutionStatus.CRASHED,
+                "new": ExecutionStatus.NEW
+            }
+            return status_mapping.get(n8n_status.lower(), ExecutionStatus.NEW)
+        
+        # Infer from execution data when no status field
+        finished = n8n_execution.get('finished')
+        started_at = n8n_execution.get('startedAt')
+        stopped_at = n8n_execution.get('stoppedAt')
+        has_error = 'error' in n8n_execution
+        
+        if finished and started_at and stopped_at:
+            # Execution completed - check if it has an error
+            if has_error:
+                return ExecutionStatus.ERROR
+            else:
+                return ExecutionStatus.SUCCESS
+        elif finished == False and started_at and stopped_at:
+            # Started and stopped but not finished - likely failed
+            return ExecutionStatus.ERROR
+        elif finished == False and started_at and not stopped_at:
+            # Currently running
+            return ExecutionStatus.RUNNING
+        elif finished == False and not started_at and stopped_at:
+            # Failed to start or was cancelled
+            return ExecutionStatus.ERROR
+        elif finished == False and not started_at and not stopped_at:
+            # Waiting to start
+            return ExecutionStatus.WAITING
+        else:
+            # Unknown state
+            return ExecutionStatus.NEW
     
     def _map_execution_mode(self, n8n_mode: str) -> Optional[ExecutionMode]:
         """Map n8n execution mode to our enum"""
