@@ -60,6 +60,7 @@ async def list_workflows(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
     client_id: Optional[int] = Query(None, description="Filter by client id"),
+    active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflows (admin). Optionally filter by client."""
     try:
@@ -79,6 +80,9 @@ async def list_workflows(
 
         if client_id is not None:
             query = query.where(Workflow.client_id == client_id)
+        
+        if active is not None:
+            query = query.where(Workflow.active == active)
 
         query = query.group_by(Workflow.id, Client.name).order_by(desc(func.max(WorkflowExecution.started_at)))
 
@@ -95,6 +99,7 @@ async def list_workflows(
 async def list_my_workflows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user),
+    active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflows for the current client user."""
     if not current_user.client_id:
@@ -112,6 +117,9 @@ async def list_my_workflows(
             WorkflowExecution,
             and_(Workflow.id == WorkflowExecution.workflow_id, WorkflowExecution.is_production == True),
         ).where(Workflow.client_id == current_user.client_id)
+
+        if active is not None:
+            query = query.where(Workflow.active == active)
 
         query = query.group_by(Workflow.id).order_by(desc(func.max(WorkflowExecution.started_at)))
 

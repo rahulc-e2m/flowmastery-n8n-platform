@@ -24,14 +24,18 @@ export type WorkflowListResponse = {
 }
 
 export class WorkflowsApi {
-  static async listAll(clientId?: number): Promise<WorkflowListResponse> {
-    const params = clientId ? { client_id: clientId } : undefined
+  static async listAll(clientId?: number, activeFilter?: string): Promise<WorkflowListResponse> {
+    const params: any = {}
+    if (clientId) params.client_id = clientId
+    if (activeFilter && activeFilter !== 'all') params.active = activeFilter === 'active'
     const res = await api.get<WorkflowListResponse>('/workflows', { params })
     return res.data
   }
 
-  static async listMine(): Promise<WorkflowListResponse> {
-    const res = await api.get<WorkflowListResponse>('/workflows/my')
+  static async listMine(activeFilter?: string): Promise<WorkflowListResponse> {
+    const params: any = {}
+    if (activeFilter && activeFilter !== 'all') params.active = activeFilter === 'active'
+    const res = await api.get<WorkflowListResponse>('/workflows/my', { params })
     return res.data
   }
 

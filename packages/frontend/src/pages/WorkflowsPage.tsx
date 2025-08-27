@@ -8,9 +8,10 @@ import { Card } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { MoreHorizontal, Clock } from 'lucide-react'
+import { MoreHorizontal, Clock, Search, X } from 'lucide-react'
 
 function MinutesTimeSelector({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   const hours = Math.floor(value / 60)
@@ -43,6 +44,11 @@ export function WorkflowsPage() {
   const { isAdmin } = useAuth()
   const qc = useQueryClient()
   const [clientFilter, setClientFilter] = React.useState<string>('all')
+  const [activeFilter, setActiveFilter] = React.useState<string>('active')
+  const [successRateFilter, setSuccessRateFilter] = React.useState<string>('all')
+  const [volumeFilter, setVolumeFilter] = React.useState<string>('all')
+  const [lastExecutionFilter, setLastExecutionFilter] = React.useState<string>('all')
+  const [searchQuery, setSearchQuery] = React.useState<string>('')
   const [editing, setEditing] = React.useState<WorkflowListItem | null>(null)
   const [minutes, setMinutes] = React.useState<number>(30)
   const clientId = isAdmin && clientFilter && clientFilter !== 'all' ? Number(clientFilter) : undefined
@@ -54,9 +60,60 @@ export function WorkflowsPage() {
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['workflows', clientId ?? 'mine'],
-    queryFn: () => (isAdmin ? WorkflowsApi.listAll(clientId) : WorkflowsApi.listMine()),
+    queryKey: ['workflows', clientId ?? 'mine', activeFilter],
+    queryFn: () => (isAdmin ? WorkflowsApi.listAll(clientId, activeFilter) : WorkflowsApi.listMine(activeFilter)),
   })
+
+  // Client-side filtering function
+  const filteredWorkflows = React.useMemo(() => {
+    if (!data?.workflows) return []
+    
+    return data.workflows.filter(wf => {
+      // Search filter
+      if (searchQuery && !wf.workflow_name.toLowerCase().includes(searchQuery.toLowerCase())) {
+        return false
+      }
+      
+      // Success rate filter
+      if (successRateFilter !== 'all') {
+        if (successRateFilter === 'high' && wf.success_rate < 90) return false
+        if (successRateFilter === 'medium' && (wf.success_rate < 50 || wf.success_rate >= 90)) return false
+        if (successRateFilter === 'low' && wf.success_rate >= 50) return false
+      }
+      
+      // Volume filter
+      if (volumeFilter !== 'all') {
+        if (volumeFilter === 'high' && wf.total_executions < 100) return false
+        if (volumeFilter === 'medium' && (wf.total_executions < 10 || wf.total_executions >= 100)) return false
+        if (volumeFilter === 'low' && wf.total_executions >= 10) return false
+      }
+      
+      // Last execution filter
+      if (lastExecutionFilter !== 'all' && wf.last_execution) {
+        const lastExec = new Date(wf.last_execution)
+        const now = new Date()
+        const diffHours = (now.getTime() - lastExec.getTime()) / (1000 * 60 * 60)
+        
+        if (lastExecutionFilter === 'recent' && diffHours > 24) return false
+        if (lastExecutionFilter === 'week' && (diffHours <= 24 || diffHours > 168)) return false
+        if (lastExecutionFilter === 'month' && (diffHours <= 168 || diffHours > 720)) return false
+        if (lastExecutionFilter === 'older' && diffHours <= 720) return false
+      }
+      
+      // Client filter (admin only)
+      if (isAdmin && clientFilter !== 'all' && String(wf.client_id) !== clientFilter) {
+        return false
+      }
+      
+      return true
+    }).sort((a, b) => {
+      // Sort by last execution date (most recent first)
+      if (!a.last_execution && !b.last_execution) return 0
+      if (!a.last_execution) return 1
+      if (!b.last_execution) return -1
+      return new Date(b.last_execution).getTime() - new Date(a.last_execution).getTime()
+    })
+  }, [data?.workflows, searchQuery, successRateFilter, volumeFilter, lastExecutionFilter, clientFilter, isAdmin])
 
   const openEdit = (wf: WorkflowListItem) => {
     setEditing(wf)
@@ -85,10 +142,66 @@ export function WorkflowsPage() {
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Workflows</h1>
-        {isAdmin && (
-          <div className="flex items-center space-x-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Search */}
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+            <Input
+              placeholder="Search workflows..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10 w-64"
+            />
+          </div>
+          
+          {/* Status Filter */}
+          <Select value={activeFilter} onValueChange={setActiveFilter}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Status" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active only</SelectItem>
+              <SelectItem value="inactive">Inactive only</SelectItem>
+              <SelectItem value="all">All status</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Success Rate Filter */}
+          <Select value={successRateFilter} onValueChange={setSuccessRateFilter}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Success Rate" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All rates</SelectItem>
+              <SelectItem value="high">High (&gt;90%)</SelectItem>
+              <SelectItem value="medium">Medium (50-90%)</SelectItem>
+              <SelectItem value="low">Low (&lt;50%)</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Volume Filter */}
+          <Select value={volumeFilter} onValueChange={setVolumeFilter}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Volume" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All volumes</SelectItem>
+              <SelectItem value="high">High (&gt;100)</SelectItem>
+              <SelectItem value="medium">Medium (10-100)</SelectItem>
+              <SelectItem value="low">Low (&lt;10)</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Last Execution Filter */}
+          <Select value={lastExecutionFilter} onValueChange={setLastExecutionFilter}>
+            <SelectTrigger className="w-40"><SelectValue placeholder="Last Run" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Any time</SelectItem>
+              <SelectItem value="recent">Last 24h</SelectItem>
+              <SelectItem value="week">This week</SelectItem>
+              <SelectItem value="month">This month</SelectItem>
+              <SelectItem value="older">Older</SelectItem>
+            </SelectContent>
+          </Select>
+          
+          {/* Client Filter (Admin only) */}
+          {isAdmin && (
             <Select value={clientFilter} onValueChange={setClientFilter}>
-              <SelectTrigger className="w-64"><SelectValue placeholder="Filter by client" /></SelectTrigger>
+              <SelectTrigger className="w-48"><SelectValue placeholder="Client" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All clients</SelectItem>
                 {clients?.map((c: any) => (
@@ -96,8 +209,31 @@ export function WorkflowsPage() {
                 ))}
               </SelectContent>
             </Select>
-          </div>
-        )}
+          )}
+          
+          {/* Clear Filters Button */}
+          <Button 
+            variant="outline" 
+            size="sm"
+            onClick={() => {
+              setSearchQuery('')
+              setActiveFilter('active')
+              setSuccessRateFilter('all')
+              setVolumeFilter('all')
+              setLastExecutionFilter('all')
+              setClientFilter('all')
+            }}
+            className="flex items-center gap-1"
+          >
+            <X className="w-4 h-4" />
+            Clear
+          </Button>
+        </div>
+      </div>
+
+      {/* Results Summary */}
+      <div className="text-sm text-gray-600">
+        Showing {filteredWorkflows.length} of {data?.total || 0} workflows
       </div>
 
       <Card className="p-0 overflow-hidden">
@@ -115,13 +251,29 @@ export function WorkflowsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data?.workflows?.map((wf) => (
+            {filteredWorkflows.map((wf) => (
               <TableRow key={wf.id}>
                 {isAdmin && <TableCell className="font-medium">{wf.client_name}</TableCell>}
                 <TableCell className="font-medium">{wf.workflow_name}</TableCell>
                 <TableCell>{wf.active ? 'Active' : 'Inactive'}</TableCell>
-                <TableCell className="text-right">{wf.total_executions}</TableCell>
-                <TableCell className="text-right">{wf.success_rate}%</TableCell>
+                <TableCell className="text-right">
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    wf.total_executions > 100 ? 'bg-green-100 text-green-800' :
+                    wf.total_executions > 10 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                    {wf.total_executions}
+                  </span>
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    wf.success_rate >= 90 ? 'bg-green-100 text-green-800' :
+                    wf.success_rate >= 50 ? 'bg-yellow-100 text-yellow-800' :
+                    'bg-red-100 text-red-800'
+                  }`}>
+                    {wf.success_rate}%
+                  </span>
+                </TableCell>
                 <TableCell className="text-right">{wf.last_execution ? new Date(wf.last_execution).toLocaleString() : '-'}</TableCell>
                 <TableCell className="text-right flex items-center justify-end space-x-1">
                   <Clock className="w-4 h-4 text-muted-foreground" />
@@ -141,6 +293,14 @@ export function WorkflowsPage() {
                 </TableCell>
               </TableRow>
             ))}
+            
+            {filteredWorkflows.length === 0 && !isLoading && (
+              <TableRow>
+                <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-gray-500">
+                  {data?.workflows?.length ? 'No workflows match the current filters' : 'No workflows found'}
+                </TableCell>
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       </Card>

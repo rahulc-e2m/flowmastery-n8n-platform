@@ -1,3 +1,6 @@
+/* Import Inter font for premium typography */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -315,9 +318,6 @@
     @apply bg-black/10 backdrop-blur-md border border-white/10;
   }
 }
-
-/* Import Inter font for premium typography */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
 
 /* Additional component utilities */
 @layer components {
