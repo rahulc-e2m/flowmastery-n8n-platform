@@ -45,6 +45,9 @@ class Workflow(Base, TimestampMixin):
     # Additional workflow settings
     settings: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string of settings
     
+    # Estimated minutes saved per successful execution (editable)
+    time_saved_per_execution_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
+    
     # Last sync information
     last_synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 

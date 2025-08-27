@@ -74,6 +74,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       description: 'Overview & insights'
     },
     {
+      name: 'Workflows',
+      href: '/workflows',
+      icon: Activity,
+      show: true,
+      description: 'Manage workflows'
+    },
+    {
       name: 'Metrics',
       href: '/metrics',
       icon: Activity,

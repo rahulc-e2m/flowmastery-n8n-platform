@@ -34,20 +34,8 @@ services:
     build:
       context: ./packages/backend
       dockerfile: Dockerfile
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=your-secret-key-change-in-production
-      - ENCRYPTION_KEY=your-32-char-encryption-key-here
-      - SMTP_SERVER=smtp.gmail.com
-      - SMTP_PORT=587
-      - SMTP_USERNAME=your-email@gmail.com
-      - SMTP_PASSWORD=your-app-password
-      - FRONTEND_URL=http://localhost:3000
-      - N8N_BASE_URL=http://host.docker.internal:5678
-      - N8N_API_KEY=your-n8n-api-key
-      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:5176,http://127.0.0.1:3000,http://127.0.0.1:5173,http://127.0.0.1:5176
-      - DEBUG=true
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     depends_on:
@@ -64,8 +52,8 @@ services:
     build:
       context: ./packages/frontend
       dockerfile: Dockerfile
-    environment:
-      - REACT_APP_API_URL=http://localhost:8000
+    env_file:
+      - .env
     ports:
       - "3000:3000"
     depends_on:
@@ -80,13 +68,8 @@ services:
     build:
       context: ./packages/backend
       dockerfile: Dockerfile
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=your-secret-key-change-in-production
-      - ENCRYPTION_KEY=your-32-char-encryption-key-here
-      - N8N_BASE_URL=http://host.docker.internal:5678
-      - N8N_API_KEY=your-n8n-api-key
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,13 +84,8 @@ services:
     build:
       context: ./packages/backend
       dockerfile: Dockerfile
-    environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/metrics_dashboard
-      - REDIS_URL=redis://redis:6379
-      - SECRET_KEY=your-secret-key-change-in-production
-      - ENCRYPTION_KEY=your-32-char-encryption-key-here
-      - N8N_BASE_URL=http://host.docker.internal:5678
-      - N8N_API_KEY=your-n8n-api-key
+    env_file:
+      - .env
     depends_on:
       postgres:
         condition: service_healthy
@@ -122,8 +100,8 @@ services:
     build:
       context: ./packages/backend
       dockerfile: Dockerfile
-    environment:
-      - REDIS_URL=redis://redis:6379
+    env_file:
+      - .env
     ports:
       - "5555:5555"
     depends_on:

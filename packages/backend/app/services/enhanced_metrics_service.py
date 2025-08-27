@@ -209,6 +209,10 @@ class EnhancedMetricsService:
             if failed > successful and total_executions > 0:
                 status = 'error'
             
+            # Compute time saved for this workflow (last 7 days)
+            minutes_per_success = workflow.time_saved_per_execution_minutes or 30
+            time_saved_hours = round((successful * minutes_per_success) / 60, 2) if successful > 0 else 0.0
+
             workflow_metrics.append(WorkflowMetrics(
                 workflow_id=str(workflow.n8n_workflow_id),
                 workflow_name=workflow.name,
@@ -218,7 +222,9 @@ class EnhancedMetricsService:
                 success_rate=round(success_rate, 2),
                 avg_execution_time=round(avg_time, 2) if avg_time else None,
                 last_execution=last_execution,
-                status=status
+                status=status,
+                time_saved_per_execution_minutes=minutes_per_success,
+                time_saved_hours=time_saved_hours
             ))
         
         return ClientWorkflowMetrics(
@@ -389,8 +395,20 @@ class EnhancedMetricsService:
         sync_result = await db.execute(sync_stmt)
         last_sync_time = sync_result.scalar_one_or_none()
         
-        # Calculate time saved (estimate 30 minutes per successful execution)
-        time_saved_hours = round(successful * 0.5, 1) if successful > 0 else None
+        # Calculate time saved using per-workflow minutes: sum over successful executions
+        # Fetch per-workflow minutes for this client
+        workflows_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
+            Workflow.client_id == client.id
+        )
+        workflows_minutes_result = await db.execute(workflows_minutes_stmt)
+        workflow_minutes = {wid: (mins or 30) for wid, mins in workflows_minutes_result.all()}
+
+        successful_execs = [e for e in executions if e.is_successful]
+        total_minutes_saved = 0
+        for e in successful_execs:
+            minutes = workflow_minutes.get(e.workflow_id, 30)
+            total_minutes_saved += minutes
+        time_saved_hours = round(total_minutes_saved / 60, 1) if total_minutes_saved > 0 else None
         
         return ClientMetrics(
             client_id=client.id,

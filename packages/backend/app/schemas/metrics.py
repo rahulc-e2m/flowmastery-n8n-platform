@@ -16,6 +16,8 @@ class WorkflowMetrics(BaseModel):
     avg_execution_time: Optional[float] = None
     last_execution: Optional[datetime] = None
     status: str  # 'active', 'inactive', 'error'
+    time_saved_per_execution_minutes: Optional[int] = None
+    time_saved_hours: Optional[float] = None
 
 
 class ClientMetrics(BaseModel):

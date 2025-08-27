@@ -1,0 +1,44 @@
+import api from '@/services/authApi'
+
+export type WorkflowListItem = {
+  id: number
+  client_id: number
+  client_name?: string
+  n8n_workflow_id: string
+  workflow_name: string
+  active: boolean
+  total_executions: number
+  successful_executions: number
+  failed_executions: number
+  success_rate: number
+  avg_execution_time_ms: number
+  avg_execution_time_seconds: number
+  last_execution?: string | null
+  time_saved_per_execution_minutes: number
+  time_saved_hours?: number
+}
+
+export type WorkflowListResponse = {
+  workflows: WorkflowListItem[]
+  total: number
+}
+
+export class WorkflowsApi {
+  static async listAll(clientId?: number): Promise<WorkflowListResponse> {
+    const params = clientId ? { client_id: clientId } : undefined
+    const res = await api.get<WorkflowListResponse>('/workflows', { params })
+    return res.data
+  }
+
+  static async listMine(): Promise<WorkflowListResponse> {
+    const res = await api.get<WorkflowListResponse>('/workflows/my')
+    return res.data
+  }
+
+  static async updateMinutes(workflowDbId: number, minutes: number): Promise<{ id: number; time_saved_per_execution_minutes: number }> {
+    const res = await api.patch(`/workflows/${workflowDbId}`, { time_saved_per_execution_minutes: minutes })
+    return res.data
+  }
+}
+
+
