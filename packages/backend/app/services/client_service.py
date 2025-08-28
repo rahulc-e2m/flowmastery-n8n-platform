@@ -38,7 +38,7 @@ class ClientService:
         return client
     
     @staticmethod
-    async def get_client_by_id(db: AsyncSession, client_id: int) -> Optional[Client]:
+    async def get_client_by_id(db: AsyncSession, client_id: str) -> Optional[Client]:
         """Get client by ID"""
         result = await db.execute(select(Client).where(Client.id == client_id))
         return result.scalar_one_or_none()
@@ -52,7 +52,7 @@ class ClientService:
     @staticmethod
     async def update_client(
         db: AsyncSession,
-        client_id: int,
+        client_id: str,
         client_data: ClientUpdate
     ) -> Optional[Client]:
         """Update a client"""
@@ -76,7 +76,7 @@ class ClientService:
     @staticmethod
     async def configure_n8n_api(
         db: AsyncSession,
-        client_id: int,
+        client_id: str,
         n8n_config: ClientN8nConfig
     ) -> Optional[Client]:
         """Configure n8n API settings for a client and immediately fetch data"""
@@ -129,7 +129,7 @@ class ClientService:
             await n8n_client.close()
     
     @staticmethod
-    async def get_n8n_api_key(db: AsyncSession, client_id: int) -> Optional[str]:
+    async def get_n8n_api_key(db: AsyncSession, client_id: str) -> Optional[str]:
         """Get decrypted n8n API key for a client"""
         result = await db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()
@@ -140,7 +140,7 @@ class ClientService:
         return encryption_manager.decrypt(client.n8n_api_key_encrypted)
     
     @staticmethod
-    def get_n8n_api_key_sync(db: Session, client_id: int) -> Optional[str]:
+    def get_n8n_api_key_sync(db: Session, client_id: str) -> Optional[str]:
         """Get decrypted n8n API key for a client (synchronous version for Celery)"""
         client = db.query(Client).filter(Client.id == client_id).first()
         
@@ -209,7 +209,7 @@ class ClientService:
             await n8n_client.close()
     
     @staticmethod
-    async def delete_client(db: AsyncSession, client_id: int) -> bool:
+    async def delete_client(db: AsyncSession, client_id: str) -> bool:
         """Delete a client"""
         result = await db.execute(select(Client).where(Client.id == client_id))
         client = result.scalar_one_or_none()

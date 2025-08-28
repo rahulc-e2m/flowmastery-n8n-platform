@@ -55,7 +55,7 @@ class PersistentMetricsCollector:
         
         return results
     
-    async def sync_client_data(self, db: AsyncSession, client_id: int) -> Dict[str, Any]:
+    async def sync_client_data(self, db: AsyncSession, client_id: str) -> Dict[str, Any]:
         """Sync workflows and executions for a specific client"""
         client = await ClientService.get_client_by_id(db, client_id)
         if not client:

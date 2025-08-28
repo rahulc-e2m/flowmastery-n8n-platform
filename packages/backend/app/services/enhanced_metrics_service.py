@@ -38,7 +38,7 @@ class EnhancedMetricsService:
     async def get_client_metrics(
         self, 
         db: AsyncSession, 
-        client_id: int,
+        client_id: str,
         use_cache: bool = True
     ) -> ClientMetrics:
         """Get current metrics for a client using persistent data.
@@ -96,7 +96,7 @@ class EnhancedMetricsService:
     async def get_historical_metrics(
         self,
         db: AsyncSession,
-        client_id: int,
+        client_id: str,
         period_type: AggregationPeriod,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None,
@@ -161,7 +161,7 @@ class EnhancedMetricsService:
     async def get_client_workflow_metrics(
         self,
         db: AsyncSession,
-        client_id: int
+        client_id: str
     ) -> ClientWorkflowMetrics:
         """Get workflow-level metrics for a client"""
         client = await self._get_client_by_id(db, client_id)
@@ -317,7 +317,7 @@ class EnhancedMetricsService:
             trends=overall_trends
         )
     
-    async def _get_client_by_id(self, db: AsyncSession, client_id: int) -> Optional[Client]:
+    async def _get_client_by_id(self, db: AsyncSession, client_id: str) -> Optional[Client]:
         """Get client by ID"""
         stmt = select(Client).where(Client.id == client_id)
         result = await db.execute(stmt)
@@ -326,7 +326,7 @@ class EnhancedMetricsService:
     async def _get_recent_client_aggregation(
         self, 
         db: AsyncSession, 
-        client_id: int
+        client_id: str
     ) -> Optional[MetricsAggregation]:
         """Get the most recent daily aggregation for a client"""
         stmt = select(MetricsAggregation).where(
@@ -340,7 +340,7 @@ class EnhancedMetricsService:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
     
-    async def _calculate_all_time_saved(self, db: AsyncSession, client_id: int) -> Optional[float]:
+    async def _calculate_all_time_saved(self, db: AsyncSession, client_id: str) -> Optional[float]:
         """Calculate all-time time saved for a client from all successful executions"""
         # Get all successful executions for this client
         executions_stmt = select(WorkflowExecution).where(
@@ -372,7 +372,7 @@ class EnhancedMetricsService:
         
         return round(total_minutes_saved / 60, 1) if total_minutes_saved > 0 else None
 
-    async def _get_last_activity(self, db: AsyncSession, client_id: int) -> Optional[datetime]:
+    async def _get_last_activity(self, db: AsyncSession, client_id: str) -> Optional[datetime]:
         """Get last activity timestamp for a client"""
         stmt = select(func.max(WorkflowExecution.started_at)).where(
             and_(
@@ -496,7 +496,7 @@ class EnhancedMetricsService:
             performance_trend=round(performance_trend, 1)
         )
     
-    async def _calculate_client_trends(self, db: AsyncSession, client_id: int) -> Optional[MetricsTrend]:
+    async def _calculate_client_trends(self, db: AsyncSession, client_id: str) -> Optional[MetricsTrend]:
         """Calculate trend indicators for a specific client based on all-time cumulative data"""
         try:
             # Calculate trends from cumulative all-time data over meaningful periods
@@ -578,7 +578,7 @@ class EnhancedMetricsService:
             logger.warning(f"Failed to calculate overall trends: {e}")
             return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
     
-    async def _calculate_trends_from_cumulative_data(self, db: AsyncSession, client_id: int) -> MetricsTrend:
+    async def _calculate_trends_from_cumulative_data(self, db: AsyncSession, client_id: str) -> MetricsTrend:
         """Calculate trends from cumulative all-time data comparing meaningful periods"""
         try:
             # Compare cumulative totals: all data up to 30 days ago vs all data up to 60 days ago
@@ -653,7 +653,7 @@ class EnhancedMetricsService:
             logger.warning(f"Failed to calculate trends from cumulative data for client {client_id}: {e}")
             return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
     
-    async def _get_last_sync_time(self, db: AsyncSession, client_id: int) -> Optional[datetime]:
+    async def _get_last_sync_time(self, db: AsyncSession, client_id: str) -> Optional[datetime]:
         """Get the most recent last_synced_at timestamp for a client's executions"""
         stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
             WorkflowExecution.client_id == client_id
@@ -661,7 +661,7 @@ class EnhancedMetricsService:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
 
-    async def _get_all_time_client_summary(self, db: AsyncSession, client_id: int) -> Dict[str, Any]:
+    async def _get_all_time_client_summary(self, db: AsyncSession, client_id: str) -> Dict[str, Any]:
         """Compute all-time summary metrics for a client from raw executions"""
         # Workflows counts
         workflows_stmt = select(

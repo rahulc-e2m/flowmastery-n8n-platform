@@ -54,7 +54,7 @@ async def list_clients(
 
 @router.get("/{client_id}", response_model=ClientResponse)
 async def get_client(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -81,7 +81,7 @@ async def get_client(
 
 @router.put("/{client_id}", response_model=ClientResponse)
 async def update_client(
-    client_id: int,
+    client_id: str,
     client_data: ClientUpdate,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -103,7 +103,7 @@ async def update_client(
 
 @router.post("/{client_id}/n8n-config", response_model=ClientSyncResponse)
 async def configure_n8n_api(
-    client_id: int,
+    client_id: str,
     n8n_config: ClientN8nConfig,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -128,7 +128,7 @@ async def configure_n8n_api(
 
 @router.delete("/{client_id}")
 async def delete_client(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ):
@@ -160,7 +160,7 @@ async def test_n8n_connection(
 
 @router.post("/{client_id}/sync-n8n")
 async def trigger_immediate_sync(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:

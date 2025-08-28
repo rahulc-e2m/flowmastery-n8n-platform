@@ -52,6 +52,11 @@ export class AuthApi {
     return response.data
   }
 
+  static async updateProfile(profileData: { first_name?: string; last_name?: string }): Promise<User> {
+    const response = await api.put<User>('/auth/profile', profileData)
+    return response.data
+  }
+
   static async createInvitation(invitation: InvitationCreate): Promise<Invitation> {
     const response = await api.post<Invitation>('/auth/invitations', invitation)
     return response.data
@@ -62,7 +67,7 @@ export class AuthApi {
     return response.data
   }
 
-  static async getInvitationLink(invitationId: number): Promise<{ invitation_link: string; token: string }> {
+  static async getInvitationLink(invitationId: string): Promise<{ invitation_link: string; token: string }> {
     const response = await api.get<{ invitation_link: string; token: string }>(`/auth/invitations/${invitationId}/link`)
     return response.data
   }
@@ -77,8 +82,8 @@ export class AuthApi {
     return response.data
   }
 
-  static async revokeInvitation(invitationId: number): Promise<{ message: string; invitation_id: number; email: string }> {
-    const response = await api.delete<{ message: string; invitation_id: number; email: string }>(`/auth/invitations/${invitationId}`)
+  static async revokeInvitation(invitationId: string): Promise<{ message: string; invitation_id: string; email: string }> {
+    const response = await api.delete<{ message: string; invitation_id: string; email: string }>(`/auth/invitations/${invitationId}`)
     return response.data
   }
 }

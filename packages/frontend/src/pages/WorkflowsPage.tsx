@@ -51,7 +51,7 @@ export function WorkflowsPage() {
   const [searchQuery, setSearchQuery] = React.useState<string>('')
   const [editing, setEditing] = React.useState<WorkflowListItem | null>(null)
   const [minutes, setMinutes] = React.useState<number>(30)
-  const clientId = isAdmin && clientFilter && clientFilter !== 'all' ? Number(clientFilter) : undefined
+  const clientId = isAdmin && clientFilter && clientFilter !== 'all' ? clientFilter : undefined
 
   const { data: clients } = useQuery({
     queryKey: ['clients'],

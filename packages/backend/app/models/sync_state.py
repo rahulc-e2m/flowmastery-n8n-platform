@@ -1,8 +1,10 @@
 """Sync state model for tracking synchronization history"""
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, DateTime, Text, Date
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -13,11 +15,11 @@ class SyncState(Base, TimestampMixin):
     
     __tablename__ = "sync_states"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     
     # Client association
-    client_id: Mapped[int] = mapped_column(
-        Integer,
+    client_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
         unique=True,  # One sync state per client

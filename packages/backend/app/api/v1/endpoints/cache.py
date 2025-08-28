@@ -10,7 +10,7 @@ router = APIRouter()
 
 @router.delete("/client/{client_id}")
 async def clear_client_cache(
-    client_id: int,
+    client_id: str,
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Clear cache for a specific client (admin only)"""

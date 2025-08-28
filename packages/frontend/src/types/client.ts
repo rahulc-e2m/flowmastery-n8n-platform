@@ -1,5 +1,5 @@
 export interface Client {
-  id: number
+  id: string
   name: string
   n8n_api_url?: string
   has_n8n_api_key: boolean

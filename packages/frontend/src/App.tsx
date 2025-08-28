@@ -14,6 +14,7 @@ import { MetricsPage } from '@/pages/MetricsPage'
 import { ClientsPage } from '@/pages/admin/ClientsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -78,6 +79,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <WorkflowsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

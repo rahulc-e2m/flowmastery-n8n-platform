@@ -1,8 +1,10 @@
 """Workflow execution model for persistent storage"""
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Text, Float, Enum
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -34,22 +36,22 @@ class WorkflowExecution(Base, TimestampMixin):
     
     __tablename__ = "workflow_executions"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     
     # n8n execution identifier
     n8n_execution_id: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     
     # Workflow association
-    workflow_id: Mapped[int] = mapped_column(
-        Integer,
+    workflow_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("workflows.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
     
     # Client association (for easier querying)
-    client_id: Mapped[int] = mapped_column(
-        Integer,
+    client_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
         index=True
