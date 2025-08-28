@@ -144,6 +144,11 @@ class AuthService:
             )
         
         if invitation.status != "pending":
+            if invitation.status == "revoked":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This invitation has been revoked"
+                )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invitation has already been used or expired"
@@ -169,3 +174,31 @@ class AuthService:
         """Get invitation by token"""
         result = await db.execute(select(Invitation).where(Invitation.token == token))
         return result.scalar_one_or_none()
+    
+    @staticmethod
+    async def revoke_invitation(db: AsyncSession, invitation_id: int) -> Invitation:
+        """Revoke a pending invitation"""
+        # Find invitation by ID
+        result = await db.execute(
+            select(Invitation).where(Invitation.id == invitation_id)
+        )
+        invitation = result.scalar_one_or_none()
+        
+        if not invitation:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invitation not found"
+            )
+        
+        if invitation.status != "pending":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot revoke invitation with status '{invitation.status}'. Only pending invitations can be revoked."
+            )
+        
+        # Update invitation status to revoked
+        invitation.status = "revoked"
+        await db.commit()
+        await db.refresh(invitation)
+        
+        return invitation
