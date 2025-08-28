@@ -62,6 +62,17 @@ export function UsersPage() {
     },
   })
 
+  const revokeInvitationMutation = useMutation({
+    mutationFn: AuthApi.revokeInvitation,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['invitations'] })
+      toast.success(`Invitation for ${data.email} has been revoked`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to revoke invitation')
+    },
+  })
+
   const {
     register,
     handleSubmit,
@@ -95,6 +106,12 @@ export function UsersPage() {
     }
   }
 
+  const revokeInvitation = async (invitationId: number, email: string) => {
+    if (window.confirm(`Are you sure you want to revoke the invitation for ${email}? This action cannot be undone.`)) {
+      revokeInvitationMutation.mutate(invitationId)
+    }
+  }
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case 'pending':
@@ -103,6 +120,8 @@ export function UsersPage() {
         return <Badge variant="default"><CheckCircle className="w-3 h-3 mr-1" />Accepted</Badge>
       case 'expired':
         return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Expired</Badge>
+      case 'revoked':
+        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Revoked</Badge>
       default:
         return <Badge variant="outline">{status}</Badge>
     }
@@ -111,6 +130,7 @@ export function UsersPage() {
   const pendingInvitations = invitations?.filter(inv => inv.status === 'pending') || []
   const acceptedInvitations = invitations?.filter(inv => inv.status === 'accepted') || []
   const expiredInvitations = invitations?.filter(inv => inv.status === 'expired') || []
+  const revokedInvitations = invitations?.filter(inv => inv.status === 'revoked') || []
 
   return (
     <div className="p-6 space-y-6">
@@ -222,6 +242,9 @@ export function UsersPage() {
           <TabsTrigger value="expired">
             Expired ({expiredInvitations.length})
           </TabsTrigger>
+          <TabsTrigger value="revoked">
+            Revoked ({revokedInvitations.length})
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="pending">
@@ -281,14 +304,25 @@ export function UsersPage() {
                           {formatDistanceToNow(new Date(invitation.expiry_date), { addSuffix: true })}
                         </TableCell>
                         <TableCell>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => copyInvitationLink(invitation.id)}
-                          >
-                            <Copy className="w-4 h-4 mr-2" />
-                            Copy Link
-                          </Button>
+                          <div className="flex space-x-2">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => copyInvitationLink(invitation.id)}
+                            >
+                              <Copy className="w-4 h-4 mr-2" />
+                              Copy Link
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => revokeInvitation(invitation.id, invitation.email)}
+                              disabled={revokeInvitationMutation.isPending}
+                            >
+                              <XCircle className="w-4 h-4 mr-2" />
+                              Revoke
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -393,6 +427,58 @@ export function UsersPage() {
                         </TableCell>
                         <TableCell>
                           {formatDistanceToNow(new Date(invitation.expiry_date), { addSuffix: true })}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="revoked">
+          <Card className="admin-card">
+            <CardHeader>
+              <CardTitle>Revoked Invitations</CardTitle>
+              <CardDescription>
+                Invitations that have been manually revoked by administrators
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {revokedInvitations.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <XCircle className="w-12 h-12 mx-auto mb-4 text-muted-foreground/50" />
+                  <p>No revoked invitations</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead>Client</TableHead>
+                      <TableHead>Originally Sent</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {revokedInvitations.map((invitation) => (
+                      <TableRow key={invitation.id}>
+                        <TableCell className="font-medium">{invitation.email}</TableCell>
+                        <TableCell>
+                          <Badge variant={invitation.role === 'admin' ? 'default' : 'secondary'}>
+                            {invitation.role}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {invitation.client_id ? (
+                            clients?.find(c => c.id === invitation.client_id)?.name || 'Unknown'
+                          ) : (
+                            '-'
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {formatDistanceToNow(new Date(invitation.created_at), { addSuffix: true })}
                         </TableCell>
                       </TableRow>
                     ))}

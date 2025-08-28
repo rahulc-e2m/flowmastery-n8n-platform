@@ -29,7 +29,7 @@ export interface Invitation {
   id: number
   email: string
   role: 'admin' | 'client'
-  status: 'pending' | 'accepted' | 'expired'
+  status: 'pending' | 'accepted' | 'expired' | 'revoked'
   expiry_date: string
   client_id?: number
   created_at: string
