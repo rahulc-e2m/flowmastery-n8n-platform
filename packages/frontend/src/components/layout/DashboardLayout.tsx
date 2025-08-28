@@ -16,7 +16,13 @@ import {
   Activity,
   Zap,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  MessageCircle,
+  Bot,
+  Mail,
+  Calendar,
+  FileText,
+  Workflow
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { MetricsApi } from '@/services/metricsApi'
@@ -48,6 +54,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
   const { user, logout, isAdmin, isClient } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -65,6 +72,39 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     navigate('/login')
   }
 
+  const workflowSubOptions = [
+    {
+      name: 'Chatbot Workflows',
+      href: '/workflows/chatbot',
+      icon: MessageCircle,
+      description: 'AI-powered chatbot interfaces'
+    },
+    {
+      name: 'Email Automation',
+      href: '/workflows/email',
+      icon: Mail,
+      description: 'Automated email sequences'
+    },
+    {
+      name: 'Calendar Integration',
+      href: '/workflows/calendar',
+      icon: Calendar,
+      description: 'Schedule and booking workflows'
+    },
+    {
+      name: 'Document Processing',
+      href: '/workflows/documents',
+      icon: FileText,
+      description: 'Automated document workflows'
+    },
+    {
+      name: 'Custom Workflows',
+      href: '/workflows/custom',
+      icon: Bot,
+      description: 'Build your own workflows'
+    }
+  ]
+
   const navigation = [
     {
       name: 'Dashboard',
@@ -78,7 +118,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       href: '/workflows',
       icon: Activity,
       show: true,
-      description: 'Manage workflows'
+      description: 'Manage workflows',
+      hasSubMenu: true,
+      subOptions: workflowSubOptions
     },
     {
       name: 'Metrics',
@@ -108,26 +150,16 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   const SidebarContent = () => (
-    <motion.div 
+    <div 
       className="flex flex-col h-full dashboard-sidebar backdrop-blur-md"
-      variants={staggerContainer}
-      initial="initial"
-      animate="animate"
       style={{ width: sidebarCollapsed ? '80px' : '320px' }}
     >
       {/* Logo */}
-      <motion.div 
-        variants={staggerItem}
-        className="flex items-center h-16 px-6 border-b border-border/50 justify-between"
-      >
+      <div className="flex items-center h-16 px-6 border-b border-border/50 justify-between">
         <div className={`flex items-center ${sidebarCollapsed ? 'justify-center w-full' : 'space-x-3'}`}>
-          <motion.div 
-            className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-lg"
-            whileHover={{ scale: 1.05, rotate: 5 }}
-            whileTap={{ scale: 0.95 }}
-          >
+          <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary/80 rounded-xl flex items-center justify-center shadow-lg">
             <Zap className="w-6 h-6 text-primary-foreground" />
-          </motion.div>
+          </div>
           {!sidebarCollapsed && (
             <div>
               <h1 className="text-xl font-bold text-gradient">FlowMastery</h1>
@@ -137,93 +169,136 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         </div>
         
         {/* Collapse button - only on desktop */}
-        <motion.button
+        <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
           className="hidden lg:flex items-center justify-center w-8 h-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-accent/50 transition-colors"
-          variants={buttonTap}
-          whileTap="tap"
         >
           {sidebarCollapsed ? (
             <ChevronRight className="w-4 h-4" />
           ) : (
             <ChevronLeft className="w-4 h-4" />
           )}
-        </motion.button>
-      </motion.div>
+        </button>
+      </div>
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2">
         {navigation.filter(item => item.show).map((item, index) => {
           const isItemActive = isActive(item.href)
           return (
-            <motion.div
+            <div
               key={item.name}
-              variants={staggerItem}
-              custom={index}
+              className="relative"
             >
-              <Link
-                to={item.href}
-                onClick={() => setSidebarOpen(false)}
-                title={sidebarCollapsed ? item.name : undefined}
+              <div
+                onMouseEnter={() => item.hasSubMenu && !sidebarCollapsed && setHoveredItem(item.name)}
+                onMouseLeave={() => item.hasSubMenu && setHoveredItem(null)}
               >
-                <motion.div
-                  className={`
-                    group flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-xl text-sm font-medium
-                    transition-all duration-200 cursor-pointer
-                    ${isItemActive
-                      ? 'dashboard-nav-item active text-primary bg-primary/10 border border-primary/20 shadow-sm'
-                      : 'dashboard-nav-item text-muted-foreground hover:text-foreground hover:bg-accent/50'
-                    }
-                  `}
-                  variants={navItemHover}
-                  initial="rest"
-                  whileHover="hover"
-                  whileTap={{ scale: 0.98 }}
+                <Link
+                  to={item.href}
+                  onClick={() => setSidebarOpen(false)}
+                  title={sidebarCollapsed ? item.name : undefined}
                 >
                   <motion.div
                     className={`
-                      p-1.5 rounded-lg transition-colors
-                      ${isItemActive 
-                        ? 'bg-primary/20 text-primary' 
-                        : 'bg-muted/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground'
+                      group flex items-center ${sidebarCollapsed ? 'justify-center px-2' : 'space-x-3 px-4'} py-3 rounded-xl text-sm font-medium
+                      transition-all duration-200 cursor-pointer
+                      ${isItemActive
+                        ? 'dashboard-nav-item active text-primary bg-primary/10 border border-primary/20 shadow-sm'
+                        : 'dashboard-nav-item text-muted-foreground hover:text-foreground hover:bg-accent/50'
                       }
                     `}
-                    whileHover={{ scale: 1.1 }}
+                    variants={navItemHover}
+                    initial="rest"
+                    whileHover="hover"
+                    whileTap={{ scale: 0.98 }}
                   >
-                    <item.icon className="w-4 h-4" />
+                    <motion.div
+                      className={`
+                        p-1.5 rounded-lg transition-colors
+                        ${isItemActive 
+                          ? 'bg-primary/20 text-primary' 
+                          : 'bg-muted/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground'
+                        }
+                      `}
+                      whileHover={{ scale: 1.1 }}
+                    >
+                      <item.icon className="w-4 h-4" />
+                    </motion.div>
+                    {!sidebarCollapsed && (
+                      <div className="flex-1">
+                        <div className="font-medium flex items-center">
+                          {item.name}
+                          {item.hasSubMenu && (
+                            <ChevronDown className={`w-3 h-3 ml-2 text-muted-foreground transition-transform ${
+                              hoveredItem === item.name ? 'rotate-180' : ''
+                            }`} />
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground">{item.description}</div>
+                      </div>
+                    )}
+                    {isItemActive && !sidebarCollapsed && (
+                      <motion.div
+                        layoutId="nav-indicator"
+                        className="w-2 h-2 bg-primary rounded-full"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      />
+                    )}
+                    {isItemActive && sidebarCollapsed && (
+                      <motion.div
+                        className="absolute right-1 w-1 h-8 bg-primary rounded-full"
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                      />
+                    )}
                   </motion.div>
-                  {!sidebarCollapsed && (
-                    <div className="flex-1">
-                      <div className="font-medium">{item.name}</div>
-                      <div className="text-xs text-muted-foreground">{item.description}</div>
+                </Link>
+                
+                {/* Submenu - Simple show/hide without complex animations */}
+                {item.hasSubMenu && hoveredItem === item.name && !sidebarCollapsed && (
+                  <div className="mt-2 ml-4 bg-background/95 backdrop-blur-md border border-border/50 rounded-lg shadow-lg">
+                    <div className="p-2">
+                      <div className="space-y-1">
+                        {item.subOptions?.map((subOption, subIndex) => (
+                          <Link
+                            key={subOption.name}
+                            to={subOption.href}
+                            onClick={() => {
+                              setSidebarOpen(false)
+                              setHoveredItem(null)
+                            }}
+                          >
+                            <div className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm hover:bg-accent/50 transition-colors cursor-pointer group">
+                              <div className="p-1.5 rounded-md bg-primary/10 text-primary group-hover:bg-primary/20 transition-colors flex-shrink-0">
+                                <subOption.icon className="w-3 h-3" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="font-medium text-foreground group-hover:text-primary transition-colors truncate">
+                                  {subOption.name}
+                                </div>
+                                <div className="text-xs text-muted-foreground truncate">
+                                  {subOption.description}
+                                </div>
+                              </div>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
                     </div>
-                  )}
-                  {isItemActive && !sidebarCollapsed && (
-                    <motion.div
-                      layoutId="nav-indicator"
-                      className="w-2 h-2 bg-primary rounded-full"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                    />
-                  )}
-                  {isItemActive && sidebarCollapsed && (
-                    <motion.div
-                      className="absolute right-1 w-1 h-8 bg-primary rounded-full"
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
-                    />
-                  )}
-                </motion.div>
-              </Link>
-            </motion.div>
+                  </div>
+                )}
+              </div>
+            </div>
           )
         })}
       </nav>
 
 
-    </motion.div>
+    </div>
   )
 
   return (
