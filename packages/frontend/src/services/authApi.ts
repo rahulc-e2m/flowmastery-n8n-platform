@@ -76,6 +76,11 @@ export class AuthApi {
     const response = await api.post<LoginResponse>('/auth/invitations/accept', data)
     return response.data
   }
+
+  static async revokeInvitation(invitationId: number): Promise<{ message: string; invitation_id: number; email: string }> {
+    const response = await api.delete<{ message: string; invitation_id: number; email: string }>(`/auth/invitations/${invitationId}`)
+    return response.data
+  }
 }
 
 export default api

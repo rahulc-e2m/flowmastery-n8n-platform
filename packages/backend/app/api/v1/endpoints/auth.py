@@ -138,6 +138,11 @@ async def get_invitation_details(
         )
     
     if invitation.status != "pending":
+        if invitation.status == "revoked":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This invitation has been revoked"
+            )
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invitation has already been used or expired"
@@ -177,3 +182,19 @@ async def accept_invitation(
         access_token=access_token,
         user=UserResponse.model_validate(user)
     )
+
+
+@router.delete("/invitations/{invitation_id}")
+async def revoke_invitation(
+    invitation_id: int,
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user)
+):
+    """Revoke a pending invitation (admin only)"""
+    invitation = await AuthService.revoke_invitation(db, invitation_id)
+    
+    return {
+        "message": f"Invitation for {invitation.email} has been revoked",
+        "invitation_id": invitation_id,
+        "email": invitation.email
+    }

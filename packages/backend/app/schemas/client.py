@@ -1,7 +1,7 @@
 """Client schemas"""
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
 
 
@@ -35,3 +35,21 @@ class ClientN8nConfig(BaseModel):
     """Schema for configuring client's n8n API"""
     n8n_api_url: str = Field(..., max_length=500)
     n8n_api_key: str = Field(..., min_length=1)
+
+
+class N8nConnectionTestResponse(BaseModel):
+    """Schema for n8n connection test response"""
+    status: str  # success, warning, error
+    connection_healthy: bool
+    api_accessible: bool
+    message: str
+    instance_info: Dict[str, Any] = {}
+
+
+class ClientSyncResponse(BaseModel):
+    """Schema for client sync response"""
+    message: str
+    client_id: int
+    client_name: str
+    immediate_sync_triggered: bool
+    note: str
