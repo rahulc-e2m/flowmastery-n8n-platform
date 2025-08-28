@@ -176,7 +176,7 @@ class AuthService:
         return result.scalar_one_or_none()
     
     @staticmethod
-    async def revoke_invitation(db: AsyncSession, invitation_id: int) -> Invitation:
+    async def revoke_invitation(db: AsyncSession, invitation_id: str) -> Invitation:
         """Revoke a pending invitation"""
         # Find invitation by ID
         result = await db.execute(

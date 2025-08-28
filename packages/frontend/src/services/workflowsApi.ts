@@ -1,8 +1,8 @@
 import api from '@/services/authApi'
 
 export type WorkflowListItem = {
-  id: number
-  client_id: number
+  id: string
+  client_id: string
   client_name?: string
   n8n_workflow_id: string
   workflow_name: string
@@ -24,7 +24,7 @@ export type WorkflowListResponse = {
 }
 
 export class WorkflowsApi {
-  static async listAll(clientId?: number, activeFilter?: string): Promise<WorkflowListResponse> {
+  static async listAll(clientId?: string, activeFilter?: string): Promise<WorkflowListResponse> {
     const params: any = {}
     if (clientId) params.client_id = clientId
     if (activeFilter && activeFilter !== 'all') params.active = activeFilter === 'active'
@@ -39,7 +39,7 @@ export class WorkflowsApi {
     return res.data
   }
 
-  static async updateMinutes(workflowDbId: number, minutes: number): Promise<{ id: number; time_saved_per_execution_minutes: number }> {
+  static async updateMinutes(workflowDbId: string, minutes: number): Promise<{ id: string; time_saved_per_execution_minutes: number }> {
     const res = await api.patch(`/workflows/${workflowDbId}`, { time_saved_per_execution_minutes: minutes })
     return res.data
   }

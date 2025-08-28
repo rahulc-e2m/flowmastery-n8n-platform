@@ -66,7 +66,7 @@ export function ClientsPage() {
   })
 
   const configureN8nMutation = useMutation({
-    mutationFn: ({ clientId, config }: { clientId: number; config: ClientN8nConfig }) =>
+    mutationFn: ({ clientId, config }: { clientId: string; config: ClientN8nConfig }) =>
       ClientApi.configureN8nApi(clientId, config),
     onSuccess: (data: ClientSyncResponse) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
@@ -176,13 +176,13 @@ export function ClientsPage() {
     setConfigDialogOpen(true)
   }
 
-  const handleTriggerSync = (clientId: number) => {
+  const handleTriggerSync = (clientId: string) => {
     if (confirm('This will immediately sync data from the n8n instance. Continue?')) {
       triggerSyncMutation.mutate(clientId)
     }
   }
 
-  const handleDeleteClient = (clientId: number) => {
+  const handleDeleteClient = (clientId: string) => {
     if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
       deleteClientMutation.mutate(clientId)
     }

@@ -9,6 +9,8 @@ class UserBase(BaseModel):
     """Base user schema"""
     email: EmailStr
     role: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     
     @field_validator('role')
     @classmethod
@@ -25,9 +27,9 @@ class UserCreate(UserBase):
 
 class UserResponse(UserBase):
     """Schema for user response"""
-    id: int
+    id: str
     is_active: bool
-    client_id: Optional[int] = None
+    client_id: Optional[str] = None
     created_at: datetime
     last_login: Optional[datetime] = None
     
@@ -51,7 +53,7 @@ class InvitationCreate(BaseModel):
     """Schema for creating an invitation"""
     email: EmailStr
     role: str
-    client_id: Optional[int] = None
+    client_id: Optional[str] = None
     
     @field_validator('role')
     @classmethod
@@ -63,12 +65,12 @@ class InvitationCreate(BaseModel):
 
 class InvitationResponse(BaseModel):
     """Schema for invitation response"""
-    id: int
+    id: str
     email: EmailStr
     role: str
     status: str
     expiry_date: datetime
-    client_id: Optional[int] = None
+    client_id: Optional[str] = None
     created_at: datetime
     
     model_config = {"from_attributes": True}
@@ -84,3 +86,9 @@ class PasswordChange(BaseModel):
     """Schema for changing password"""
     current_password: str
     new_password: str = Field(..., min_length=8)
+
+
+class UserProfileUpdate(BaseModel):
+    """Schema for updating user profile"""
+    first_name: Optional[str] = Field(None, max_length=100)
+    last_name: Optional[str] = Field(None, max_length=100)

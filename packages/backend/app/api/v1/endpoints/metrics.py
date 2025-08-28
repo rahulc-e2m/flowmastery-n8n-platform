@@ -39,7 +39,7 @@ async def get_all_clients_metrics(
 
 @router.get("/client/{client_id}", response_model=ClientMetrics)
 async def get_client_metrics(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -62,7 +62,7 @@ async def get_client_metrics(
 
 @router.get("/client/{client_id}/workflows", response_model=ClientWorkflowMetrics)
 async def get_client_workflow_metrics(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -85,7 +85,7 @@ async def get_client_workflow_metrics(
 
 @router.get("/client/{client_id}/historical", response_model=HistoricalMetrics)
 async def get_client_historical_metrics(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     period_type: AggregationPeriod = Query(AggregationPeriod.DAILY, description="Aggregation period"),
@@ -264,7 +264,7 @@ async def quick_sync_all_metrics(
 # Admin endpoints for metrics management
 @router.post("/admin/sync/{client_id}")
 async def force_sync_client(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ):
@@ -308,7 +308,7 @@ async def force_sync_all_clients(
 
 @router.get("/client/{client_id}/executions")
 async def get_client_executions(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
     limit: int = Query(50, description="Number of executions to return"),
@@ -396,7 +396,7 @@ async def get_client_executions(
 
 @router.get("/client/{client_id}/execution-stats")
 async def get_client_execution_stats(
-    client_id: int,
+    client_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):

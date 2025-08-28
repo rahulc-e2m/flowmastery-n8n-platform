@@ -59,7 +59,7 @@ async def _format_workflow_rows(db: AsyncSession, rows):
 async def list_workflows(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
-    client_id: Optional[int] = Query(None, description="Filter by client id"),
+    client_id: Optional[str] = Query(None, description="Filter by client id"),
     active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflows (admin). Optionally filter by client."""

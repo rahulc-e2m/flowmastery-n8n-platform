@@ -16,7 +16,7 @@ export interface N8nConnectionTestResponse {
 
 export interface ClientSyncResponse {
   message: string
-  client_id: number
+  client_id: string
   client_name: string
   immediate_sync_triggered: boolean
   note: string
@@ -38,17 +38,17 @@ export class ClientApi {
     return response.data
   }
 
-  static async getClient(clientId: number): Promise<Client> {
+  static async getClient(clientId: string): Promise<Client> {
     const response = await api.get<Client>(`/clients/${clientId}`)
     return response.data
   }
 
-  static async updateClient(clientId: number, client: ClientUpdate): Promise<Client> {
+  static async updateClient(clientId: string, client: ClientUpdate): Promise<Client> {
     const response = await api.put<Client>(`/clients/${clientId}`, client)
     return response.data
   }
 
-  static async configureN8nApi(clientId: number, config: ClientN8nConfig): Promise<ClientSyncResponse> {
+  static async configureN8nApi(clientId: string, config: ClientN8nConfig): Promise<ClientSyncResponse> {
     const response = await api.post<ClientSyncResponse>(`/clients/${clientId}/n8n-config`, config)
     return response.data
   }
@@ -58,12 +58,12 @@ export class ClientApi {
     return response.data
   }
 
-  static async triggerImmediateSync(clientId: number): Promise<ManualSyncResponse> {
+  static async triggerImmediateSync(clientId: string): Promise<ManualSyncResponse> {
     const response = await api.post<ManualSyncResponse>(`/clients/${clientId}/sync-n8n`)
     return response.data
   }
 
-  static async deleteClient(clientId: number): Promise<{ message: string }> {
+  static async deleteClient(clientId: string): Promise<{ message: string }> {
     const response = await api.delete<{ message: string }>(`/clients/${clientId}`)
     return response.data
   }

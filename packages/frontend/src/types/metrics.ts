@@ -22,7 +22,7 @@ export interface MetricsTrend {
 }
 
 export interface ClientMetrics {
-  client_id: number
+  client_id: string
   client_name: string
   total_workflows: number
   active_workflows: number
@@ -41,7 +41,7 @@ export interface ClientMetrics {
 }
 
 export interface ClientWorkflowMetrics {
-  client_id: number
+  client_id: string
   client_name: string
   workflows: WorkflowMetrics[]
   summary: ClientMetrics
@@ -62,16 +62,16 @@ export interface AdminMetricsResponse {
 
 export interface MetricsError {
   error: string
-  client_id: number
+  client_id: string
   client_name: string
   details?: string
 }
 
 // Historical Metrics Types
 export interface MetricsAggregation {
-  id: number
-  client_id: number
-  workflow_id?: number
+  id: string
+  client_id: string
+  workflow_id?: string
   period_type: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   period_start: string
   period_end: string
@@ -95,11 +95,11 @@ export interface MetricsAggregation {
 }
 
 export interface HistoricalMetrics {
-  client_id: number
+  client_id: string
   period_type: 'DAILY' | 'WEEKLY' | 'MONTHLY'
   start_date?: string
   end_date?: string
-  workflow_id?: number
+  workflow_id?: string
   aggregations: MetricsAggregation[]
   summary: {
     total_periods: number
@@ -112,9 +112,9 @@ export interface HistoricalMetrics {
 }
 
 export interface WorkflowTrendMetrics {
-  id: number
-  workflow_id: number
-  client_id: number
+  id: string
+  workflow_id: string
+  client_id: string
   date: string
   executions_count: number
   success_count: number
@@ -141,6 +141,6 @@ export interface MetricsFilters {
   period_type?: AggregationPeriod
   start_date?: string
   end_date?: string
-  workflow_id?: number
+  workflow_id?: string
   include_test_data?: boolean
 }
