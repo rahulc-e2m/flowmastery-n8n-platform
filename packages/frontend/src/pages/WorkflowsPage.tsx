@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import { MoreHorizontal, Clock, Search, X, MessageCircle, Mail, Calendar, FileText, Bot, ArrowLeft, ExternalLink } from 'lucide-react'
+import { MoreHorizontal, Clock, Search, X, MessageCircle, Mail, Calendar, FileText, Bot, ArrowLeft, ExternalLink, Settings, Zap } from 'lucide-react'
 import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 
@@ -147,6 +147,9 @@ export function WorkflowsPage({ workflowType }: WorkflowsPageProps) {
 
   // If workflowType is specified, show the workflow interface
   if (workflowType) {
+    if (workflowType === 'chatbot') {
+      return <ChatbotInterface />
+    }
     return <WorkflowInterface workflowType={workflowType} />
   }
 
@@ -341,186 +344,201 @@ export function WorkflowsPage({ workflowType }: WorkflowsPageProps) {
   )
 }
 
-// Workflow Interface Component for different workflow types
-function WorkflowInterface({ workflowType }: { workflowType: string }) {
-  const workflowConfigs = {
-    chatbot: {
-      title: 'Chatbot Workflows',
-      description: 'Create and manage AI-powered chatbot interfaces',
-      icon: MessageCircle,
-      color: 'bg-blue-500',
-      features: [
-        'AI-powered conversation flows',
-        'Multi-platform deployment',
-        'Custom training data integration',
-        'Real-time analytics and insights'
-      ],
-      templates: [
-        {
-          name: 'Customer Support Bot',
-          description: 'Handle common customer inquiries automatically',
-          setupTime: '15 minutes',
-          complexity: 'Beginner'
+// Chatbot Interface Component
+function ChatbotInterface() {
+  const [messages, setMessages] = React.useState([
+    {
+      id: '1',
+      text: 'Hello! I\'m your AI assistant. How can I help you today?',
+      sender: 'bot',
+      timestamp: new Date()
+    }
+  ])
+  const [inputMessage, setInputMessage] = React.useState('')
+  const [isLoading, setIsLoading] = React.useState(false)
+  const [showConfig, setShowConfig] = React.useState(false)
+  const [webhookUrl, setWebhookUrl] = React.useState(localStorage.getItem('chatbot_webhook_url') || '')
+  const [apiKey, setApiKey] = React.useState(localStorage.getItem('chatbot_api_key') || '')
+  const [isConfigured, setIsConfigured] = React.useState(!!localStorage.getItem('chatbot_webhook_url'))
+  const [showDebug, setShowDebug] = React.useState(false)
+  const [lastResponse, setLastResponse] = React.useState<any>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
+  React.useEffect(() => {
+    scrollToBottom()
+  }, [messages])
+
+  const handleSaveConfig = () => {
+    if (!webhookUrl.trim()) {
+      toast.error('Please enter a valid webhook URL')
+      return
+    }
+    
+    localStorage.setItem('chatbot_webhook_url', webhookUrl)
+    localStorage.setItem('chatbot_api_key', apiKey)
+    setIsConfigured(true)
+    setShowConfig(false)
+    toast.success('Chatbot configuration saved successfully!')
+  }
+
+  const handleClearConfig = () => {
+    localStorage.removeItem('chatbot_webhook_url')
+    localStorage.removeItem('chatbot_api_key')
+    setWebhookUrl('')
+    setApiKey('')
+    setIsConfigured(false)
+    toast.success('Configuration cleared')
+  }
+
+  const sendMessage = async () => {
+    if (!inputMessage.trim()) return
+    if (!isConfigured) {
+      toast.error('Please configure the chatbot webhook first')
+      setShowConfig(true)
+      return
+    }
+
+    const userMessage = {
+      id: Date.now().toString(),
+      text: inputMessage,
+      sender: 'user' as const,
+      timestamp: new Date()
+    }
+
+    setMessages(prev => [...prev, userMessage])
+    setInputMessage('')
+    setIsLoading(true)
+
+    try {
+      // Call n8n webhook
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(apiKey && { 'Authorization': `Bearer ${apiKey}` })
         },
-        {
-          name: 'Lead Qualification Bot',
-          description: 'Qualify leads through interactive conversations',
-          setupTime: '30 minutes',
-          complexity: 'Intermediate'
-        },
-        {
-          name: 'FAQ Assistant',
-          description: 'Instant answers to frequently asked questions',
-          setupTime: '10 minutes',
-          complexity: 'Beginner'
+        body: JSON.stringify({
+          message: inputMessage,
+          timestamp: new Date().toISOString(),
+          sessionId: 'web-chat-' + Date.now()
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      // Store the last response for debugging
+      setLastResponse(data)
+      
+      // Log the full response for debugging
+      console.log('Full n8n webhook response:', data)
+      
+      // Enhanced response parsing to handle various n8n response formats
+      let botResponseText = ''
+      
+      if (typeof data === 'string') {
+        // If the response is a direct string
+        botResponseText = data
+      } else if (data.response) {
+        // Standard response field
+        botResponseText = data.response
+      } else if (data.message) {
+        // Alternative message field
+        botResponseText = data.message
+      } else if (data.output) {
+        // n8n sometimes uses 'output' field
+        botResponseText = data.output
+      } else if (data.result) {
+        // Some workflows use 'result' field
+        botResponseText = data.result
+      } else if (data.text) {
+        // Text field for simple responses
+        botResponseText = data.text
+      } else if (data.content) {
+        // Content field
+        botResponseText = data.content
+      } else if (data.reply) {
+        // Reply field
+        botResponseText = data.reply
+      } else if (data.data && typeof data.data === 'string') {
+        // Data field with string content
+        botResponseText = data.data
+      } else if (data.data && data.data.response) {
+        // Nested response in data object
+        botResponseText = data.data.response
+      } else if (data.data && data.data.message) {
+        // Nested message in data object
+        botResponseText = data.data.message
+      } else if (Array.isArray(data) && data.length > 0) {
+        // If it's an array, try to get the first item
+        const firstItem = data[0]
+        if (typeof firstItem === 'string') {
+          botResponseText = firstItem
+        } else if (firstItem.response) {
+          botResponseText = firstItem.response
+        } else if (firstItem.message) {
+          botResponseText = firstItem.message
+        } else if (firstItem.output) {
+          botResponseText = firstItem.output
         }
-      ]
-    },
-    email: {
-      title: 'Email Automation',
-      description: 'Design sophisticated email marketing and automation sequences',
-      icon: Mail,
-      color: 'bg-green-500',
-      features: [
-        'Drag-and-drop email builder',
-        'A/B testing capabilities',
-        'Advanced segmentation',
-        'Behavioral triggers'
-      ],
-      templates: [
-        {
-          name: 'Welcome Series',
-          description: 'Onboard new subscribers with a warm welcome sequence',
-          setupTime: '20 minutes',
-          complexity: 'Beginner'
-        },
-        {
-          name: 'Abandoned Cart Recovery',
-          description: 'Recover lost sales with strategic reminder emails',
-          setupTime: '25 minutes',
-          complexity: 'Intermediate'
-        },
-        {
-          name: 'Re-engagement Campaign',
-          description: 'Win back inactive subscribers',
-          setupTime: '30 minutes',
-          complexity: 'Advanced'
-        }
-      ]
-    },
-    calendar: {
-      title: 'Calendar Integration',
-      description: 'Streamline scheduling and booking processes',
-      icon: Calendar,
-      color: 'bg-purple-500',
-      features: [
-        'Smart scheduling algorithms',
-        'Multi-calendar sync',
-        'Automated reminders',
-        'Time zone handling'
-      ],
-      templates: [
-        {
-          name: 'Meeting Scheduler',
-          description: 'Allow clients to book meetings automatically',
-          setupTime: '15 minutes',
-          complexity: 'Beginner'
-        },
-        {
-          name: 'Event Registration',
-          description: 'Manage event registrations and capacity',
-          setupTime: '25 minutes',
-          complexity: 'Intermediate'
-        },
-        {
-          name: 'Resource Booking',
-          description: 'Book rooms, equipment, and other resources',
-          setupTime: '35 minutes',
-          complexity: 'Advanced'
-        }
-      ]
-    },
-    documents: {
-      title: 'Document Processing',
-      description: 'Automate document creation, processing, and management',
-      icon: FileText,
-      color: 'bg-orange-500',
-      features: [
-        'OCR and text extraction',
-        'Template generation',
-        'Digital signatures',
-        'Workflow approvals'
-      ],
-      templates: [
-        {
-          name: 'Invoice Generator',
-          description: 'Automatically generate and send invoices',
-          setupTime: '20 minutes',
-          complexity: 'Intermediate'
-        },
-        {
-          name: 'Contract Workflow',
-          description: 'Streamline contract creation and approval',
-          setupTime: '40 minutes',
-          complexity: 'Advanced'
-        },
-        {
-          name: 'Report Automation',
-          description: 'Generate periodic reports automatically',
-          setupTime: '30 minutes',
-          complexity: 'Intermediate'
-        }
-      ]
-    },
-    custom: {
-      title: 'Custom Workflows',
-      description: 'Build completely custom automation workflows',
-      icon: Bot,
-      color: 'bg-indigo-500',
-      features: [
-        'Visual workflow builder',
-        'Custom integrations',
-        'Advanced logic flows',
-        'API connections'
-      ],
-      templates: [
-        {
-          name: 'Data Sync Workflow',
-          description: 'Sync data between different platforms',
-          setupTime: '45 minutes',
-          complexity: 'Advanced'
-        },
-        {
-          name: 'Notification System',
-          description: 'Create complex notification workflows',
-          setupTime: '25 minutes',
-          complexity: 'Intermediate'
-        },
-        {
-          name: 'Multi-step Process',
-          description: 'Build complex multi-step business processes',
-          setupTime: '60 minutes',
-          complexity: 'Expert'
-        }
-      ]
+      }
+      
+      // If we still don't have a response, show the structure to the user
+      if (!botResponseText) {
+        console.warn('Could not parse n8n response. Available fields:', Object.keys(data))
+        botResponseText = `I received a response, but couldn't parse it. Response structure: ${JSON.stringify(Object.keys(data))}. Please check the n8n workflow output format.`
+      }
+      
+      const botMessage = {
+        id: (Date.now() + 1).toString(),
+        text: botResponseText,
+        sender: 'bot' as const,
+        timestamp: new Date()
+      }
+
+      setMessages(prev => [...prev, botMessage])
+    } catch (error) {
+      console.error('Error calling webhook:', error)
+      const errorMessage = {
+        id: (Date.now() + 1).toString(),
+        text: 'Sorry, I\'m having trouble connecting to my brain right now. Please check the configuration or try again later.',
+        sender: 'bot' as const,
+        timestamp: new Date()
+      }
+      setMessages(prev => [...prev, errorMessage])
+      toast.error('Failed to get response from chatbot')
+    } finally {
+      setIsLoading(false)
     }
   }
 
-  const config = workflowConfigs[workflowType as keyof typeof workflowConfigs]
-  const IconComponent = config.icon
-
-  const getComplexityColor = (complexity: string) => {
-    switch (complexity) {
-      case 'Beginner': return 'bg-green-100 text-green-800'
-      case 'Intermediate': return 'bg-yellow-100 text-yellow-800'
-      case 'Advanced': return 'bg-orange-100 text-orange-800'
-      case 'Expert': return 'bg-red-100 text-red-800'
-      default: return 'bg-gray-100 text-gray-800'
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      sendMessage()
     }
+  }
+
+  const clearChat = () => {
+    setMessages([
+      {
+        id: '1',
+        text: 'Hello! I\'m your AI assistant. How can I help you today?',
+        sender: 'bot',
+        timestamp: new Date()
+      }
+    ])
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
@@ -532,7 +550,382 @@ function WorkflowInterface({ workflowType }: { workflowType: string }) {
           </Link>
           <div className="flex items-center space-x-3">
             <motion.div 
-              className={`p-3 rounded-xl ${config.color} text-white`}
+              className="p-3 rounded-xl bg-blue-500 text-white"
+              whileHover={{ scale: 1.05 }}
+            >
+              <MessageCircle className="w-6 h-6" />
+            </motion.div>
+            <div>
+              <h1 className="text-3xl font-bold">AI Chatbot Interface</h1>
+              <p className="text-muted-foreground">Interactive chat with your n8n-powered AI assistant</p>
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowConfig(true)}
+            className="flex items-center space-x-2"
+          >
+            <Settings className="w-4 h-4" />
+            <span>Configure</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowDebug(!showDebug)}
+            className="flex items-center space-x-2"
+          >
+            <Bot className="w-4 h-4" />
+            <span>Debug</span>
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={clearChat}
+            className="flex items-center space-x-2"
+          >
+            <X className="w-4 h-4" />
+            <span>Clear Chat</span>
+          </Button>
+        </div>
+      </div>
+
+      {/* Debug Panel */}
+      {showDebug && (
+        <Card className="border-purple-200 bg-purple-50">
+          <CardHeader>
+            <CardTitle className="text-purple-900">Debug Information</CardTitle>
+            <CardDescription className="text-purple-700">
+              This panel shows the raw response from your n8n webhook to help troubleshoot parsing issues.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium text-purple-900 mb-2">Webhook URL:</h4>
+                <code className="text-xs bg-purple-100 p-2 rounded block text-purple-800 break-all">
+                  {webhookUrl || 'Not configured'}
+                </code>
+              </div>
+              
+              <div>
+                <h4 className="font-medium text-purple-900 mb-2">Last Response:</h4>
+                <div className="bg-purple-100 p-3 rounded text-xs">
+                  {lastResponse ? (
+                    <pre className="text-purple-800 whitespace-pre-wrap">
+                      {JSON.stringify(lastResponse, null, 2)}
+                    </pre>
+                  ) : (
+                    <span className="text-purple-600">No responses yet. Send a message to see the webhook response.</span>
+                  )}
+                </div>
+              </div>
+              
+              {lastResponse && (
+                <div>
+                  <h4 className="font-medium text-purple-900 mb-2">Available Fields:</h4>
+                  <div className="flex flex-wrap gap-1">
+                    {Object.keys(lastResponse).map((key) => (
+                      <Badge key={key} variant="outline" className="text-purple-700 border-purple-300">
+                        {key}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              <div className="text-xs text-purple-600">
+                <p>💡 <strong>Tip:</strong> Make sure your n8n workflow returns a response with one of these fields:</p>
+                <p className="mt-1"><code>response</code>, <code>message</code>, <code>output</code>, <code>result</code>, <code>text</code>, <code>content</code>, or <code>reply</code></p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Configuration Status */}
+      {!isConfigured && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2 text-yellow-800">
+              <Bot className="w-5 h-5" />
+              <span className="font-medium">Configuration Required</span>
+            </div>
+            <p className="text-sm text-yellow-700 mt-1">
+              Please configure your n8n webhook URL to enable chatbot functionality.
+            </p>
+            <Button 
+              size="sm" 
+              className="mt-3" 
+              onClick={() => setShowConfig(true)}
+            >
+              Configure Now
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Chat Interface */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Main Chat Area */}
+        <div className="lg:col-span-2">
+          <Card className="h-[600px] flex flex-col">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center space-x-2">
+                    <MessageCircle className="w-5 h-5 text-blue-500" />
+                    <span>Chat Assistant</span>
+                  </CardTitle>
+                  <CardDescription>Powered by n8n workflow automation</CardDescription>
+                </div>
+                <Badge variant={isConfigured ? 'default' : 'secondary'}>
+                  {isConfigured ? 'Connected' : 'Not Configured'}
+                </Badge>
+              </div>
+            </CardHeader>
+            
+            {/* Messages Area */}
+            <CardContent className="flex-1 overflow-hidden p-0">
+              <div className="h-full overflow-y-auto p-4 space-y-4">
+                {messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                  >
+                    <div
+                      className={`max-w-[80%] rounded-lg px-4 py-2 ${
+                        message.sender === 'user'
+                          ? 'bg-blue-500 text-white'
+                          : 'bg-gray-100 text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+                      }`}
+                    >
+                      <p className="text-sm">{message.text}</p>
+                      <p className="text-xs opacity-70 mt-1">
+                        {message.timestamp.toLocaleTimeString()}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 dark:bg-gray-800 rounded-lg px-4 py-2">
+                      <div className="flex items-center space-x-2">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-500 border-t-transparent"></div>
+                        <span className="text-sm text-gray-600 dark:text-gray-400">Thinking...</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <div ref={messagesEndRef} />
+              </div>
+            </CardContent>
+            
+            {/* Input Area */}
+            <div className="p-4 border-t">
+              <div className="flex space-x-2">
+                <Input
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  placeholder="Type your message here..."
+                  disabled={isLoading || !isConfigured}
+                  className="flex-1"
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={isLoading || !inputMessage.trim() || !isConfigured}
+                  className="px-6"
+                >
+                  {isLoading ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                  ) : (
+                    'Send'
+                  )}
+                </Button>
+              </div>
+            </div>
+          </Card>
+        </div>
+
+        {/* Chat Info & Settings Panel */}
+        <div className="space-y-4">
+          {/* Quick Stats */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Chat Statistics</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Messages:</span>
+                <Badge variant="outline">{messages.length}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Status:</span>
+                <Badge variant={isConfigured ? 'default' : 'secondary'}>
+                  {isConfigured ? 'Ready' : 'Setup Required'}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Response Time:</span>
+                <Badge variant="outline">~2s avg</Badge>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Features */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Features</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Bot className="w-4 h-4 text-green-500" />
+                  <span className="text-sm">AI-Powered Responses</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Zap className="w-4 h-4 text-blue-500" />
+                  <span className="text-sm">n8n Integration</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <MessageCircle className="w-4 h-4 text-purple-500" />
+                  <span className="text-sm">Real-time Chat</span>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Settings className="w-4 h-4 text-orange-500" />
+                  <span className="text-sm">Configurable Webhooks</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Quick Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <FileText className="w-4 h-4 mr-2" />
+                Export Chat History
+              </Button>
+              <Button variant="outline" size="sm" className="w-full justify-start">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Open n8n Editor
+              </Button>
+              <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setShowConfig(true)}>
+                <Settings className="w-4 h-4 mr-2" />
+                Configure Webhook
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Configuration Dialog */}
+      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Configure Chatbot</DialogTitle>
+            <CardDescription>
+              Set up your n8n webhook URL and optional API key for the chatbot integration.
+            </CardDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <label className="text-sm font-medium">n8n Webhook URL *</label>
+              <Input
+                value={webhookUrl}
+                onChange={(e) => setWebhookUrl(e.target.value)}
+                placeholder="https://your-n8n-instance.com/webhook/chatbot"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Enter the webhook URL from your n8n chatbot workflow
+              </p>
+            </div>
+            <div>
+              <label className="text-sm font-medium">API Key (Optional)</label>
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Enter API key if required"
+                className="mt-1"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Optional authentication key for secure webhooks
+              </p>
+            </div>
+          </div>
+          <DialogFooter className="flex justify-between">
+            <Button variant="outline" onClick={handleClearConfig} disabled={!isConfigured}>
+              Clear Config
+            </Button>
+            <div className="space-x-2">
+              <Button variant="outline" onClick={() => setShowConfig(false)}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveConfig}>
+                Save Configuration
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
+
+// Generic Workflow Interface Component for other workflow types
+function WorkflowInterface({ workflowType }: { workflowType: 'email' | 'calendar' | 'documents' | 'custom' }) {
+  const workflowConfig = {
+    email: {
+      title: 'Email Automation',
+      description: 'Automate your email workflows with smart templates and triggers',
+      icon: Mail,
+      features: ['Email Templates', 'Auto-replies', 'Smart Filtering', 'Bulk Operations']
+    },
+    calendar: {
+      title: 'Calendar Integration', 
+      description: 'Sync and automate calendar events across platforms',
+      icon: Calendar,
+      features: ['Event Sync', 'Meeting Automation', 'Reminder Systems', 'Availability Checks']
+    },
+    documents: {
+      title: 'Document Workflow',
+      description: 'Streamline document processing and management',
+      icon: FileText,
+      features: ['Document Processing', 'Auto-generation', 'Approval Workflows', 'Version Control']
+    },
+    custom: {
+      title: 'Custom Workflow',
+      description: 'Build your own custom automation workflows',
+      icon: Bot,
+      features: ['Custom Logic', 'API Integrations', 'Advanced Triggers', 'Data Processing']
+    }
+  }
+
+  const config = workflowConfig[workflowType]
+  const IconComponent = config.icon
+
+  return (
+    <div className="p-6 space-y-6 max-w-5xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center space-x-4">
+          <Link to="/workflows">
+            <Button variant="ghost" size="sm" className="flex items-center space-x-2">
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back to Workflows</span>
+            </Button>
+          </Link>
+          <div className="flex items-center space-x-3">
+            <motion.div 
+              className="p-3 rounded-xl bg-blue-500 text-white"
               whileHover={{ scale: 1.05 }}
             >
               <IconComponent className="w-6 h-6" />
@@ -543,120 +936,153 @@ function WorkflowInterface({ workflowType }: { workflowType: string }) {
             </div>
           </div>
         </div>
-        <Button className="flex items-center space-x-2">
-          <ExternalLink className="w-4 h-4" />
-          <span>Open n8n Editor</span>
-        </Button>
       </div>
 
-      {/* Features Grid */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Key Features</CardTitle>
-          <CardDescription>What you can accomplish with this workflow type</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {config.features.map((feature, index) => (
-              <motion.div 
-                key={feature}
-                className="p-4 border rounded-lg text-center hover:shadow-md transition-shadow"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.1 }}
-              >
-                <p className="text-sm font-medium">{feature}</p>
-              </motion.div>
-            ))}
+      {/* Coming Soon Notice */}
+      <Card className="border-blue-200 bg-blue-50">
+        <CardContent className="p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="p-2 rounded-full bg-blue-100">
+              <IconComponent className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-blue-900">{config.title} - Coming Soon</h3>
+              <p className="text-blue-700 text-sm">We're working on bringing you this powerful workflow automation.</p>
+            </div>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Templates */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Ready-to-Use Templates</CardTitle>
-          <CardDescription>Start with these pre-built templates and customize as needed</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {config.templates.map((template, index) => (
-              <motion.div 
-                key={template.name}
-                className="border rounded-lg p-6 hover:shadow-lg transition-all duration-200 cursor-pointer group"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: index * 0.1 }}
-                whileHover={{ y: -4 }}
-              >
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-semibold group-hover:text-primary transition-colors">
-                      {template.name}
-                    </h3>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      {template.description}
-                    </p>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Clock className="w-4 h-4 text-muted-foreground" />
-                      <span className="text-sm text-muted-foreground">{template.setupTime}</span>
-                    </div>
-                    <Badge className={getComplexityColor(template.complexity)}>
-                      {template.complexity}
-                    </Badge>
-                  </div>
-                  
-                  <Button className="w-full" variant="outline">
-                    Use Template
-                  </Button>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+            <div>
+              <h4 className="font-medium text-blue-900 mb-2">Planned Features:</h4>
+              <ul className="space-y-1">
+                {config.features.map((feature, index) => (
+                  <li key={index} className="text-sm text-blue-700 flex items-center space-x-2">
+                    <Zap className="w-3 h-3" />
+                    <span>{feature}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+            
+            <div>
+              <h4 className="font-medium text-blue-900 mb-2">Integration Ready:</h4>
+              <div className="space-y-2">
+                <div className="flex items-center space-x-2 text-sm text-blue-700">
+                  <Settings className="w-3 h-3" />
+                  <span>n8n Workflow Engine</span>
                 </div>
-              </motion.div>
-            ))}
+                <div className="flex items-center space-x-2 text-sm text-blue-700">
+                  <ExternalLink className="w-3 h-3" />
+                  <span>API Connectivity</span>
+                </div>
+                <div className="flex items-center space-x-2 text-sm text-blue-700">
+                  <Bot className="w-3 h-3" />
+                  <span>Smart Automation</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-6 pt-4 border-t border-blue-200">
+            <p className="text-sm text-blue-600 mb-3">Want to be notified when {config.title} is available?</p>
+            <div className="flex space-x-2">
+              <Button size="sm" variant="outline" className="text-blue-600 border-blue-300">
+                Get Notified
+              </Button>
+              <Button size="sm" variant="outline" className="text-blue-600 border-blue-300">
+                Request Feature
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Getting Started Guide */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Getting Started</CardTitle>
-          <CardDescription>Follow these steps to create your first workflow</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-start space-x-4">
-              <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
-                1
+      {/* Workflow Preview */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <IconComponent className="w-5 h-5" />
+              <span>Workflow Preview</span>
+            </CardTitle>
+            <CardDescription>
+              See how {config.title} will work when it's ready
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-green-500"></div>
+                  <span className="text-sm font-medium">Trigger Detection</span>
+                </div>
+                <p className="text-xs text-gray-600">Automatically detect when {workflowType} events occur</p>
               </div>
-              <div>
-                <h4 className="font-medium">Choose a Template</h4>
-                <p className="text-sm text-muted-foreground">Select one of the pre-built templates above or start from scratch</p>
+              
+              <div className="flex justify-center">
+                <div className="w-px h-6 bg-gray-300"></div>
+              </div>
+              
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                  <span className="text-sm font-medium">Smart Processing</span>
+                </div>
+                <p className="text-xs text-gray-600">AI-powered analysis and decision making</p>
+              </div>
+              
+              <div className="flex justify-center">
+                <div className="w-px h-6 bg-gray-300"></div>
+              </div>
+              
+              <div className="p-4 border rounded-lg bg-gray-50">
+                <div className="flex items-center space-x-3 mb-3">
+                  <div className="w-3 h-3 rounded-full bg-purple-500"></div>
+                  <span className="text-sm font-medium">Automated Action</span>
+                </div>
+                <p className="text-xs text-gray-600">Execute the appropriate response or task</p>
               </div>
             </div>
-            <div className="flex items-start space-x-4">
-              <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
-                2
+          </CardContent>
+        </Card>
+        
+        <Card>
+          <CardHeader>
+            <CardTitle>Development Status</CardTitle>
+            <CardDescription>Track our progress on this workflow</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Core Architecture</span>
+                <Badge variant="default">Complete</Badge>
               </div>
-              <div>
-                <h4 className="font-medium">Customize the Workflow</h4>
-                <p className="text-sm text-muted-foreground">Use our visual editor to modify the workflow to match your needs</p>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">UI Design</span>
+                <Badge variant="outline">In Progress</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">{config.title} Logic</span>
+                <Badge variant="secondary">Planned</Badge>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Testing & QA</span>
+                <Badge variant="secondary">Planned</Badge>
+              </div>
+              
+              <div className="mt-6 pt-4 border-t">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-medium">Overall Progress</span>
+                  <span className="text-sm text-gray-600">25%</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="bg-blue-500 h-2 rounded-full" style={{ width: '25%' }}></div>
+                </div>
               </div>
             </div>
-            <div className="flex items-start space-x-4">
-              <div className="w-8 h-8 bg-primary text-primary-foreground rounded-full flex items-center justify-center text-sm font-semibold">
-                3
-              </div>
-              <div>
-                <h4 className="font-medium">Test and Deploy</h4>
-                <p className="text-sm text-muted-foreground">Test your workflow and deploy it to start automation</p>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
