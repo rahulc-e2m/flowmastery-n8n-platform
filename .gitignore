@@ -116,3 +116,7 @@ site/
 # Old Directories
 /packages/backend-old
 /packages/frontend-deprecated
+
+# Celery
+/packages/backend/celerybeat-schedule
+celerybeat.pid
