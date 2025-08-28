@@ -26,6 +26,7 @@ import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
+import { TrendIndicator } from '@/components/ui/trend-indicator'
 import { ClientMetricsCard } from '@/components/dashboard/ClientMetricsCard'
 import { formatDistanceToNow } from 'date-fns'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
@@ -142,7 +143,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       value: metrics?.total_clients || 0,
       icon: Building2,
       color: 'blue',
-      trend: { value: 12, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Active organizations'
     },
     {
@@ -150,7 +151,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       value: metrics?.total_workflows || 0,
       icon: Activity,
       color: 'green',
-      trend: { value: 8, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Automated processes'
     },
     {
@@ -158,7 +159,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       value: (metrics?.total_executions || 0).toLocaleString(),
       icon: Zap,
       color: 'purple',
-      trend: { value: 24, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Last 30 days'
     },
     {
@@ -166,15 +167,15 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       value: metrics?.total_time_saved_hours ? `${metrics.total_time_saved_hours}h` : '0h',
       icon: Clock,
       color: 'orange',
-      trend: { value: 18, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Time saved by automation'
     },
     {
       title: 'Success Rate',
-      value: `${metrics?.overall_success_rate || 0}%`,
+      value: `${metrics?.overall_success_rate?.toFixed(1) || '0.0'}%`,
       icon: TrendingUp,
       color: 'green',
-      trend: { value: 2, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.success_rate_trend || 0), isPositive: (metrics?.trends?.success_rate_trend || 0) >= 0 },
       description: 'System performance'
     },
   ]
@@ -302,21 +303,7 @@ function MetricCard({ title, value, icon: Icon, color, trend, description }: any
             </motion.p>
           )}
           {trend && (
-            <motion.div 
-              className={`flex items-center mt-2 text-xs font-medium ${
-                trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-              }`}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              {trend.isPositive ? (
-                <ArrowUpRight className="w-3 h-3 mr-1" />
-              ) : (
-                <ArrowDownRight className="w-3 h-3 mr-1" />
-              )}
-              {Math.abs(trend.value)}%
-            </motion.div>
+            <TrendIndicator value={trend.value} isPositive={trend.isPositive} />
           )}
         </div>
         <motion.div 
@@ -359,7 +346,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       value: metrics?.total_workflows || 0,
       icon: Activity,
       color: 'blue',
-      trend: { value: 5, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Automated processes'
     },
     {
@@ -367,7 +354,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       value: metrics?.active_workflows || 0,
       icon: CheckCircle,
       color: 'green',
-      trend: { value: 2, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Currently running'
     },
     {
@@ -375,7 +362,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       value: (metrics?.total_executions || 0).toLocaleString(),
       icon: Zap,
       color: 'purple',
-      trend: { value: 15, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'All time'
     },
     {
@@ -383,15 +370,15 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
       value: metrics?.time_saved_hours ? `${metrics.time_saved_hours}h` : '0h',
       icon: Clock,
       color: 'orange',
-      trend: { value: 18, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Time saved by automation'
     },
     {
       title: 'Success Rate',
-      value: `${metrics?.success_rate || 0}%`,
+      value: `${metrics?.success_rate?.toFixed(1) || '0.0'}%`,
       icon: TrendingUp,
       color: 'green',
-      trend: { value: 3, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.success_rate_trend || 0), isPositive: (metrics?.trends?.success_rate_trend || 0) >= 0 },
       description: 'Performance metric'
     },
   ]
@@ -599,7 +586,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
                         )}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {workflow.total_executions} executions • {workflow.success_rate}% success
+                        {workflow.total_executions} executions • {workflow.success_rate?.toFixed(1) || '0.0'}% success • {workflow.time_saved_hours ? `${workflow.time_saved_hours}h saved` : '0h saved'}
                       </p>
                     </div>
                   </div>

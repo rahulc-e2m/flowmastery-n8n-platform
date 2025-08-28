@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Skeleton } from '@/components/ui/skeleton'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
+import { TrendIndicator } from '@/components/ui/trend-indicator'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 import { 
@@ -122,7 +123,7 @@ function AdminMetricsView({
       value: adminMetrics?.total_clients || 0,
       icon: Building2,
       color: 'blue',
-      trend: { value: 12, isPositive: true },
+      trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Active organizations'
     },
     {
@@ -130,7 +131,7 @@ function AdminMetricsView({
       value: adminMetrics?.total_workflows || 0,
       icon: Activity,
       color: 'green',
-      trend: { value: 8, isPositive: true },
+      trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Automated processes'
     },
     {
@@ -138,7 +139,7 @@ function AdminMetricsView({
       value: (adminMetrics?.total_executions || 0).toLocaleString(),
       icon: Zap,
       color: 'purple',
-      trend: { value: 24, isPositive: true },
+      trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Last 30 days'
     },
     {
@@ -146,15 +147,15 @@ function AdminMetricsView({
       value: adminMetrics?.total_time_saved_hours ? `${adminMetrics.total_time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
-      trend: { value: 18, isPositive: true },
+      trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Time saved by automation'
     },
     {
       title: 'Overall Success Rate',
-      value: `${adminMetrics?.overall_success_rate || 0}%`,
+      value: `${adminMetrics?.overall_success_rate?.toFixed(1) || '0.0'}%`,
       icon: TrendingUp,
       color: 'green',
-      trend: { value: 2, isPositive: true },
+      trend: { value: Math.abs(adminMetrics?.trends?.success_rate_trend || 0), isPositive: (adminMetrics?.trends?.success_rate_trend || 0) >= 0 },
       description: 'System performance'
     },
   ]
@@ -216,16 +217,7 @@ function AdminMetricsView({
                         <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                         <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
                         {stat.trend && (
-                          <div className={`flex items-center space-x-1 text-sm ${
-                            stat.trend.isPositive ? 'text-green-600' : 'text-red-600'
-                          }`}>
-                            {stat.trend.isPositive ? (
-                              <TrendingUp className="w-3 h-3" />
-                            ) : (
-                              <TrendingDown className="w-3 h-3" />
-                            )}
-                            <span>{stat.trend.value}%</span>
-                          </div>
+                          <TrendIndicator value={stat.trend.value} isPositive={stat.trend.isPositive} />
                         )}
                       </div>
                       <div className={`p-3 rounded-xl bg-gradient-to-br ${
@@ -369,7 +361,7 @@ function AdminMetricsView({
                           </div>
                           <div>
                             <p className="text-muted-foreground">Success Rate</p>
-                            <p className="font-semibold text-green-600">{client.success_rate}%</p>
+                            <p className="font-semibold text-green-600">{client.success_rate?.toFixed(1) || '0.0'}%</p>
                           </div>
                         </div>
                       </CardContent>
@@ -399,7 +391,7 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
       value: metrics?.total_workflows || 0,
       icon: Activity,
       color: 'blue',
-      trend: { value: 5, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Automated processes'
     },
     {
@@ -407,7 +399,7 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
       value: metrics?.active_workflows || 0,
       icon: CheckCircle,
       color: 'green',
-      trend: { value: 2, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Currently running'
     },
     {
@@ -415,7 +407,7 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
       value: (metrics?.total_executions || 0).toLocaleString(),
       icon: Zap,
       color: 'purple',
-      trend: { value: 15, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'All time'
     },
     {
@@ -423,15 +415,15 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
       value: metrics?.time_saved_hours ? `${metrics.time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
-      trend: { value: 18, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Time saved by automation'
     },
     {
       title: 'Success Rate',
-      value: `${metrics?.success_rate || 0}%`,
+      value: `${metrics?.success_rate?.toFixed(1) || '0.0'}%`,
       icon: TrendingUp,
       color: 'green',
-      trend: { value: 3, isPositive: true },
+      trend: { value: Math.abs(metrics?.trends?.success_rate_trend || 0), isPositive: (metrics?.trends?.success_rate_trend || 0) >= 0 },
       description: 'Performance metric'
     },
   ]
@@ -500,16 +492,7 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
                     <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                     <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
                     {stat.trend && (
-                      <div className={`flex items-center space-x-1 text-sm ${
-                        stat.trend.isPositive ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {stat.trend.isPositive ? (
-                          <TrendingUp className="w-3 h-3" />
-                        ) : (
-                          <TrendingDown className="w-3 h-3" />
-                        )}
-                        <span>{stat.trend.value}%</span>
-                      </div>
+                      <TrendIndicator value={stat.trend.value} isPositive={stat.trend.isPositive} />
                     )}
                   </div>
                   <div className={`p-3 rounded-xl bg-gradient-to-br ${
@@ -704,7 +687,7 @@ function ClientDetailView({ metrics, workflows, sortedWorkflows, isLoading }: an
                       )}
                     </div>
                     <p className="text-sm text-muted-foreground">
-                      {workflow.total_executions} executions • {workflow.success_rate}% success
+                      {workflow.total_executions} executions • {workflow.success_rate?.toFixed(1) || '0.0'}% success
                     </p>
                   </div>
                 </div>
@@ -723,6 +706,12 @@ function ClientDetailView({ metrics, workflows, sortedWorkflows, isLoading }: an
                       {workflow.avg_execution_time ? `${workflow.avg_execution_time}s` : 'N/A'}
                     </p>
                     <p className="text-xs text-muted-foreground">Avg Time</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm font-medium text-foreground">
+                      {workflow.time_saved_hours ? `${workflow.time_saved_hours}h` : '0h'}
+                    </p>
+                    <p className="text-xs text-orange-600 dark:text-orange-400">Time Saved</p>
                   </div>
                   <div className="text-center">
                     <p className="text-xs text-muted-foreground">Last run</p>

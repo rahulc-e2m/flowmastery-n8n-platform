@@ -5,6 +5,7 @@ import {
   CheckCircle, 
   XCircle, 
   Clock, 
+  Timer,
   TrendingUp, 
   TrendingDown,
   ArrowUpRight,
@@ -24,6 +25,7 @@ interface ClientMetricsCardProps {
     success_rate: number
     last_activity?: string
     avg_execution_time?: number
+    time_saved_hours?: number
   }
   index: number
   onClick?: () => void
@@ -67,14 +69,18 @@ export function ClientMetricsCard({ client, index, onClick }: ClientMetricsCardP
           </div>
 
           {/* Metrics Grid */}
-          <div className="grid grid-cols-2 gap-4 mb-4">
+          <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="text-center">
-              <p className="text-2xl font-bold text-foreground">{client.total_workflows}</p>
+              <p className="text-xl font-bold text-foreground">{client.total_workflows}</p>
               <p className="text-xs text-muted-foreground">Workflows</p>
             </div>
             <div className="text-center">
-              <p className="text-2xl font-bold text-foreground">{client.total_executions.toLocaleString()}</p>
+              <p className="text-xl font-bold text-foreground">{client.total_executions.toLocaleString()}</p>
               <p className="text-xs text-muted-foreground">Executions</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xl font-bold text-orange-600">{client.time_saved_hours ? `${client.time_saved_hours}h` : '0h'}</p>
+              <p className="text-xs text-muted-foreground">Time Saved</p>
             </div>
           </div>
 

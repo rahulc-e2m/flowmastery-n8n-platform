@@ -5,6 +5,7 @@ import {
   CheckCircle, 
   XCircle, 
   Clock, 
+  Timer,
   TrendingUp,
   Filter,
   Search,
@@ -30,6 +31,8 @@ interface WorkflowMetric {
   success_rate: number
   avg_execution_time_seconds: number
   last_execution?: string
+  time_saved_per_execution_minutes?: number
+  time_saved_hours?: number
 }
 
 interface WorkflowMetricsTableProps {
@@ -259,6 +262,11 @@ export function WorkflowMetricsTable({
                     {getSortIcon('avg_time')}
                   </div>
                 </TableHead>
+                <TableHead className="text-center">
+                  <div className="flex items-center justify-center space-x-2">
+                    <span>Time Saved</span>
+                  </div>
+                </TableHead>
                 <TableHead 
                   className="cursor-pointer hover:bg-muted/50 transition-colors text-center"
                   onClick={() => handleSort('last_execution')}
@@ -362,6 +370,15 @@ export function WorkflowMetricsTable({
                         <Clock className="w-3 h-3 text-muted-foreground" />
                         <span className="font-medium">
                           {workflow.avg_execution_time_seconds.toFixed(2)}s
+                        </span>
+                      </div>
+                    </TableCell>
+                    
+                    <TableCell className="text-center">
+                      <div className="flex items-center justify-center space-x-1">
+                        <Timer className="w-3 h-3 text-orange-600" />
+                        <span className="font-medium text-orange-600">
+                          {workflow.time_saved_hours ? `${workflow.time_saved_hours}h` : '0h'}
                         </span>
                       </div>
                     </TableCell>

@@ -41,7 +41,10 @@ class EnhancedMetricsService:
         client_id: int,
         use_cache: bool = True
     ) -> ClientMetrics:
-        """Get current metrics for a client using persistent data"""
+        """Get current metrics for a client using persistent data.
+        IMPORTANT: totals are computed from raw execution data (all-time),
+        while trends use recent aggregations when available.
+        """
         cache_key = f"enhanced_client_metrics:{client_id}"
         
         if use_cache:
@@ -54,39 +57,38 @@ class EnhancedMetricsService:
         if not client:
             raise ValueError(f"Client {client_id} not found")
         
-        # Get recent aggregation or compute from raw data
+        # Get recent aggregation (for timestamp only) and trends
         recent_metrics = await self._get_recent_client_aggregation(db, client_id)
+        trends = await self._calculate_client_trends(db, client_id)
         
-        if recent_metrics:
-            # Use aggregated data
-            metrics = ClientMetrics(
-                client_id=client.id,
-                client_name=client.name,
-                total_workflows=recent_metrics.total_workflows or 0,
-                active_workflows=recent_metrics.active_workflows or 0,
-                total_executions=recent_metrics.total_executions,
-                successful_executions=recent_metrics.successful_executions,
-                failed_executions=recent_metrics.failed_executions,
-                success_rate=recent_metrics.success_rate,
-                avg_execution_time=recent_metrics.avg_execution_time_seconds,
-                last_activity=await self._get_last_activity(db, client_id),
-                time_saved_hours=recent_metrics.time_saved_hours,
-                last_updated=recent_metrics.computed_at  # Add timestamp from aggregation
-            )
-        else:
-            # Fallback to computing from raw data
-            metrics = await self._compute_client_metrics_from_raw_data(db, client)
+        # Compute all-time summary from raw data
+        summary = await self._get_all_time_client_summary(db, client_id)
+        all_time_saved_hours = await self._calculate_all_time_saved(db, client_id)
+        last_activity = await self._get_last_activity(db, client_id)
+        
+        metrics = ClientMetrics(
+            client_id=client.id,
+            client_name=client.name,
+            total_workflows=summary.get('total_workflows', 0),
+            active_workflows=summary.get('active_workflows', 0),
+            total_executions=summary.get('total_executions', 0),
+            successful_executions=summary.get('successful_executions', 0),
+            failed_executions=summary.get('failed_executions', 0),
+            success_rate=round(summary.get('success_rate', 0.0), 1),
+            avg_execution_time=summary.get('avg_execution_time', None),
+            last_activity=last_activity,
+            time_saved_hours=all_time_saved_hours,
+            last_updated=(recent_metrics.computed_at if recent_metrics and recent_metrics.computed_at else await self._get_last_sync_time(db, client_id)),
+            trends=trends
+        )
         
         # Cache the result with extended TTL if data is fresh
         if use_cache:
-            # Use longer cache TTL if we have recent aggregation data
             cache_ttl = self.cache_ttl
             if recent_metrics and recent_metrics.computed_at:
-                # If aggregation is less than 5 minutes old, cache for longer
                 age_minutes = (datetime.utcnow().replace(tzinfo=timezone.utc) - recent_metrics.computed_at).total_seconds() / 60
                 if age_minutes < 5:
-                    cache_ttl = self.cache_ttl * 2  # Double cache time for fresh data
-            
+                    cache_ttl = self.cache_ttl * 2
             await redis_client.set(cache_key, metrics.model_dump(), expire=cache_ttl)
         
         return metrics
@@ -181,8 +183,8 @@ class EnhancedMetricsService:
         
         workflow_metrics = []
         for workflow in workflows:
-            # Get recent executions (last 7 days)
-            recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=7)
+            # Get recent executions (last 30 days for better time saved calculation)
+            recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=30)
             recent_executions = [
                 e for e in workflow.executions 
                 if e.is_production and e.started_at and e.started_at > recent_date
@@ -209,8 +211,8 @@ class EnhancedMetricsService:
             if failed > successful and total_executions > 0:
                 status = 'error'
             
-            # Compute time saved for this workflow (last 7 days)
-            minutes_per_success = workflow.time_saved_per_execution_minutes or 30
+            # Compute time saved for this workflow (last 30 days)
+            minutes_per_success = workflow.time_saved_per_execution_minutes if workflow.time_saved_per_execution_minutes is not None else 30
             time_saved_hours = round((successful * minutes_per_success) / 60, 2) if successful > 0 else 0.0
 
             workflow_metrics.append(WorkflowMetrics(
@@ -274,7 +276,7 @@ class EnhancedMetricsService:
                     last_updated=None  # No update time for failed clients
                 ))
         
-        overall_success_rate = (total_successful / total_executions * 100) if total_executions > 0 else 0.0
+        overall_success_rate = round((total_successful / total_executions * 100), 1) if total_executions > 0 else 0.0
         
         # Get the most recent update timestamp across all clients
         last_updated = None
@@ -301,6 +303,9 @@ class EnhancedMetricsService:
                 if sync_timestamp:
                     last_updated = sync_timestamp
         
+        # Calculate overall system trends
+        overall_trends = await self._calculate_overall_trends(db)
+        
         return AdminMetricsResponse(
             clients=client_metrics,
             total_clients=len(client_metrics),
@@ -308,7 +313,8 @@ class EnhancedMetricsService:
             total_executions=total_executions,
             overall_success_rate=round(overall_success_rate, 2),
             total_time_saved_hours=round(total_time_saved, 1) if total_time_saved > 0 else None,
-            last_updated=last_updated
+            last_updated=last_updated,
+            trends=overall_trends
         )
     
     async def _get_client_by_id(self, db: AsyncSession, client_id: int) -> Optional[Client]:
@@ -334,6 +340,38 @@ class EnhancedMetricsService:
         result = await db.execute(stmt)
         return result.scalar_one_or_none()
     
+    async def _calculate_all_time_saved(self, db: AsyncSession, client_id: int) -> Optional[float]:
+        """Calculate all-time time saved for a client from all successful executions"""
+        # Get all successful executions for this client
+        executions_stmt = select(WorkflowExecution).where(
+            and_(
+                WorkflowExecution.client_id == client_id,
+                WorkflowExecution.is_production == True,
+                WorkflowExecution.status == ExecutionStatus.SUCCESS  # Use status column directly
+            )
+        )
+        
+        executions_result = await db.execute(executions_stmt)
+        successful_executions = executions_result.scalars().all()
+        
+        if not successful_executions:
+            return None
+        
+        # Get per-workflow time saved minutes for this client
+        workflows_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
+            Workflow.client_id == client_id
+        )
+        workflows_minutes_result = await db.execute(workflows_minutes_stmt)
+        workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflows_minutes_result.all()}
+
+        # Calculate total minutes saved across all successful executions
+        total_minutes_saved = 0
+        for execution in successful_executions:
+            minutes = workflow_minutes.get(execution.workflow_id, 30)
+            total_minutes_saved += minutes
+        
+        return round(total_minutes_saved / 60, 1) if total_minutes_saved > 0 else None
+
     async def _get_last_activity(self, db: AsyncSession, client_id: int) -> Optional[datetime]:
         """Get last activity timestamp for a client"""
         stmt = select(func.max(WorkflowExecution.started_at)).where(
@@ -359,8 +397,8 @@ class EnhancedMetricsService:
         workflows_result = await db.execute(workflows_stmt)
         total_workflows, active_workflows = workflows_result.one()
         
-        # Get recent executions (last 7 days)
-        recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=7)
+        # Get recent executions (last 30 days for metrics like success rate and avg time)
+        recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=30)
         executions_stmt = select(WorkflowExecution).where(
             and_(
                 WorkflowExecution.client_id == client.id,
@@ -395,20 +433,8 @@ class EnhancedMetricsService:
         sync_result = await db.execute(sync_stmt)
         last_sync_time = sync_result.scalar_one_or_none()
         
-        # Calculate time saved using per-workflow minutes: sum over successful executions
-        # Fetch per-workflow minutes for this client
-        workflows_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
-            Workflow.client_id == client.id
-        )
-        workflows_minutes_result = await db.execute(workflows_minutes_stmt)
-        workflow_minutes = {wid: (mins or 30) for wid, mins in workflows_minutes_result.all()}
-
-        successful_execs = [e for e in executions if e.is_successful]
-        total_minutes_saved = 0
-        for e in successful_execs:
-            minutes = workflow_minutes.get(e.workflow_id, 30)
-            total_minutes_saved += minutes
-        time_saved_hours = round(total_minutes_saved / 60, 1) if total_minutes_saved > 0 else None
+        # Calculate all-time time saved (not just recent executions)
+        time_saved_hours = await self._calculate_all_time_saved(db, client.id)
         
         return ClientMetrics(
             client_id=client.id,
@@ -422,7 +448,8 @@ class EnhancedMetricsService:
             avg_execution_time=round(avg_time, 2) if avg_time else None,
             last_activity=last_activity,
             time_saved_hours=time_saved_hours,
-            last_updated=last_sync_time or datetime.utcnow()  # Use sync time or current time
+            last_updated=last_sync_time or datetime.utcnow(),  # Use sync time or current time
+            trends=None  # Will be set by caller
         )
     
     async def _calculate_trends(self, aggregations: List[MetricsAggregation]) -> MetricsTrend:
@@ -437,22 +464,271 @@ class EnhancedMetricsService:
         recent = aggregations[-1]
         previous = aggregations[-2]
         
-        # Calculate trends as percentage change
+        # Calculate trends as percentage change with bounds
         execution_trend = 0.0
-        if previous.total_executions > 0:
+        
+        # For execution trend, handle edge cases
+        if previous.total_executions == 0 and recent.total_executions > 0:
+            # From 0 to something, show 100% increase (capped)
+            execution_trend = 100.0
+        elif previous.total_executions > 0:
+            # Normal percentage calculation
             execution_trend = ((recent.total_executions - previous.total_executions) / previous.total_executions) * 100
+            # Cap extreme values to +/- 500%
+            execution_trend = max(-100.0, min(500.0, execution_trend))
         
+        # Success rate trend is already a percentage point difference (not percentage change)
         success_rate_trend = recent.success_rate - previous.success_rate
+        # Cap to reasonable range (-100 to +100 percentage points)
+        success_rate_trend = max(-100.0, min(100.0, success_rate_trend))
         
+        # Performance trend (positive means improvement - faster execution)
         performance_trend = 0.0
         if previous.avg_execution_time_seconds and recent.avg_execution_time_seconds:
-            performance_trend = ((previous.avg_execution_time_seconds - recent.avg_execution_time_seconds) / previous.avg_execution_time_seconds) * 100
+            if previous.avg_execution_time_seconds > 0:
+                performance_trend = ((previous.avg_execution_time_seconds - recent.avg_execution_time_seconds) / previous.avg_execution_time_seconds) * 100
+                # Cap to reasonable range
+                performance_trend = max(-100.0, min(100.0, performance_trend))
         
         return MetricsTrend(
-            execution_trend=round(execution_trend, 2),
-            success_rate_trend=round(success_rate_trend, 2),
-            performance_trend=round(performance_trend, 2)
+            execution_trend=round(execution_trend, 1),
+            success_rate_trend=round(success_rate_trend, 1),
+            performance_trend=round(performance_trend, 1)
         )
+    
+    async def _calculate_client_trends(self, db: AsyncSession, client_id: int) -> Optional[MetricsTrend]:
+        """Calculate trend indicators for a specific client"""
+        try:
+            # Get last 2 daily aggregations for this client
+            stmt = select(MetricsAggregation).where(
+                and_(
+                    MetricsAggregation.client_id == client_id,
+                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregation
+                    MetricsAggregation.period_type == AggregationPeriod.DAILY
+                )
+            ).order_by(desc(MetricsAggregation.period_start)).limit(2)
+            
+            result = await db.execute(stmt)
+            aggregations = result.scalars().all()
+            
+            if len(aggregations) < 2:
+                # If no aggregations, try to calculate from raw execution data
+                return await self._calculate_trends_from_raw_data(db, client_id)
+            
+            return await self._calculate_trends(list(aggregations))
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate trends for client {client_id}: {e}")
+            return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
+    
+    async def _calculate_overall_trends(self, db: AsyncSession) -> Optional[MetricsTrend]:
+        """Calculate overall system trends across all clients"""
+        try:
+            # Get aggregated data for the last 2 days across all clients
+            recent_date = datetime.utcnow().date()
+            previous_date = recent_date - timedelta(days=1)
+            
+            # Get recent day totals
+            recent_stmt = select(
+                func.sum(MetricsAggregation.total_executions).label('total_executions'),
+                func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
+                func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
+            ).where(
+                and_(
+                    MetricsAggregation.period_start == recent_date,
+                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregations only
+                    MetricsAggregation.period_type == AggregationPeriod.DAILY
+                )
+            )
+            
+            recent_result = await db.execute(recent_stmt)
+            recent_data = recent_result.first()
+            
+            # Get previous day totals
+            previous_stmt = select(
+                func.sum(MetricsAggregation.total_executions).label('total_executions'),
+                func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
+                func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
+            ).where(
+                and_(
+                    MetricsAggregation.period_start == previous_date,
+                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregations only
+                    MetricsAggregation.period_type == AggregationPeriod.DAILY
+                )
+            )
+            
+            previous_result = await db.execute(previous_stmt)
+            previous_data = previous_result.first()
+            
+            if not recent_data or not previous_data or not recent_data.total_executions or not previous_data.total_executions:
+                return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
+            
+            # Calculate execution trend with bounds
+            execution_trend = 0.0
+            if previous_data.total_executions == 0 and recent_data.total_executions > 0:
+                execution_trend = 100.0
+            elif previous_data.total_executions > 0:
+                execution_trend = ((recent_data.total_executions - previous_data.total_executions) / previous_data.total_executions) * 100
+                execution_trend = max(-100.0, min(500.0, execution_trend))
+            
+            # Calculate success rate trend (percentage points)
+            recent_success_rate = (recent_data.successful_executions / recent_data.total_executions * 100) if recent_data.total_executions > 0 else 0
+            previous_success_rate = (previous_data.successful_executions / previous_data.total_executions * 100) if previous_data.total_executions > 0 else 0
+            success_rate_trend = recent_success_rate - previous_success_rate
+            success_rate_trend = max(-100.0, min(100.0, success_rate_trend))
+            
+            # Calculate performance trend (improvement in execution time)
+            performance_trend = 0.0
+            if previous_data.avg_execution_time and recent_data.avg_execution_time and previous_data.avg_execution_time > 0:
+                performance_trend = ((previous_data.avg_execution_time - recent_data.avg_execution_time) / previous_data.avg_execution_time) * 100
+                performance_trend = max(-100.0, min(100.0, performance_trend))
+            
+            return MetricsTrend(
+                execution_trend=round(execution_trend, 1),
+                success_rate_trend=round(success_rate_trend, 1),
+                performance_trend=round(performance_trend, 1)
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate overall trends: {e}")
+            return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
+    
+    async def _calculate_trends_from_raw_data(self, db: AsyncSession, client_id: int) -> MetricsTrend:
+        """Calculate trends from raw execution data when aggregations aren't available"""
+        try:
+            # Compare last 7 days vs previous 7 days
+            now = datetime.utcnow().replace(tzinfo=timezone.utc)
+            recent_start = now - timedelta(days=7)
+            previous_start = now - timedelta(days=14)
+            previous_end = recent_start
+            
+            # Get recent period data
+            recent_stmt = select(WorkflowExecution).where(
+                and_(
+                    WorkflowExecution.client_id == client_id,
+                    WorkflowExecution.is_production == True,
+                    WorkflowExecution.started_at >= recent_start,
+                    WorkflowExecution.started_at < now
+                )
+            )
+            
+            recent_result = await db.execute(recent_stmt)
+            recent_executions = recent_result.scalars().all()
+            
+            # Get previous period data
+            previous_stmt = select(WorkflowExecution).where(
+                and_(
+                    WorkflowExecution.client_id == client_id,
+                    WorkflowExecution.is_production == True,
+                    WorkflowExecution.started_at >= previous_start,
+                    WorkflowExecution.started_at < previous_end
+                )
+            )
+            
+            previous_result = await db.execute(previous_stmt)
+            previous_executions = previous_result.scalars().all()
+            
+            # Calculate metrics for both periods
+            recent_total = len(recent_executions)
+            recent_successful = len([e for e in recent_executions if e.is_successful])
+            recent_times = [e.duration_seconds for e in recent_executions if e.duration_seconds]
+            recent_avg_time = sum(recent_times) / len(recent_times) if recent_times else 0
+            
+            previous_total = len(previous_executions)
+            previous_successful = len([e for e in previous_executions if e.is_successful])
+            previous_times = [e.duration_seconds for e in previous_executions if e.duration_seconds]
+            previous_avg_time = sum(previous_times) / len(previous_times) if previous_times else 0
+            
+            # Calculate trends with proper bounds
+            execution_trend = 0.0
+            if previous_total == 0 and recent_total > 0:
+                execution_trend = 100.0
+            elif previous_total > 0:
+                execution_trend = ((recent_total - previous_total) / previous_total) * 100
+                execution_trend = max(-100.0, min(500.0, execution_trend))
+            elif recent_total == 0 and previous_total > 0:
+                execution_trend = -100.0
+            
+            recent_success_rate = (recent_successful / recent_total * 100) if recent_total > 0 else 0
+            previous_success_rate = (previous_successful / previous_total * 100) if previous_total > 0 else 0
+            success_rate_trend = recent_success_rate - previous_success_rate
+            success_rate_trend = max(-100.0, min(100.0, success_rate_trend))
+            
+            performance_trend = 0.0
+            if previous_avg_time > 0 and recent_avg_time > 0:
+                performance_trend = ((previous_avg_time - recent_avg_time) / previous_avg_time) * 100
+                performance_trend = max(-100.0, min(100.0, performance_trend))
+            
+            return MetricsTrend(
+                execution_trend=round(execution_trend, 1),
+                success_rate_trend=round(success_rate_trend, 1),
+                performance_trend=round(performance_trend, 1)
+            )
+            
+        except Exception as e:
+            logger.warning(f"Failed to calculate trends from raw data for client {client_id}: {e}")
+            return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
+    
+    async def _get_last_sync_time(self, db: AsyncSession, client_id: int) -> Optional[datetime]:
+        """Get the most recent last_synced_at timestamp for a client's executions"""
+        stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
+            WorkflowExecution.client_id == client_id
+        )
+        result = await db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def _get_all_time_client_summary(self, db: AsyncSession, client_id: int) -> Dict[str, Any]:
+        """Compute all-time summary metrics for a client from raw executions"""
+        # Workflows counts
+        workflows_stmt = select(
+            func.count(Workflow.id).label('total_workflows'),
+            func.count().filter(Workflow.active == True).label('active_workflows')
+        ).where(Workflow.client_id == client_id)
+        wf_res = await db.execute(workflows_stmt)
+        total_workflows, active_workflows = wf_res.one()
+
+        # Executions counts
+        total_exec_stmt = select(func.count(WorkflowExecution.id)).where(
+            WorkflowExecution.client_id == client_id,
+            WorkflowExecution.is_production == True
+        )
+        success_stmt = select(func.count(WorkflowExecution.id)).where(
+            WorkflowExecution.client_id == client_id,
+            WorkflowExecution.is_production == True,
+            WorkflowExecution.status == ExecutionStatus.SUCCESS
+        )
+        failed_stmt = select(func.count(WorkflowExecution.id)).where(
+            WorkflowExecution.client_id == client_id,
+            WorkflowExecution.is_production == True,
+            WorkflowExecution.status == ExecutionStatus.ERROR
+        )
+
+        total_executions = (await db.execute(total_exec_stmt)).scalar_one() or 0
+        successful = (await db.execute(success_stmt)).scalar_one() or 0
+        failed = (await db.execute(failed_stmt)).scalar_one() or 0
+
+        success_rate = round((successful / total_executions * 100), 1) if total_executions > 0 else 0.0
+
+        # Average execution time over last 30 days for better signal
+        recent_date = datetime.utcnow().replace(tzinfo=timezone.utc) - timedelta(days=30)
+        avg_time_stmt = select(func.avg(WorkflowExecution.execution_time_ms)).where(
+            WorkflowExecution.client_id == client_id,
+            WorkflowExecution.is_production == True,
+            WorkflowExecution.execution_time_ms.isnot(None),
+            WorkflowExecution.started_at >= recent_date
+        )
+        avg_ms = (await db.execute(avg_time_stmt)).scalar_one_or_none()
+        avg_seconds = float(avg_ms) / 1000.0 if avg_ms else None
+
+        return {
+            'total_workflows': total_workflows or 0,
+            'active_workflows': active_workflows or 0,
+            'total_executions': total_executions,
+            'successful_executions': successful,
+            'failed_executions': failed,
+            'success_rate': success_rate,
+            'avg_execution_time': round(avg_seconds, 2) if avg_seconds else None,
+        }
 
 
 # Global service instance

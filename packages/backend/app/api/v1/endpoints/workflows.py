@@ -32,7 +32,7 @@ async def _format_workflow_rows(db: AsyncSession, rows):
 
         time_saved_hours = 0.0
         if successful > 0:
-            minutes = wf.time_saved_per_execution_minutes or 30
+            minutes = wf.time_saved_per_execution_minutes if wf.time_saved_per_execution_minutes is not None else 30
             time_saved_hours = round((successful * minutes) / 60, 2)
 
         workflows.append({

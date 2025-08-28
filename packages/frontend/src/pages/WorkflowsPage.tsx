@@ -247,6 +247,7 @@ export function WorkflowsPage() {
               <TableHead className="text-right">Success %</TableHead>
               <TableHead className="text-right">Last Run</TableHead>
               <TableHead className="text-right">Per Exec Saved</TableHead>
+              <TableHead className="text-right">Total Time Saved</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -271,13 +272,18 @@ export function WorkflowsPage() {
                     wf.success_rate >= 50 ? 'bg-yellow-100 text-yellow-800' :
                     'bg-red-100 text-red-800'
                   }`}>
-                    {wf.success_rate}%
+                    {wf.success_rate?.toFixed(1) || '0.0'}%
                   </span>
                 </TableCell>
                 <TableCell className="text-right">{wf.last_execution ? new Date(wf.last_execution).toLocaleString() : '-'}</TableCell>
                 <TableCell className="text-right flex items-center justify-end space-x-1">
                   <Clock className="w-4 h-4 text-muted-foreground" />
                   <span>{Math.floor((wf.time_saved_per_execution_minutes || 0)/60)}h {(wf.time_saved_per_execution_minutes||0)%60}m</span>
+                </TableCell>
+                <TableCell className="text-right">
+                  <span className="px-2 py-1 rounded-full text-xs bg-orange-100 text-orange-800 font-medium">
+                    {wf.time_saved_hours ? `${wf.time_saved_hours}h` : '0h'}
+                  </span>
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
@@ -296,7 +302,7 @@ export function WorkflowsPage() {
             
             {filteredWorkflows.length === 0 && !isLoading && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 8 : 7} className="text-center py-8 text-gray-500">
+                <TableCell colSpan={isAdmin ? 9 : 8} className="text-center py-8 text-gray-500">
                   {data?.workflows?.length ? 'No workflows match the current filters' : 'No workflows found'}
                 </TableCell>
               </TableRow>

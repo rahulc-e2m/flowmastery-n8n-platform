@@ -29,6 +29,7 @@ import { WorkflowMetricsTable } from '@/components/dashboard/WorkflowMetricsTabl
 import { ExecutionsList } from '@/components/dashboard/ExecutionsList'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
+import { TrendIndicator } from '@/components/ui/trend-indicator'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 import { 
@@ -126,7 +127,7 @@ export function ClientDashboardPage() {
       value: clientMetrics?.total_workflows || 0,
       icon: Activity,
       color: 'blue',
-      trend: { value: 5, isPositive: true },
+      trend: { value: Math.abs(clientMetrics?.trends?.execution_trend || 0), isPositive: (clientMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Automated processes'
     },
     {
@@ -134,7 +135,7 @@ export function ClientDashboardPage() {
       value: clientMetrics?.active_workflows || 0,
       icon: CheckCircle,
       color: 'green',
-      trend: { value: 2, isPositive: true },
+      trend: { value: Math.abs(clientMetrics?.trends?.execution_trend || 0), isPositive: (clientMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Currently running'
     },
     {
@@ -142,7 +143,7 @@ export function ClientDashboardPage() {
       value: (clientMetrics?.total_executions || 0).toLocaleString(),
       icon: Zap,
       color: 'purple',
-      trend: { value: 15, isPositive: true },
+      trend: { value: Math.abs(clientMetrics?.trends?.execution_trend || 0), isPositive: (clientMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'All time'
     },
     {
@@ -150,15 +151,15 @@ export function ClientDashboardPage() {
       value: clientMetrics?.time_saved_hours ? `${clientMetrics.time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
-      trend: { value: 18, isPositive: true },
+      trend: { value: Math.abs(clientMetrics?.trends?.execution_trend || 0), isPositive: (clientMetrics?.trends?.execution_trend || 0) >= 0 },
       description: 'Time saved by automation'
     },
     {
       title: 'Success Rate',
-      value: `${clientMetrics?.success_rate || 0}%`,
+      value: `${clientMetrics?.success_rate?.toFixed(1) || '0.0'}%`,
       icon: TrendingUp,
       color: 'green',
-      trend: { value: 3, isPositive: true },
+      trend: { value: Math.abs(clientMetrics?.trends?.success_rate_trend || 0), isPositive: (clientMetrics?.trends?.success_rate_trend || 0) >= 0 },
       description: 'Performance metric'
     },
   ]
@@ -438,21 +439,7 @@ function MetricCard({ title, value, icon: Icon, color, trend, description }: any
             </motion.p>
           )}
           {trend && (
-            <motion.div 
-              className={`flex items-center mt-2 text-xs font-medium ${
-                trend.isPositive ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
-              }`}
-              initial={{ opacity: 0, x: -10 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: 0.4 }}
-            >
-              {trend.isPositive ? (
-                <TrendingUp className="w-3 h-3 mr-1" />
-              ) : (
-                <TrendingDown className="w-3 h-3 mr-1" />
-              )}
-              {Math.abs(trend.value)}%
-            </motion.div>
+            <TrendIndicator value={trend.value} isPositive={trend.isPositive} />
           )}
         </div>
         <motion.div 

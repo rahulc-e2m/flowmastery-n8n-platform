@@ -195,8 +195,14 @@ class MetricsAggregator:
         executions_result = await db.execute(executions_query)
         executions = executions_result.scalars().all()
         
-        if not executions and not existing_agg:
-            return None  # No data to aggregate
+        if not executions:
+            # No new executions found for this period
+            if existing_agg:
+                # Keep existing aggregation, just update the computed_at timestamp
+                existing_agg.computed_at = datetime.utcnow()
+                await db.commit()
+                return existing_agg
+            return None  # No data to aggregate at all
         
         # Compute metrics
         total_executions = len(executions)
@@ -248,7 +254,47 @@ class MetricsAggregator:
             active_workflows = len([w for w in workflows if w.active])
         
         # Compute derived metrics
-        time_saved_hours = successful_executions * 0.5  # Estimate 30 minutes saved per successful execution
+        # Calculate time saved using actual per-workflow minutes
+        if workflow_id:
+            # For workflow-specific aggregation, get the specific workflow's minutes
+            workflow_stmt = select(Workflow.time_saved_per_execution_minutes).where(Workflow.id == workflow_id)
+            workflow_result = await db.execute(workflow_stmt)
+            minutes_per_execution = workflow_result.scalar_one_or_none() or 30
+            time_saved_hours = successful_executions * (minutes_per_execution / 60)
+        else:
+            # For client-wide aggregation, calculate based on actual executions and their workflow settings
+            # Get successful executions with their workflow IDs
+            successful_execs_stmt = select(
+                WorkflowExecution.workflow_id,
+                func.count(WorkflowExecution.id).label('count')
+            ).where(
+                and_(
+                    WorkflowExecution.client_id == client_id,
+                    WorkflowExecution.status == ExecutionStatus.SUCCESS,
+                    WorkflowExecution.is_production == True,
+                    WorkflowExecution.started_at >= datetime.combine(start_date, datetime.min.time()),
+                    WorkflowExecution.started_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+                )
+            ).group_by(WorkflowExecution.workflow_id)
+            
+            successful_execs_result = await db.execute(successful_execs_stmt)
+            successful_by_workflow = successful_execs_result.all()
+            
+            # Get workflow minutes for all workflows
+            workflow_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
+                Workflow.client_id == client_id
+            )
+            workflow_minutes_result = await db.execute(workflow_minutes_stmt)
+            workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflow_minutes_result.all()}
+            
+            # Calculate total time saved
+            total_minutes_saved = 0
+            for workflow_id_exec, count in successful_by_workflow:
+                minutes_per_exec = workflow_minutes.get(workflow_id_exec, 30)
+                total_minutes_saved += count * minutes_per_exec
+            
+            time_saved_hours = total_minutes_saved / 60 if total_minutes_saved > 0 else 0
+        
         productivity_score = min(100, success_rate * (total_executions / 10))  # Custom productivity metric
         
         # Create or update aggregation
@@ -588,8 +634,14 @@ class MetricsAggregator:
         executions_result = db.execute(executions_query)
         executions = executions_result.scalars().all()
         
-        if not executions and not existing_agg:
-            return None  # No data to aggregate
+        if not executions:
+            # No new executions found for this period
+            if existing_agg:
+                # Keep existing aggregation, just update the computed_at timestamp
+                existing_agg.computed_at = datetime.utcnow()
+                db.commit()
+                return existing_agg
+            return None  # No data to aggregate at all
         
         # Compute metrics
         total_executions = len(executions)
@@ -641,7 +693,47 @@ class MetricsAggregator:
             active_workflows = len([w for w in workflows if w.active])
         
         # Compute derived metrics
-        time_saved_hours = successful_executions * 0.5  # Estimate 30 minutes saved per successful execution
+        # Calculate time saved using actual per-workflow minutes
+        if workflow_id:
+            # For workflow-specific aggregation, get the specific workflow's minutes
+            workflow_stmt = select(Workflow.time_saved_per_execution_minutes).where(Workflow.id == workflow_id)
+            workflow_result = db.execute(workflow_stmt)
+            minutes_per_execution = workflow_result.scalar_one_or_none() or 30
+            time_saved_hours = successful_executions * (minutes_per_execution / 60)
+        else:
+            # For client-wide aggregation, calculate based on actual executions and their workflow settings
+            # Get successful executions with their workflow IDs
+            successful_execs_stmt = select(
+                WorkflowExecution.workflow_id,
+                func.count(WorkflowExecution.id).label('count')
+            ).where(
+                and_(
+                    WorkflowExecution.client_id == client_id,
+                    WorkflowExecution.status == ExecutionStatus.SUCCESS,
+                    WorkflowExecution.is_production == True,
+                    WorkflowExecution.started_at >= datetime.combine(start_date, datetime.min.time()),
+                    WorkflowExecution.started_at < datetime.combine(end_date + timedelta(days=1), datetime.min.time())
+                )
+            ).group_by(WorkflowExecution.workflow_id)
+            
+            successful_execs_result = db.execute(successful_execs_stmt)
+            successful_by_workflow = successful_execs_result.all()
+            
+            # Get workflow minutes for all workflows
+            workflow_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
+                Workflow.client_id == client_id
+            )
+            workflow_minutes_result = db.execute(workflow_minutes_stmt)
+            workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflow_minutes_result.all()}
+            
+            # Calculate total time saved
+            total_minutes_saved = 0
+            for workflow_id_exec, count in successful_by_workflow:
+                minutes_per_exec = workflow_minutes.get(workflow_id_exec, 30)
+                total_minutes_saved += count * minutes_per_exec
+            
+            time_saved_hours = total_minutes_saved / 60 if total_minutes_saved > 0 else 0
+        
         productivity_score = min(100, success_rate * (total_executions / 10))  # Custom productivity metric
         
         # Create or update aggregation

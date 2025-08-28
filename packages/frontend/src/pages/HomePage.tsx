@@ -99,7 +99,7 @@ const HomePage: React.FC = () => {
     },
     {
       label: "Success Rate",
-      value: `${metricsData.executions.success_rate}%`,
+      value: `${metricsData.executions.success_rate?.toFixed(1) || '0.0'}%`,
       trend: metricsData.executions.success_rate > 90 ? 5 : -2,
       icon: <CheckCircle className="h-4 w-4" />,
       isLoading: metricsLoading

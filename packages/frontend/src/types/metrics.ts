@@ -8,9 +8,17 @@ export interface WorkflowMetrics {
   avg_execution_time?: number
   last_execution?: string
   status: 'active' | 'inactive' | 'error'
+  time_saved_per_execution_minutes?: number
+  time_saved_hours?: number
   is_production?: boolean
   execution_time_trend?: number
   success_rate_trend?: number
+}
+
+export interface MetricsTrend {
+  execution_trend: number
+  success_rate_trend: number
+  performance_trend: number
 }
 
 export interface ClientMetrics {
@@ -29,6 +37,7 @@ export interface ClientMetrics {
   productivity_score?: number
   time_saved_hours?: number
   last_updated?: string  // When metrics were last computed
+  trends?: MetricsTrend  // Trend indicators
 }
 
 export interface ClientWorkflowMetrics {
@@ -48,6 +57,7 @@ export interface AdminMetricsResponse {
   overall_productivity_score?: number
   total_time_saved_hours?: number  // Overall time saved across all clients
   last_updated?: string  // When admin metrics were last computed
+  trends?: MetricsTrend  // Overall system trends
 }
 
 export interface MetricsError {

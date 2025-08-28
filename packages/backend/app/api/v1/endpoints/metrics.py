@@ -4,6 +4,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import date, datetime
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.user import User
@@ -414,6 +417,7 @@ async def get_client_execution_stats(
             Workflow.name.label('workflow_name'),
             Workflow.n8n_workflow_id,
             Workflow.active,
+            Workflow.time_saved_per_execution_minutes,
             func.count(WorkflowExecution.id).label('total_executions'),
             func.sum(case((WorkflowExecution.status == ExecutionStatus.SUCCESS, 1), else_=0)).label('successful_executions'),
             func.sum(case((WorkflowExecution.status == ExecutionStatus.ERROR, 1), else_=0)).label('failed_executions'),
@@ -430,7 +434,7 @@ async def get_client_execution_stats(
         ).where(
             Workflow.client_id == client_id
         ).group_by(
-            Workflow.id, Workflow.name, Workflow.n8n_workflow_id, Workflow.active
+            Workflow.id, Workflow.name, Workflow.n8n_workflow_id, Workflow.active, Workflow.time_saved_per_execution_minutes
         ).order_by(
             func.count(WorkflowExecution.id).desc()
         )
@@ -447,6 +451,11 @@ async def get_client_execution_stats(
             success_rate = (successful / total * 100) if total > 0 else 0
             avg_time_ms = float(stat_row.avg_execution_time_ms or 0)
             
+            # Calculate time saved
+            time_saved_per_execution_minutes = stat_row.time_saved_per_execution_minutes or 0
+            total_time_saved_minutes = successful * time_saved_per_execution_minutes
+            total_time_saved_hours = round(total_time_saved_minutes / 60, 1) if total_time_saved_minutes > 0 else 0
+            
             workflow_stats.append({
                 "workflow_name": stat_row.workflow_name,
                 "workflow_id": stat_row.n8n_workflow_id,
@@ -457,7 +466,9 @@ async def get_client_execution_stats(
                 "success_rate": round(success_rate, 1),
                 "avg_execution_time_ms": round(avg_time_ms, 0) if avg_time_ms else 0,
                 "avg_execution_time_seconds": round(avg_time_ms / 1000, 2) if avg_time_ms else 0,
-                "last_execution": stat_row.last_execution.isoformat() if stat_row.last_execution else None
+                "last_execution": stat_row.last_execution.isoformat() if stat_row.last_execution else None,
+                "time_saved_per_execution_minutes": time_saved_per_execution_minutes,
+                "time_saved_hours": total_time_saved_hours
             })
         
         return {
@@ -644,6 +655,76 @@ async def get_data_freshness(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to get data freshness: {str(e)}"
+        )
+
+
+@router.post("/admin/trigger-aggregation")
+async def trigger_daily_aggregation(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+    target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD), defaults to yesterday")
+):
+    """Manually trigger daily aggregation for testing (admin only)"""
+    try:
+        from app.tasks.aggregation_tasks import compute_daily_aggregations
+        from datetime import date, timedelta
+        
+        # Default to yesterday if no date provided
+        if target_date:
+            computation_date = datetime.strptime(target_date, "%Y-%m-%d").date()
+        else:
+            computation_date = date.today() - timedelta(days=1)
+        
+        # Trigger the aggregation task
+        task = compute_daily_aggregations.delay(computation_date.isoformat())
+        
+        return {
+            "message": f"Daily aggregation triggered for {computation_date.isoformat()}",
+            "task_id": task.id,
+            "target_date": computation_date.isoformat(),
+            "status": "queued"
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger aggregation: {str(e)}"
+        )
+
+
+@router.post("/admin/trigger-historical-aggregation")
+async def trigger_historical_aggregation(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_admin_user),
+    days_back: int = Query(7, description="Number of days back to aggregate")
+):
+    """Trigger aggregation for multiple historical days (admin only)"""
+    try:
+        from app.tasks.aggregation_tasks import compute_daily_aggregations
+        from datetime import date, timedelta
+        
+        task_ids = []
+        today = date.today()
+        
+        # Trigger aggregation for the last N days
+        for i in range(1, days_back + 1):
+            target_date = today - timedelta(days=i)
+            task = compute_daily_aggregations.delay(target_date.isoformat())
+            task_ids.append({
+                "date": target_date.isoformat(),
+                "task_id": task.id
+            })
+        
+        return {
+            "message": f"Historical aggregation triggered for {days_back} days",
+            "tasks": task_ids,
+            "total_tasks": len(task_ids)
+        }
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger historical aggregation: {str(e)}"
         )
 
 

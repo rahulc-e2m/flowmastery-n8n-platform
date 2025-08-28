@@ -12,7 +12,8 @@ from app.models import (
     Workflow,
     WorkflowExecution,
     ExecutionStatus,
-    ExecutionMode
+    ExecutionMode,
+    SyncState
 )
 from app.services.client_service import ClientService
 
@@ -172,12 +173,34 @@ class SyncMetricsCollector:
             return {'error': str(e), 'total': 0}
     
     def _sync_executions(self, db: Session, client: Client, http_client: httpx.Client) -> Dict[str, Any]:
-        """Sync executions for a client"""
+        """Sync executions for a client with incremental sync support"""
         try:
+            # Get or create sync state for this client
+            sync_state = db.query(SyncState).filter(SyncState.client_id == client.id).first()
+            if not sync_state:
+                sync_state = SyncState(client_id=client.id)
+                db.add(sync_state)
+                db.flush()
+            
             executions = []
             cursor = None
             page = 0
             max_pages = 10  # Limit to prevent excessive API calls
+            
+            # Determine date range for incremental sync
+            from datetime import timedelta
+            now = datetime.now(timezone.utc)
+            
+            # If we have a previous sync, only get executions since then
+            # Otherwise, get last 30 days of data
+            if sync_state.last_execution_sync:
+                # Add a small overlap (1 hour) to catch any updates
+                start_date = sync_state.last_execution_sync - timedelta(hours=1)
+                logger.info(f"Incremental sync: fetching executions since {start_date}")
+            else:
+                # First sync - get last 30 days
+                start_date = now - timedelta(days=30)
+                logger.info(f"Initial sync: fetching executions from last 30 days")
             
             # Fetch executions with pagination
             while page < max_pages:
@@ -300,20 +323,6 @@ class SyncMetricsCollector:
                 if raw_status and raw_status not in status_mapping:
                     logger.warning(f"Unknown execution status from n8n: '{raw_status}' for execution {n8n_execution_id}")
                 
-                # Check if execution already exists
-                existing_execution = db.query(WorkflowExecution).filter(
-                    WorkflowExecution.n8n_execution_id == n8n_execution_id
-                ).first()
-                
-                if existing_execution:
-                    # Update existing execution if it has NEW status (needs status correction)
-                    if existing_execution.status == ExecutionStatus.NEW:
-                        existing_execution.status = status
-                        existing_execution.last_synced_at = datetime.now(timezone.utc)
-                        existing_execution.updated_at = datetime.now(timezone.utc)
-                        stored_executions += 1
-                    continue
-                
                 # Map mode
                 mode_mapping = {
                     'manual': ExecutionMode.MANUAL,
@@ -348,6 +357,51 @@ class SyncMetricsCollector:
                 if started_at and finished_at:
                     execution_time_ms = int((finished_at - started_at).total_seconds() * 1000)
                 
+                # Check if execution already exists
+                existing_execution = db.query(WorkflowExecution).filter(
+                    WorkflowExecution.n8n_execution_id == n8n_execution_id
+                ).first()
+                
+                if existing_execution:
+                    # Update existing execution with latest data from n8n
+                    # Always update status as it might have changed
+                    existing_execution.status = status
+                    existing_execution.mode = mode
+                    
+                    # Update timestamps if they are available
+                    if started_at:
+                        existing_execution.started_at = started_at
+                    if finished_at:
+                        existing_execution.finished_at = finished_at
+                    if stopped_at:
+                        existing_execution.stopped_at = stopped_at
+                    
+                    # Update execution time
+                    if execution_time_ms is not None:
+                        existing_execution.execution_time_ms = execution_time_ms
+                    
+                    # Update error message if execution failed
+                    if status == ExecutionStatus.ERROR and exec_data.get('error'):
+                        error_msg = str(exec_data.get('error', {}).get('message', ''))[:500]
+                        if error_msg:
+                            existing_execution.error_message = error_msg
+                    
+                    # Update data size if available
+                    if exec_data.get('data'):
+                        import json
+                        try:
+                            data_size = len(json.dumps(exec_data['data']))
+                            existing_execution.data_size_bytes = data_size
+                        except:
+                            pass
+                    
+                    # Always update sync timestamps
+                    existing_execution.last_synced_at = datetime.now(timezone.utc)
+                    existing_execution.updated_at = datetime.now(timezone.utc)
+                    
+                    stored_executions += 1
+                    continue
+                
                 # Create execution record
                 execution = WorkflowExecution(
                     n8n_execution_id=n8n_execution_id,
@@ -370,13 +424,23 @@ class SyncMetricsCollector:
             
             db.flush()
             
+            # Update sync state with the latest sync information
+            if stored_executions > 0:
+                sync_state.update_execution_sync(
+                    execution_count=stored_executions,
+                    newest_date=now
+                )
+                db.flush()
+            
             logger.info(f"Status distribution: {status_counts}")
+            logger.info(f"Sync state updated: {stored_executions} executions synced")
             
             return {
                 'total': len(executions),
                 'production': len(production_executions),
                 'stored_executions': stored_executions,
-                'status_counts': status_counts
+                'status_counts': status_counts,
+                'incremental_sync': bool(sync_state.last_execution_sync)
             }
             
         except Exception as e:

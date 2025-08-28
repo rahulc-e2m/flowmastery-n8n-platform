@@ -5,6 +5,13 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 
 
+class MetricsTrend(BaseModel):
+    """Schema for metrics trend indicators"""
+    execution_trend: float  # Percentage change in executions
+    success_rate_trend: float  # Change in success rate
+    performance_trend: float  # Performance improvement (negative is slower)
+
+
 class WorkflowMetrics(BaseModel):
     """Schema for individual workflow metrics"""
     workflow_id: str
@@ -34,6 +41,7 @@ class ClientMetrics(BaseModel):
     last_activity: Optional[datetime] = None
     time_saved_hours: Optional[float] = None  # Time saved through automation
     last_updated: Optional[datetime] = None  # When metrics were last computed
+    trends: Optional[MetricsTrend] = None  # Trend indicators
 
 
 class ClientWorkflowMetrics(BaseModel):
@@ -53,6 +61,7 @@ class AdminMetricsResponse(BaseModel):
     overall_success_rate: float
     total_time_saved_hours: Optional[float] = None  # Overall time saved across all clients
     last_updated: Optional[datetime] = None  # When admin metrics were last computed
+    trends: Optional[MetricsTrend] = None  # Overall system trends
 
 
 class MetricsError(BaseModel):
@@ -61,13 +70,6 @@ class MetricsError(BaseModel):
     client_id: int
     client_name: str
     details: Optional[str] = None
-
-
-class MetricsTrend(BaseModel):
-    """Schema for metrics trend indicators"""
-    execution_trend: float  # Percentage change in executions
-    success_rate_trend: float  # Change in success rate
-    performance_trend: float  # Performance improvement (negative is slower)
 
 
 class HistoricalMetrics(BaseModel):
