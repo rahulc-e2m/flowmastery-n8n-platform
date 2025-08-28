@@ -80,22 +80,22 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-      <Route
-        path="/workflows"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <WorkflowsPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
         path="/settings"
         element={
           <ProtectedRoute>
             <DashboardLayout>
               <SettingsPage />
 >>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workflows"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage />
             </DashboardLayout>
           </ProtectedRoute>
         }
