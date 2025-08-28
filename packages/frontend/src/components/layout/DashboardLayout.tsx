@@ -8,15 +8,9 @@ import {
   LogOut,
   Menu,
   Settings,
-  Users,
-  X,
-  UserPlus,
-  Home,
-  ChevronDown,
   User,
   Calendar,
-  Shield
->>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
+  Shield,
   Activity,
   Zap,
   ChevronLeft,
@@ -28,7 +22,16 @@ import {
   FileText,
   Workflow,
   User,
-  Shield
+  Shield,
+  Building2,
+  LogOut,
+  Menu,
+  Settings,
+  Users,
+  X,
+  UserPlus,
+  Home,
+  ChevronDown
 =======
   User,
   Calendar,

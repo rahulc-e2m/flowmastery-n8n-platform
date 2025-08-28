@@ -80,16 +80,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <SettingsPage />
->>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
       <Route
         path="/workflows"
         element={
@@ -140,6 +130,25 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:clientId"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ClientDashboardPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
       <Route
         path="/workflows/custom"
         element={
@@ -160,13 +169,22 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/client/:clientId"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ClientDashboardPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 =======
         path="/settings"
         element={
           <ProtectedRoute>
             <DashboardLayout>
               <SettingsPage />
->>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
             </DashboardLayout>
           </ProtectedRoute>
         }
