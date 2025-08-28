@@ -14,6 +14,7 @@ import { MetricsPage } from '@/pages/MetricsPage'
 import { ClientsPage } from '@/pages/admin/ClientsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
+import HomePage from '@/pages/HomePage'
 import { SettingsPage } from '@/pages/SettingsPage'
 
 // Create a client
@@ -42,6 +43,12 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Root route - HomePage for unauthenticated, Dashboard for authenticated */}
+      <Route 
+        path="/" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <HomePage />} 
+      />
+
       {/* Public routes */}
       <Route 
         path="/login" 
@@ -126,16 +133,10 @@ function AppRoutes() {
         }
       />
 
-      {/* Redirect root to dashboard */}
-      <Route 
-        path="/" 
-        element={<Navigate to="/dashboard" replace />} 
-      />
-
-      {/* Catch all - redirect to dashboard */}
+      {/* Catch all - redirect to root */}
       <Route 
         path="*" 
-        element={<Navigate to="/dashboard" replace />} 
+        element={<Navigate to="/" replace />} 
       />
     </Routes>
   )

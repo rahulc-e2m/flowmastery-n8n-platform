@@ -11,8 +11,8 @@ from app.models.invitation import Invitation
 
 async def send_invitation_email(invitation: Invitation) -> bool:
     """Send invitation email to user"""
-    # Create invitation link (needed for both email and fallback)
-    invitation_link = f"{settings.FRONTEND_URL}/accept-invitation?token={invitation.token}"
+    # Create invitation link pointing to homepage with token
+    invitation_link = f"{settings.FRONTEND_URL}/?token={invitation.token}"
     
     if not settings.SMTP_HOST:
         print(f"📧 Email not configured. Invitation link: {invitation_link}")
@@ -58,12 +58,24 @@ async def send_invitation_email(invitation: Invitation) -> bool:
             <p style="margin: 4px 0 0; color: #6b7280; font-size: 14px;">Workflow Analytics Platform</p>
         </div>
 
-        <!-- Content -->
         <div style="text-align: center;">
-            <h2 style="font-size: 28px; color: #1f2937; margin: 0 0 16px;">You're Invited! 🎉</h2>
+            <h2 style="font-size: 28px; color: #1f2937; margin: 0 0 16px;">Welcome to FlowMastery! 🎉</h2>
             <p style="font-size: 16px; color: #4b5563; margin: 0 0 24px; line-height: 1.6;">
-                <strong>{inviter_name}</strong> has invited you to join <strong>{workspace_name}</strong> as a team member.
+                <strong>{inviter_name}</strong> has invited you to join <strong>{workspace_name}</strong> as a <strong>{invitation_role}</strong>.
             </p>
+
+            <!-- Instructions Card -->
+            <div style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-radius: 8px; padding: 24px; margin: 24px 0; border: 1px solid #0ea5e9; text-align: left;">
+                <h3 style="margin: 0 0 16px; font-size: 18px; color: #0369a1; display: flex; align-items: center;">
+                    📋 How to Get Started:
+                </h3>
+                <ol style="margin: 0; padding-left: 20px; color: #0f172a; line-height: 1.6;">
+                    <li style="margin-bottom: 8px;">Click the button below to visit FlowMastery</li>
+                    <li style="margin-bottom: 8px;">Explore our platform and features</li>
+                    <li style="margin-bottom: 8px;">Scroll down to complete your account setup</li>
+                    <li style="margin-bottom: 0;">Start automating your workflows!</li>
+                </ol>
+            </div>
 
             <!-- Role Card -->
             <div style="background: linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%); border-radius: 8px; padding: 20px; margin: 24px 0; border: 1px solid #a5b4fc;">
@@ -73,13 +85,19 @@ async def send_invitation_email(invitation: Invitation) -> bool:
 
             <!-- CTA Button -->
             <a href="{invitation_link}" style="display: inline-block; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-decoration: none; padding: 16px 32px; border-radius: 8px; font-weight: 600; margin: 24px 0; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
-                🚀 Accept Invitation
+                🚀 Explore FlowMastery & Complete Setup
             </a>
 
             <!-- Link Fallback -->
             <p style="font-size: 14px; color: #6b7280; margin: 16px 0;">
-                Can't click the button? <a href="{invitation_link}" style="color: #667eea;">Use this link</a>
+                Can't click the button? <a href="{invitation_link}" style="color: #667eea;">Copy this link: {invitation_link}</a>
             </p>
+
+            <!-- Note about the flow -->
+            <div style="background: #f3f4f6; border-radius: 6px; padding: 16px; margin: 24px 0; font-size: 14px; color: #374151; text-align: left;">
+                <p style="margin: 0 0 8px; font-weight: 600; color: #1f2937;">💡 What to expect:</p>
+                <p style="margin: 0;">The link will take you to our homepage where you can learn more about FlowMastery. You'll then be guided to complete your account setup.</p>
+            </div>
 
             <!-- Expiry Warning -->
             <div style="background: #fef3c7; border: 1px solid #fcd34d; border-radius: 6px; padding: 12px; margin: 24px 0; font-size: 14px; color: #92400e;">
