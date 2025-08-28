@@ -147,12 +147,12 @@ export function ClientDashboardPage() {
       description: 'All time'
     },
     {
-      title: 'Hours Saved',
+      title: 'Avg Hours Saved',
       value: clientMetrics?.time_saved_hours ? `${clientMetrics.time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
       trend: { value: Math.abs(clientMetrics?.trends?.execution_trend || 0), isPositive: (clientMetrics?.trends?.execution_trend || 0) >= 0 },
-      description: 'Time saved by automation'
+      description: 'Average time saved per workflow'
     },
     {
       title: 'Success Rate',

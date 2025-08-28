@@ -143,12 +143,12 @@ function AdminMetricsView({
       description: 'Last 30 days'
     },
     {
-      title: 'Hours Saved',
+      title: 'Avg Hours Saved',
       value: adminMetrics?.total_time_saved_hours ? `${adminMetrics.total_time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
       trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
-      description: 'Time saved by automation'
+      description: 'Average time saved per client'
     },
     {
       title: 'Overall Success Rate',

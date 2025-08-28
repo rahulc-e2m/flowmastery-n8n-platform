@@ -163,12 +163,12 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
       description: 'Last 30 days'
     },
     {
-      title: 'Hours Saved',
+      title: 'Avg Hours Saved',
       value: metrics?.total_time_saved_hours ? `${metrics.total_time_saved_hours}h` : '0h',
       icon: Clock,
       color: 'orange',
       trend: { value: Math.abs(metrics?.trends?.execution_trend || 0), isPositive: (metrics?.trends?.execution_trend || 0) >= 0 },
-      description: 'Time saved by automation'
+      description: 'Average time saved per client'
     },
     {
       title: 'Success Rate',

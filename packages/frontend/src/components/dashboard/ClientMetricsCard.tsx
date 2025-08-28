@@ -80,7 +80,7 @@ export function ClientMetricsCard({ client, index, onClick }: ClientMetricsCardP
             </div>
             <div className="text-center">
               <p className="text-xl font-bold text-orange-600">{client.time_saved_hours ? `${client.time_saved_hours}h` : '0h'}</p>
-              <p className="text-xs text-muted-foreground">Time Saved</p>
+              <p className="text-xs text-muted-foreground">Avg Time Saved</p>
             </div>
           </div>
 

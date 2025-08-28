@@ -247,7 +247,7 @@ class EnhancedMetricsService:
         total_workflows = 0
         total_executions = 0
         total_successful = 0
-        total_time_saved = 0.0
+        time_saved_values = []  # Changed to collect individual values for average calculation
         
         for client in clients:
             try:
@@ -257,7 +257,7 @@ class EnhancedMetricsService:
                 total_executions += metrics.total_executions
                 total_successful += metrics.successful_executions
                 if metrics.time_saved_hours:
-                    total_time_saved += metrics.time_saved_hours
+                    time_saved_values.append(metrics.time_saved_hours)  # Collect for average calculation
             except Exception as e:
                 logger.error(f"Error getting metrics for client {client.id}: {e}")
                 # Add empty metrics for failed clients
@@ -303,6 +303,9 @@ class EnhancedMetricsService:
                 if sync_timestamp:
                     last_updated = sync_timestamp
         
+        # Calculate average time saved instead of total
+        avg_time_saved = round(sum(time_saved_values) / len(time_saved_values), 1) if time_saved_values else None
+        
         # Calculate overall system trends
         overall_trends = await self._calculate_overall_trends(db)
         
@@ -312,7 +315,7 @@ class EnhancedMetricsService:
             total_workflows=total_workflows,
             total_executions=total_executions,
             overall_success_rate=round(overall_success_rate, 2),
-            total_time_saved_hours=round(total_time_saved, 1) if total_time_saved > 0 else None,
+            total_time_saved_hours=avg_time_saved,  # Now represents average time saved across clients
             last_updated=last_updated,
             trends=overall_trends
         )
@@ -341,20 +344,23 @@ class EnhancedMetricsService:
         return result.scalar_one_or_none()
     
     async def _calculate_all_time_saved(self, db: AsyncSession, client_id: str) -> Optional[float]:
-        """Calculate all-time time saved for a client from all successful executions"""
-        # Get all successful executions for this client
-        executions_stmt = select(WorkflowExecution).where(
+        """Calculate average time saved per workflow for a client"""
+        # Get all successful executions grouped by workflow
+        executions_stmt = select(
+            WorkflowExecution.workflow_id,
+            func.count(WorkflowExecution.id).label('execution_count')
+        ).where(
             and_(
                 WorkflowExecution.client_id == client_id,
                 WorkflowExecution.is_production == True,
-                WorkflowExecution.status == ExecutionStatus.SUCCESS  # Use status column directly
+                WorkflowExecution.status == ExecutionStatus.SUCCESS
             )
-        )
+        ).group_by(WorkflowExecution.workflow_id)
         
         executions_result = await db.execute(executions_stmt)
-        successful_executions = executions_result.scalars().all()
+        workflow_executions = executions_result.all()
         
-        if not successful_executions:
+        if not workflow_executions:
             return None
         
         # Get per-workflow time saved minutes for this client
@@ -364,13 +370,19 @@ class EnhancedMetricsService:
         workflows_minutes_result = await db.execute(workflows_minutes_stmt)
         workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflows_minutes_result.all()}
 
-        # Calculate total minutes saved across all successful executions
-        total_minutes_saved = 0
-        for execution in successful_executions:
-            minutes = workflow_minutes.get(execution.workflow_id, 30)
-            total_minutes_saved += minutes
+        # Calculate time saved per workflow and then average across all workflows
+        workflow_time_saved = []
+        for workflow_id, execution_count in workflow_executions:
+            minutes_per_execution = workflow_minutes.get(workflow_id, 30)
+            total_minutes_for_workflow = execution_count * minutes_per_execution
+            hours_for_workflow = total_minutes_for_workflow / 60
+            workflow_time_saved.append(hours_for_workflow)
         
-        return round(total_minutes_saved / 60, 1) if total_minutes_saved > 0 else None
+        # Return average time saved across all workflows that have executions
+        if workflow_time_saved:
+            return round(sum(workflow_time_saved) / len(workflow_time_saved), 1)
+        else:
+            return None
 
     async def _get_last_activity(self, db: AsyncSession, client_id: str) -> Optional[datetime]:
         """Get last activity timestamp for a client"""
