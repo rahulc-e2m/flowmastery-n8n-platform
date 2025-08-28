@@ -46,6 +46,10 @@ htmlcov/
 .eggs/
 *.egg
 
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
 # Logs
 logs/
 *.log
