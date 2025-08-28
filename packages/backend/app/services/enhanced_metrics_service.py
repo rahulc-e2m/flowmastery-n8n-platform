@@ -78,7 +78,7 @@ class EnhancedMetricsService:
             avg_execution_time=summary.get('avg_execution_time', None),
             last_activity=last_activity,
             time_saved_hours=all_time_saved_hours,
-            last_updated=(recent_metrics.computed_at if recent_metrics and recent_metrics.computed_at else await self._get_last_sync_time(db, client_id)),
+            last_updated=await self._get_last_sync_time(db, client_id),
             trends=trends
         )
         
