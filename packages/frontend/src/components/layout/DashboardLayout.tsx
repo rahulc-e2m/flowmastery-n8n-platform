@@ -388,12 +388,6 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           </div>
 
           <div className="flex items-center space-x-4">
-            <div className="hidden sm:block text-sm text-muted-foreground">
-              Welcome back, 
-              <span className="font-semibold text-foreground">
-                {getUserDisplayName()}
-              </span>
-            </div>
             
             <ThemeToggle />
             
