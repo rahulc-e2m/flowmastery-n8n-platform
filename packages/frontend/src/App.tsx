@@ -110,6 +110,76 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/workflows/chatbot"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage workflowType="chatbot" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workflows/email"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage workflowType="email" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workflows/calendar"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage workflowType="calendar" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workflows/documents"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage workflowType="documents" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/workflows/custom"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <WorkflowsPage workflowType="custom" />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:clientId"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ClientDashboardPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
 
       {/* Admin only routes */}
       <Route
