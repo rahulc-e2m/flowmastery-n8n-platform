@@ -114,8 +114,8 @@ async def get_invitation_link(
             detail="Invitation has expired"
         )
     
-    # Return the invitation link
-    invitation_link = f"{settings.FRONTEND_URL}/accept-invitation?token={invitation.token}"
+    # Return the invitation link pointing to homepage with token
+    invitation_link = f"{settings.FRONTEND_URL}/?token={invitation.token}"
     
     return {
         "invitation_link": invitation_link,
