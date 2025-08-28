@@ -25,7 +25,7 @@ class MetricsService:
     """Service for fetching and processing metrics from n8n"""
     
     @staticmethod
-    async def get_client_metrics(db: AsyncSession, client_id: int, use_cache: bool = True) -> ClientMetrics:
+    async def get_client_metrics(db: AsyncSession, client_id: str, use_cache: bool = True) -> ClientMetrics:
         """Get aggregated metrics for a specific client"""
         # Try cache first
         cache_key = f"client_metrics:{client_id}"
@@ -126,7 +126,7 @@ class MetricsService:
             )
     
     @staticmethod
-    async def get_client_workflow_metrics(db: AsyncSession, client_id: int) -> ClientWorkflowMetrics:
+    async def get_client_workflow_metrics(db: AsyncSession, client_id: str) -> ClientWorkflowMetrics:
         """Get workflow-level metrics for a specific client"""
         client = await ClientService.get_client_by_id(db, client_id)
         if not client:

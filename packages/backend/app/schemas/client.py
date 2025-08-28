@@ -23,7 +23,7 @@ class ClientUpdate(BaseModel):
 
 class ClientResponse(ClientBase):
     """Schema for client response"""
-    id: int
+    id: str
     n8n_api_url: Optional[str] = None
     has_n8n_api_key: bool = False  # Don't expose the actual key
     created_at: datetime
@@ -49,7 +49,7 @@ class N8nConnectionTestResponse(BaseModel):
 class ClientSyncResponse(BaseModel):
     """Schema for client sync response"""
     message: str
-    client_id: int
+    client_id: str
     client_name: str
     immediate_sync_triggered: bool
     note: str

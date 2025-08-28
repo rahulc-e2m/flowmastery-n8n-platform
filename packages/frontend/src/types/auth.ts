@@ -1,9 +1,11 @@
 export interface User {
-  id: number
+  id: string
   email: string
+  first_name?: string
+  last_name?: string
   role: 'admin' | 'client'
   is_active: boolean
-  client_id?: number
+  client_id?: string
   created_at: string
   last_login?: string
 }
@@ -22,16 +24,16 @@ export interface LoginResponse {
 export interface InvitationCreate {
   email: string
   role: 'admin' | 'client'
-  client_id?: number
+  client_id?: string
 }
 
 export interface Invitation {
-  id: number
+  id: string
   email: string
   role: 'admin' | 'client'
   status: 'pending' | 'accepted' | 'expired' | 'revoked'
   expiry_date: string
-  client_id?: number
+  client_id?: string
   created_at: string
 }
 

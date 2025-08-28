@@ -14,12 +14,12 @@ export class MetricsApi {
     return response.data
   }
 
-  static async getClientMetrics(clientId: number): Promise<ClientMetrics> {
+  static async getClientMetrics(clientId: string): Promise<ClientMetrics> {
     const response = await api.get<ClientMetrics>(`/metrics/client/${clientId}`)
     return response.data
   }
 
-  static async getClientWorkflowMetrics(clientId: number): Promise<ClientWorkflowMetrics> {
+  static async getClientWorkflowMetrics(clientId: string): Promise<ClientWorkflowMetrics> {
     const response = await api.get<ClientWorkflowMetrics>(`/metrics/client/${clientId}/workflows`)
     return response.data
   }
@@ -36,7 +36,7 @@ export class MetricsApi {
 
   // Historical Metrics Methods
   static async getClientHistoricalMetrics(
-    clientId: number, 
+    clientId: string, 
     filters?: MetricsFilters
   ): Promise<HistoricalMetrics> {
     const params = new URLSearchParams()
@@ -63,7 +63,7 @@ export class MetricsApi {
   }
 
   // Data Management Methods
-  static async forceSync(clientId?: number): Promise<{ message: string; result: any }> {
+  static async forceSync(clientId?: string): Promise<{ message: string; result: any }> {
     if (clientId) {
       const response = await api.post(`/metrics/admin/sync/${clientId}`)
       return response.data
@@ -89,7 +89,7 @@ export class MetricsApi {
   }
 
   // Task Management Methods  
-  static async triggerClientSync(clientId: number): Promise<{ message: string; task_id: string }> {
+  static async triggerClientSync(clientId: string): Promise<{ message: string; task_id: string }> {
     const response = await api.post(`/tasks/sync-client/${clientId}`)
     return response.data
   }
@@ -110,12 +110,12 @@ export class MetricsApi {
   }
 
   // New Execution Data Methods
-  static async getClientExecutionStats(clientId: number): Promise<any> {
+  static async getClientExecutionStats(clientId: string): Promise<any> {
     const response = await api.get(`/metrics/client/${clientId}/execution-stats`)
     return response.data
   }
 
-  static async getClientExecutions(clientId: number, limit: number = 10): Promise<any> {
+  static async getClientExecutions(clientId: string, limit: number = 10): Promise<any> {
     const response = await api.get(`/metrics/client/${clientId}/executions?limit=${limit}`)
     return response.data
   }

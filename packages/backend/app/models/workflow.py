@@ -1,8 +1,10 @@
 """Workflow model for persistent storage"""
 
+import uuid
 from datetime import datetime
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Text, JSON, UniqueConstraint
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -16,14 +18,14 @@ class Workflow(Base, TimestampMixin):
         UniqueConstraint('client_id', 'n8n_workflow_id', name='uq_workflows_client_n8n_id'),
     )
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     
     # n8n workflow identifier (unique per client)
     n8n_workflow_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     
     # Client association
-    client_id: Mapped[int] = mapped_column(
-        Integer,
+    client_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
         index=True

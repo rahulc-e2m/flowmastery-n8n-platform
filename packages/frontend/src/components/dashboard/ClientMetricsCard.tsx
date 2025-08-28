@@ -17,7 +17,7 @@ import { formatDistanceToNow } from 'date-fns'
 
 interface ClientMetricsCardProps {
   client: {
-    client_id: number
+    client_id: string
     client_name: string
     total_workflows: number
     active_workflows: number

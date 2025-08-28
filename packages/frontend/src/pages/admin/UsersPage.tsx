@@ -30,7 +30,7 @@ import type { InvitationCreate } from '@/types/auth'
 const invitationSchema = z.object({
   email: z.string().email('Invalid email address'),
   role: z.enum(['admin', 'client'], { required_error: 'Role is required' }),
-  client_id: z.number().optional(),
+  client_id: z.string().optional(),
 })
 
 type InvitationFormData = z.infer<typeof invitationSchema>
@@ -95,7 +95,7 @@ export function UsersPage() {
     createInvitationMutation.mutate(invitationData)
   }
 
-  const copyInvitationLink = async (invitationId: number) => {
+  const copyInvitationLink = async (invitationId: string) => {
     try {
       const { invitation_link } = await AuthApi.getInvitationLink(invitationId)
       await navigator.clipboard.writeText(invitation_link)
@@ -106,7 +106,7 @@ export function UsersPage() {
     }
   }
 
-  const revokeInvitation = async (invitationId: number, email: string) => {
+  const revokeInvitation = async (invitationId: string, email: string) => {
     if (window.confirm(`Are you sure you want to revoke the invitation for ${email}? This action cannot be undone.`)) {
       revokeInvitationMutation.mutate(invitationId)
     }
@@ -197,7 +197,7 @@ export function UsersPage() {
                     name="client_id"
                     control={control}
                     render={({ field }) => (
-                      <Select onValueChange={(value) => field.onChange(parseInt(value))} value={field.value?.toString()}>
+                      <Select onValueChange={(value) => field.onChange(value)} value={field.value?.toString()}>
                         <SelectTrigger>
                           <SelectValue placeholder="Select a client" />
                         </SelectTrigger>

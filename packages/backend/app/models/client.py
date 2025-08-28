@@ -1,7 +1,9 @@
 """Client model"""
 
+import uuid
 from typing import Optional
-from sqlalchemy import String, Integer, ForeignKey, Text
+from sqlalchemy import String, ForeignKey, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -12,7 +14,7 @@ class Client(Base, TimestampMixin):
     
     __tablename__ = "clients"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     
     # Encrypted n8n API key
@@ -20,8 +22,8 @@ class Client(Base, TimestampMixin):
     n8n_api_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     
     # Admin who created this client
-    created_by_admin_id: Mapped[int] = mapped_column(
-        Integer,
+    created_by_admin_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("users.id", ondelete="CASCADE"),
         nullable=False
     )

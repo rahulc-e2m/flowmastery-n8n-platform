@@ -1,8 +1,10 @@
 """Metrics aggregation models for persistent storage"""
 
+import uuid
 from datetime import datetime, date
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Date, Float, Enum
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 import enum
 
@@ -21,19 +23,19 @@ class MetricsAggregation(Base, TimestampMixin):
     
     __tablename__ = "metrics_aggregations"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     
     # Client association
-    client_id: Mapped[int] = mapped_column(
-        Integer,
+    client_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
     
     # Workflow association (optional - can be null for client-wide metrics)
-    workflow_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
+    workflow_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("workflows.id", ondelete="CASCADE"),
         nullable=True,
         index=True
@@ -112,19 +114,19 @@ class WorkflowTrendMetrics(Base, TimestampMixin):
     
     __tablename__ = "workflow_trend_metrics"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     
     # Workflow association
-    workflow_id: Mapped[int] = mapped_column(
-        Integer,
+    workflow_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("workflows.id", ondelete="CASCADE"),
         nullable=False,
         index=True
     )
     
     # Client association
-    client_id: Mapped[int] = mapped_column(
-        Integer,
+    client_id: Mapped[str] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=False,
         index=True
