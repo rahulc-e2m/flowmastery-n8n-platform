@@ -91,6 +91,26 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/client/:clientId"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ClientDashboardPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/workflows/chatbot"
         element={
           <ProtectedRoute>
@@ -130,25 +150,6 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <SettingsPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/client/:clientId"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <ClientDashboardPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
       <Route
         path="/workflows/custom"
         element={
@@ -160,26 +161,6 @@ function AppRoutes() {
         }
       />
       <Route
-        path="/settings"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <SettingsPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/client/:clientId"
-        element={
-          <ProtectedRoute>
-            <DashboardLayout>
-              <ClientDashboardPage />
-            </DashboardLayout>
-          </ProtectedRoute>
-        }
-      />
-=======
         path="/settings"
         element={
           <ProtectedRoute>

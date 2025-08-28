@@ -3,40 +3,28 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
-  BarChart3,
-  Building2,
-  LogOut,
-  Menu,
-  Settings,
-  User,
-  Calendar,
-  Shield,
   Activity,
-  Zap,
+  BarChart3,
+  Bot,
+  Building2,
+  Calendar,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
-  MessageCircle,
-  Bot,
-  Mail,
-  Calendar,
   FileText,
-  Workflow,
-  User,
-  Shield,
-  Building2,
-  LogOut,
-  Menu,
-  Settings,
-  Users,
-  X,
-  UserPlus,
   Home,
-  ChevronDown
-=======
+  LogOut,
+  Mail,
+  Menu,
+  MessageCircle,
+  Settings,
+  Shield,
   User,
-  Calendar,
-  Shield
->>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
+  UserPlus,
+  Users,
+  Workflow,
+  X,
+  Zap,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { MetricsApi } from '@/services/metricsApi'
