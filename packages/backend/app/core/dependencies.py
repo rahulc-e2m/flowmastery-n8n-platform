@@ -29,13 +29,8 @@ async def get_current_user(
             detail="Could not validate credentials"
         )
     
-    try:
-        user_id = int(user_id_str)
-    except (ValueError, TypeError):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid user ID in token"
-        )
+    # User ID is now a UUID string, no conversion needed
+    user_id = user_id_str
     
     # Get user from database
     result = await db.execute(select(User).where(User.id == user_id))
@@ -103,7 +98,7 @@ async def get_client_for_user(
     return client
 
 
-def verify_client_access(client_id: int):
+def verify_client_access(client_id: str):
     """Dependency factory to verify client access"""
     async def _verify_client_access(
         current_user: User = Depends(get_current_user),

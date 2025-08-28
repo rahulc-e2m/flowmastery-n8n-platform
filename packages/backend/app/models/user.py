@@ -1,8 +1,10 @@
 """User model"""
 
+import uuid
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Boolean, Integer, ForeignKey, DateTime
+from sqlalchemy import String, Boolean, ForeignKey, DateTime
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .base import Base, TimestampMixin
@@ -13,22 +15,24 @@ class User(Base, TimestampMixin):
     
     __tablename__ = "users"
     
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    first_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    last_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
     role: Mapped[str] = mapped_column(String(50), nullable=False)  # 'admin' or 'client'
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     
     # For client users - link to their client record
-    client_id: Mapped[Optional[int]] = mapped_column(
-        Integer, 
+    client_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False), 
         ForeignKey("clients.id", ondelete="CASCADE"),
         nullable=True
     )
     
     # Who created this user (for audit trail)
-    created_by_admin_id: Mapped[Optional[int]] = mapped_column(
-        Integer,
+    created_by_admin_id: Mapped[Optional[str]] = mapped_column(
+        UUID(as_uuid=False),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True
     )

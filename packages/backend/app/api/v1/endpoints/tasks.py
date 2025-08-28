@@ -60,7 +60,7 @@ async def get_worker_stats(
 # Metrics Collection Tasks
 @router.post("/sync-client/{client_id}")
 async def trigger_client_sync(
-    client_id: int,
+    client_id: str,
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:
     """Trigger metrics sync for a specific client"""

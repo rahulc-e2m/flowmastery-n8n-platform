@@ -18,7 +18,8 @@ from app.schemas.auth import (
     InvitationCreate, 
     InvitationResponse,
     InvitationAccept,
-    UserResponse
+    UserResponse,
+    UserProfileUpdate
 )
 from app.config import settings
 
@@ -62,6 +63,25 @@ async def get_current_user_info(
     return UserResponse.model_validate(current_user)
 
 
+@router.put("/profile", response_model=UserResponse)
+async def update_user_profile(
+    profile_data: UserProfileUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Update current user's profile information"""
+    # Update user fields
+    if profile_data.first_name is not None:
+        current_user.first_name = profile_data.first_name
+    if profile_data.last_name is not None:
+        current_user.last_name = profile_data.last_name
+    
+    await db.commit()
+    await db.refresh(current_user)
+    
+    return UserResponse.model_validate(current_user)
+
+
 @router.post("/invitations", response_model=InvitationResponse)
 async def create_invitation(
     invitation_data: InvitationCreate,
@@ -86,7 +106,7 @@ async def list_invitations(
 
 @router.get("/invitations/{invitation_id}/link")
 async def get_invitation_link(
-    invitation_id: int,
+    invitation_id: str,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ):
@@ -114,8 +134,8 @@ async def get_invitation_link(
             detail="Invitation has expired"
         )
     
-    # Return the invitation link
-    invitation_link = f"{settings.FRONTEND_URL}/accept-invitation?token={invitation.token}"
+    # Return the invitation link pointing to homepage with token
+    invitation_link = f"{settings.FRONTEND_URL}/?token={invitation.token}"
     
     return {
         "invitation_link": invitation_link,
@@ -186,7 +206,7 @@ async def accept_invitation(
 
 @router.delete("/invitations/{invitation_id}")
 async def revoke_invitation(
-    invitation_id: int,
+    invitation_id: str,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ):

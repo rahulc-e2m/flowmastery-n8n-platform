@@ -29,7 +29,7 @@ class WorkflowMetrics(BaseModel):
 
 class ClientMetrics(BaseModel):
     """Schema for client-level aggregated metrics"""
-    client_id: int
+    client_id: str
     client_name: str
     total_workflows: int
     active_workflows: int
@@ -46,7 +46,7 @@ class ClientMetrics(BaseModel):
 
 class ClientWorkflowMetrics(BaseModel):
     """Schema for client's workflow-level metrics"""
-    client_id: int
+    client_id: str
     client_name: str
     workflows: List[WorkflowMetrics]
     summary: ClientMetrics
@@ -67,14 +67,14 @@ class AdminMetricsResponse(BaseModel):
 class MetricsError(BaseModel):
     """Schema for metrics error response"""
     error: str
-    client_id: int
+    client_id: str
     client_name: str
     details: Optional[str] = None
 
 
 class HistoricalMetrics(BaseModel):
     """Schema for historical metrics data"""
-    client_id: int
+    client_id: str
     workflow_id: Optional[int] = None
     period_type: str  # 'daily', 'weekly', 'monthly'
     start_date: date

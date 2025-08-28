@@ -15,6 +15,10 @@ import {
   ChevronDown,
   Activity,
   Zap,
+  User,
+  Calendar,
+  Shield
+>>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
   ChevronLeft,
   ChevronRight,
   MessageCircle,
@@ -22,7 +26,14 @@ import {
   Mail,
   Calendar,
   FileText,
-  Workflow
+  Workflow,
+  User,
+  Shield
+=======
+  User,
+  Calendar,
+  Shield
+>>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { MetricsApi } from '@/services/metricsApi'
@@ -58,6 +69,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const { user, logout, isAdmin, isClient } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
+
+  // Get user display name from user data or fallback to email
+  const getUserDisplayName = () => {
+    if (user?.first_name || user?.last_name) {
+      return `${user.first_name || ''} ${user.last_name || ''}`.trim()
+    }
+    return user?.email?.split('@')[0] || 'User'
+  }
+
+  const getUserInitials = () => {
+    if (user?.first_name) {
+      const firstInitial = user.first_name.charAt(0).toUpperCase()
+      const lastInitial = user?.last_name?.charAt(0).toUpperCase() || ''
+      return firstInitial + lastInitial
+    }
+    return user?.email?.split('@')[0].charAt(0).toUpperCase() || 'U'
+  }
 
   // Fetch metrics data to get last_updated timestamp
   const { data: metricsData } = useQuery({
@@ -372,7 +400,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <div className="hidden sm:block text-sm text-muted-foreground">
               Welcome back, 
               <span className="font-semibold text-foreground">
-                {user?.email?.split('@')[0]}
+                {getUserDisplayName()}
               </span>
             </div>
             
@@ -384,30 +412,122 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   variants={buttonTap}
                   whileTap="tap"
                 >
-                  <Button variant="ghost" size="sm" className="flex items-center space-x-2 rounded-xl">
-                    <div className="w-8 h-8 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center">
-                      <span className="text-sm font-semibold text-foreground">
-                        {user?.email?.charAt(0).toUpperCase()}
+                  <Button variant="ghost" size="sm" className="flex items-center space-x-3 rounded-xl p-2 h-auto">
+                    {/* Enhanced Avatar */}
+                    <div className="w-10 h-10 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center border-2 border-background shadow-lg">
+                      <span className="text-lg font-bold text-foreground">
+                        {getUserInitials()}
                       </span>
                     </div>
-                    <ChevronDown className="w-4 h-4" />
+                    
+                    {/* User Info - Hidden on mobile */}
+                    <div className="hidden md:flex flex-col items-start text-left">
+                      <span className="text-sm font-medium text-foreground">
+                        {getUserDisplayName()}
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize">
+                        {user?.role}
+                      </span>
+                    </div>
+                    
+                    <ChevronDown className="w-4 h-4 text-muted-foreground" />
                   </Button>
                 </motion.div>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <div className="px-3 py-2 text-sm text-muted-foreground">
-                  {user?.email}
+              <DropdownMenuContent align="end" className="w-72">
+                {/* User Profile Header */}
+                <div className="px-4 py-3 border-b border-border">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center border-2 border-background shadow-lg">
+                      <span className="text-xl font-bold text-foreground">
+                        {getUserInitials()}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-semibold text-foreground truncate">
+                        {getUserDisplayName()}
+                      </h4>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {user?.email}
+                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          user?.role === 'admin' 
+                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300'
+                            : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300'
+                        }`}>
+                          {user?.role?.charAt(0).toUpperCase()}{user?.role?.slice(1)}
+                        </div>
+                        {user?.is_active && (
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                
+                {/* Account Details */}
+                <div className="px-4 py-3 border-b border-border">
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        User ID
+                      </span>
+                      <span className="font-medium">#{user?.id}</span>
+                    </div>
+                    {user?.client_id && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                          <Building2 className="w-3 h-3" />
+                          Client ID
+                        </span>
+                        <span className="font-medium">#{user?.client_id}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground flex items-center gap-1">
+                        <Calendar className="w-3 h-3" />
+                        Member since
+                      </span>
+                      <span className="font-medium">
+                        {user?.created_at ? new Date(user.created_at).toLocaleDateString('en-US', { 
+                          month: 'short', 
+                          year: 'numeric' 
+                        }) : 'N/A'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Menu Items */}
+                <div className="py-1">
+                  <DropdownMenuItem 
+                    onClick={() => navigate('/settings')}
+                    className="flex items-center px-4 py-2 cursor-pointer"
+                  >
+                    <Settings className="w-4 h-4 mr-3 text-muted-foreground" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Settings</span>
+                      <span className="text-xs text-muted-foreground">Account preferences</span>
+                    </div>
+                  </DropdownMenuItem>
+                </div>
+                
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/settings')}>
-                  <Settings className="w-4 h-4 mr-3" />
-                  Settings
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive">
-                  <LogOut className="w-4 h-4 mr-3" />
-                  Sign out
-                </DropdownMenuItem>
+                
+                <div className="py-1">
+                  <DropdownMenuItem 
+                    onClick={handleLogout} 
+                    className="flex items-center px-4 py-2 cursor-pointer text-destructive focus:text-destructive"
+                  >
+                    <LogOut className="w-4 h-4 mr-3" />
+                    <div className="flex flex-col">
+                      <span className="text-sm font-medium">Sign out</span>
+                      <span className="text-xs text-muted-foreground">Sign out of your account</span>
+                    </div>
+                  </DropdownMenuItem>
+                </div>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>

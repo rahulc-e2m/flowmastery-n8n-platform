@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ClientApi } from '@/services/clientApi'
+import { ClientApi, type N8nConnectionTestResponse, type ClientSyncResponse } from '@/services/clientApi'
 import { 
   Building2, 
   Plus, 
@@ -9,7 +9,10 @@ import {
   Edit,
   CheckCircle,
   XCircle,
-  ExternalLink
+  ExternalLink,
+  TestTube,
+  RefreshCw,
+  Loader2
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -41,6 +44,8 @@ export function ClientsPage() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
   const [configDialogOpen, setConfigDialogOpen] = useState(false)
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
+  const [connectionTestResult, setConnectionTestResult] = useState<N8nConnectionTestResponse | null>(null)
+  const [isTestingConnection, setIsTestingConnection] = useState(false)
   const queryClient = useQueryClient()
 
   const { data: clients, isLoading } = useQuery({
@@ -61,13 +66,17 @@ export function ClientsPage() {
   })
 
   const configureN8nMutation = useMutation({
-    mutationFn: ({ clientId, config }: { clientId: number; config: ClientN8nConfig }) =>
+    mutationFn: ({ clientId, config }: { clientId: string; config: ClientN8nConfig }) =>
       ClientApi.configureN8nApi(clientId, config),
-    onSuccess: () => {
+    onSuccess: (data: ClientSyncResponse) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       setConfigDialogOpen(false)
       setSelectedClient(null)
-      toast.success('n8n configuration updated successfully')
+      setConnectionTestResult(null)
+      toast.success(
+        `n8n configuration updated successfully! ${data.note}`,
+        { duration: 5000 }
+      )
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to configure n8n API')
@@ -82,6 +91,17 @@ export function ClientsPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.detail || 'Failed to delete client')
+    },
+  })
+
+  const triggerSyncMutation = useMutation({
+    mutationFn: ClientApi.triggerImmediateSync,
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['clients'] })
+      toast.success('Immediate sync completed successfully!')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.detail || 'Failed to trigger sync')
     },
   })
 
@@ -116,8 +136,39 @@ export function ClientsPage() {
     }
   }
 
+  const testConnection = async (data: N8nConfigFormData) => {
+    setIsTestingConnection(true)
+    setConnectionTestResult(null)
+    
+    try {
+      const result = await ClientApi.testN8nConnection(data)
+      setConnectionTestResult(result)
+      
+      if (result.status === 'success') {
+        toast.success('Connection test successful!')
+      } else if (result.status === 'warning') {
+        toast.warning(result.message)
+      } else {
+        toast.error(result.message)
+      }
+    } catch (error: any) {
+      const errorMessage = error.response?.data?.detail || 'Connection test failed'
+      toast.error(errorMessage)
+      setConnectionTestResult({
+        status: 'error',
+        connection_healthy: false,
+        api_accessible: false,
+        message: errorMessage,
+        instance_info: {}
+      })
+    } finally {
+      setIsTestingConnection(false)
+    }
+  }
+
   const handleConfigureN8n = (client: Client) => {
     setSelectedClient(client)
+    setConnectionTestResult(null)
     resetConfig({
       n8n_api_url: client.n8n_api_url || '',
       n8n_api_key: '',
@@ -125,7 +176,13 @@ export function ClientsPage() {
     setConfigDialogOpen(true)
   }
 
-  const handleDeleteClient = (clientId: number) => {
+  const handleTriggerSync = (clientId: string) => {
+    if (confirm('This will immediately sync data from the n8n instance. Continue?')) {
+      triggerSyncMutation.mutate(clientId)
+    }
+  }
+
+  const handleDeleteClient = (clientId: string) => {
     if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
       deleteClientMutation.mutate(clientId)
     }
@@ -249,6 +306,22 @@ export function ClientsPage() {
                     <Settings className="w-4 h-4 mr-2" />
                     Configure n8n
                   </Button>
+                  {client.has_n8n_api_key && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleTriggerSync(client.id)}
+                      disabled={triggerSyncMutation.isPending}
+                      className="flex-1"
+                    >
+                      {triggerSyncMutation.isPending ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <RefreshCw className="w-4 h-4 mr-2" />
+                      )}
+                      Sync Now
+                    </Button>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"
@@ -270,7 +343,7 @@ export function ClientsPage() {
           <DialogHeader>
             <DialogTitle>Configure n8n API</DialogTitle>
             <DialogDescription>
-              Set up the n8n API connection for {selectedClient?.name}
+              Set up the n8n API connection for {selectedClient?.name}. Connection will be tested and data will be fetched immediately upon configuration.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleConfigSubmit(onConfigureN8n)} className="space-y-4">
@@ -299,6 +372,47 @@ export function ClientsPage() {
                 <p className="text-sm text-red-500">{configErrors.n8n_api_key.message}</p>
               )}
             </div>
+            
+            {/* Connection Test Results */}
+            {connectionTestResult && (
+              <div className={`p-3 rounded-lg border ${
+                connectionTestResult.status === 'success' ? 'bg-green-50 border-green-200' :
+                connectionTestResult.status === 'warning' ? 'bg-yellow-50 border-yellow-200' :
+                'bg-red-50 border-red-200'
+              }`}>
+                <div className="flex items-center space-x-2 mb-2">
+                  {connectionTestResult.status === 'success' ? (
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                  ) : connectionTestResult.status === 'warning' ? (
+                    <XCircle className="w-4 h-4 text-yellow-600" />
+                  ) : (
+                    <XCircle className="w-4 h-4 text-red-600" />
+                  )}
+                  <span className={`text-sm font-medium ${
+                    connectionTestResult.status === 'success' ? 'text-green-800' :
+                    connectionTestResult.status === 'warning' ? 'text-yellow-800' :
+                    'text-red-800'
+                  }`}>
+                    Connection Test: {connectionTestResult.status === 'success' ? 'Success' : 
+                                    connectionTestResult.status === 'warning' ? 'Warning' : 'Failed'}
+                  </span>
+                </div>
+                <p className={`text-sm ${
+                  connectionTestResult.status === 'success' ? 'text-green-700' :
+                  connectionTestResult.status === 'warning' ? 'text-yellow-700' :
+                  'text-red-700'
+                }`}>
+                  {connectionTestResult.message}
+                </p>
+                {connectionTestResult.instance_info && Object.keys(connectionTestResult.instance_info).length > 0 && (
+                  <div className="mt-2 text-xs text-gray-600">
+                    <div>Has workflows: {connectionTestResult.instance_info.has_workflows ? 'Yes' : 'No'}</div>
+                    <div>Has executions: {connectionTestResult.instance_info.has_executions ? 'Yes' : 'No'}</div>
+                  </div>
+                )}
+              </div>
+            )}
+            
             <div className="flex justify-end space-x-2">
               <Button
                 type="button"
@@ -307,8 +421,31 @@ export function ClientsPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={configureN8nMutation.isPending}>
-                {configureN8nMutation.isPending ? 'Saving...' : 'Save Configuration'}
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleConfigSubmit(testConnection)}
+                disabled={isTestingConnection}
+              >
+                {isTestingConnection ? (
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                ) : (
+                  <TestTube className="w-4 h-4 mr-2" />
+                )}
+                Validate Key
+              </Button>
+              <Button 
+                type="submit" 
+                disabled={configureN8nMutation.isPending || (connectionTestResult?.status === 'error')}
+              >
+                {configureN8nMutation.isPending ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Configuring & Syncing...
+                  </>
+                ) : (
+                  'Save & Sync Data'
+                )}
               </Button>
             </div>
           </form>

@@ -14,6 +14,8 @@ import { MetricsPage } from '@/pages/MetricsPage'
 import { ClientsPage } from '@/pages/admin/ClientsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
+import HomePage from '@/pages/HomePage'
+import { SettingsPage } from '@/pages/SettingsPage'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -41,6 +43,12 @@ function AppRoutes() {
 
   return (
     <Routes>
+      {/* Root route - HomePage for unauthenticated, Dashboard for authenticated */}
+      <Route 
+        path="/" 
+        element={isAuthenticated ? <Navigate to="/dashboard" replace /> : <HomePage />} 
+      />
+
       {/* Public routes */}
       <Route 
         path="/login" 
@@ -78,6 +86,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <WorkflowsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+>>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -133,6 +151,27 @@ function AppRoutes() {
         }
       />
       <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+=======
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <SettingsPage />
+>>>>>>> 66a1debade1466d068eb87a2bb2da7ff3ec07d54
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/client/:clientId"
         element={
           <ProtectedRoute>
@@ -165,16 +204,10 @@ function AppRoutes() {
         }
       />
 
-      {/* Redirect root to dashboard */}
-      <Route 
-        path="/" 
-        element={<Navigate to="/dashboard" replace />} 
-      />
-
-      {/* Catch all - redirect to dashboard */}
+      {/* Catch all - redirect to root */}
       <Route 
         path="*" 
-        element={<Navigate to="/dashboard" replace />} 
+        element={<Navigate to="/" replace />} 
       />
     </Routes>
   )

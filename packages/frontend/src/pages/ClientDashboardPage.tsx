@@ -48,36 +48,36 @@ export function ClientDashboardPage() {
   const [selectedExecutions, setSelectedExecutions] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState('workflows')
 
-  const clientIdNum = clientId ? parseInt(clientId) : 0
+  const clientIdStr = clientId || ''
 
   // Client basic info
   const { data: client } = useQuery({
-    queryKey: ['client', clientIdNum],
-    queryFn: () => ClientApi.getClient(clientIdNum),
-    enabled: !!clientIdNum && isAdmin,
+    queryKey: ['client', clientIdStr],
+    queryFn: () => ClientApi.getClient(clientIdStr),
+    enabled: !!clientIdStr && isAdmin,
   })
 
   // Client metrics
   const { data: clientMetrics, isLoading: metricsLoading, refetch: refetchMetrics } = useQuery({
-    queryKey: ['client-metrics', clientIdNum, refreshKey],
-    queryFn: () => MetricsApi.getClientMetrics(clientIdNum),
-    enabled: !!clientIdNum,
+    queryKey: ['client-metrics', clientIdStr, refreshKey],
+    queryFn: () => MetricsApi.getClientMetrics(clientIdStr),
+    enabled: !!clientIdStr,
     refetchInterval: 30000,
   })
 
   // Workflow stats
   const { data: workflowStats, isLoading: workflowStatsLoading, refetch: refetchWorkflowStats } = useQuery({
-    queryKey: ['client-execution-stats', clientIdNum, refreshKey],
-    queryFn: () => MetricsApi.getClientExecutionStats(clientIdNum),
-    enabled: !!clientIdNum,
+    queryKey: ['client-execution-stats', clientIdStr, refreshKey],
+    queryFn: () => MetricsApi.getClientExecutionStats(clientIdStr),
+    enabled: !!clientIdStr,
     refetchInterval: 30000,
   })
 
   // Recent executions
   const { data: recentExecutions, isLoading: executionsLoading, refetch: refetchExecutions } = useQuery({
-    queryKey: ['client-executions', clientIdNum, refreshKey],
-    queryFn: () => MetricsApi.getClientExecutions(clientIdNum, 20),
-    enabled: !!clientIdNum,
+    queryKey: ['client-executions', clientIdStr, refreshKey],
+    queryFn: () => MetricsApi.getClientExecutions(clientIdStr, 20),
+    enabled: !!clientIdStr,
     refetchInterval: 30000,
   })
 
@@ -101,7 +101,7 @@ export function ClientDashboardPage() {
     setSelectedExecutions([])
   }
 
-  if (!clientIdNum) {
+  if (!clientIdStr) {
     return (
       <div className="p-6">
         <div className="text-center">
