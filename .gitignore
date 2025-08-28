@@ -114,5 +114,5 @@ site/
 /packages/frontend-deprecated
 
 # Celery
-celerybeat-schedule
+/packages/backend/celerybeat-schedule
 celerybeat.pid
