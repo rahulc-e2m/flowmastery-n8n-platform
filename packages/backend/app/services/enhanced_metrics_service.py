@@ -497,90 +497,75 @@ class EnhancedMetricsService:
         )
     
     async def _calculate_client_trends(self, db: AsyncSession, client_id: int) -> Optional[MetricsTrend]:
-        """Calculate trend indicators for a specific client"""
+        """Calculate trend indicators for a specific client based on all-time cumulative data"""
         try:
-            # Get last 2 daily aggregations for this client
-            stmt = select(MetricsAggregation).where(
-                and_(
-                    MetricsAggregation.client_id == client_id,
-                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregation
-                    MetricsAggregation.period_type == AggregationPeriod.DAILY
-                )
-            ).order_by(desc(MetricsAggregation.period_start)).limit(2)
-            
-            result = await db.execute(stmt)
-            aggregations = result.scalars().all()
-            
-            if len(aggregations) < 2:
-                # If no aggregations, try to calculate from raw execution data
-                return await self._calculate_trends_from_raw_data(db, client_id)
-            
-            return await self._calculate_trends(list(aggregations))
+            # Calculate trends from cumulative all-time data over meaningful periods
+            # Compare last 30 days vs previous 30 days to show growth in all-time totals
+            return await self._calculate_trends_from_cumulative_data(db, client_id)
             
         except Exception as e:
             logger.warning(f"Failed to calculate trends for client {client_id}: {e}")
             return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
     
     async def _calculate_overall_trends(self, db: AsyncSession) -> Optional[MetricsTrend]:
-        """Calculate overall system trends across all clients"""
+        """Calculate overall system trends across all clients using cumulative all-time data"""
         try:
-            # Get aggregated data for the last 2 days across all clients
-            recent_date = datetime.utcnow().date()
-            previous_date = recent_date - timedelta(days=1)
+            # Compare cumulative all-time totals: up to 30 days ago vs up to now
+            # This shows how the overall system has grown over the last 30 days
+            now = datetime.utcnow().replace(tzinfo=timezone.utc)
+            cutoff_30_days = now - timedelta(days=30)
             
-            # Get recent day totals
-            recent_stmt = select(
-                func.sum(MetricsAggregation.total_executions).label('total_executions'),
-                func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
-                func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
-            ).where(
+            # Get all-time totals up to 30 days ago (previous period baseline)
+            previous_stmt = select(WorkflowExecution).where(
                 and_(
-                    MetricsAggregation.period_start == recent_date,
-                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregations only
-                    MetricsAggregation.period_type == AggregationPeriod.DAILY
-                )
-            )
-            
-            recent_result = await db.execute(recent_stmt)
-            recent_data = recent_result.first()
-            
-            # Get previous day totals
-            previous_stmt = select(
-                func.sum(MetricsAggregation.total_executions).label('total_executions'),
-                func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
-                func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
-            ).where(
-                and_(
-                    MetricsAggregation.period_start == previous_date,
-                    MetricsAggregation.workflow_id.is_(None),  # Client-wide aggregations only
-                    MetricsAggregation.period_type == AggregationPeriod.DAILY
+                    WorkflowExecution.is_production == True,
+                    WorkflowExecution.started_at < cutoff_30_days
                 )
             )
             
             previous_result = await db.execute(previous_stmt)
-            previous_data = previous_result.first()
+            previous_executions = previous_result.scalars().all()
             
-            if not recent_data or not previous_data or not recent_data.total_executions or not previous_data.total_executions:
+            # Get all-time totals up to now (current period)
+            current_stmt = select(WorkflowExecution).where(
+                WorkflowExecution.is_production == True
+            )
+            
+            current_result = await db.execute(current_stmt)
+            current_executions = current_result.scalars().all()
+            
+            # Calculate cumulative metrics for both periods
+            previous_total = len(previous_executions)
+            previous_successful = len([e for e in previous_executions if e.is_successful])
+            previous_times = [e.duration_seconds for e in previous_executions if e.duration_seconds]
+            previous_avg_time = sum(previous_times) / len(previous_times) if previous_times else 0
+            
+            current_total = len(current_executions)
+            current_successful = len([e for e in current_executions if e.is_successful])
+            current_times = [e.duration_seconds for e in current_executions if e.duration_seconds]
+            current_avg_time = sum(current_times) / len(current_times) if current_times else 0
+            
+            if current_total == 0:
                 return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
             
-            # Calculate execution trend with bounds
+            # Calculate execution trend showing growth in all-time totals
             execution_trend = 0.0
-            if previous_data.total_executions == 0 and recent_data.total_executions > 0:
+            if previous_total == 0 and current_total > 0:
                 execution_trend = 100.0
-            elif previous_data.total_executions > 0:
-                execution_trend = ((recent_data.total_executions - previous_data.total_executions) / previous_data.total_executions) * 100
+            elif previous_total > 0:
+                execution_trend = ((current_total - previous_total) / previous_total) * 100
                 execution_trend = max(-100.0, min(500.0, execution_trend))
             
-            # Calculate success rate trend (percentage points)
-            recent_success_rate = (recent_data.successful_executions / recent_data.total_executions * 100) if recent_data.total_executions > 0 else 0
-            previous_success_rate = (previous_data.successful_executions / previous_data.total_executions * 100) if previous_data.total_executions > 0 else 0
-            success_rate_trend = recent_success_rate - previous_success_rate
+            # Calculate success rate trend (change in overall success rate)
+            current_success_rate = (current_successful / current_total * 100) if current_total > 0 else 0
+            previous_success_rate = (previous_successful / previous_total * 100) if previous_total > 0 else 0
+            success_rate_trend = current_success_rate - previous_success_rate
             success_rate_trend = max(-100.0, min(100.0, success_rate_trend))
             
             # Calculate performance trend (improvement in execution time)
             performance_trend = 0.0
-            if previous_data.avg_execution_time and recent_data.avg_execution_time and previous_data.avg_execution_time > 0:
-                performance_trend = ((previous_data.avg_execution_time - recent_data.avg_execution_time) / previous_data.avg_execution_time) * 100
+            if previous_avg_time > 0 and current_avg_time > 0:
+                performance_trend = ((previous_avg_time - current_avg_time) / previous_avg_time) * 100
                 performance_trend = max(-100.0, min(100.0, performance_trend))
             
             return MetricsTrend(
@@ -593,70 +578,69 @@ class EnhancedMetricsService:
             logger.warning(f"Failed to calculate overall trends: {e}")
             return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
     
-    async def _calculate_trends_from_raw_data(self, db: AsyncSession, client_id: int) -> MetricsTrend:
-        """Calculate trends from raw execution data when aggregations aren't available"""
+    async def _calculate_trends_from_cumulative_data(self, db: AsyncSession, client_id: int) -> MetricsTrend:
+        """Calculate trends from cumulative all-time data comparing meaningful periods"""
         try:
-            # Compare last 7 days vs previous 7 days
+            # Compare cumulative totals: all data up to 30 days ago vs all data up to 60 days ago
+            # This shows how the all-time totals have grown over the last 30 days
             now = datetime.utcnow().replace(tzinfo=timezone.utc)
-            recent_start = now - timedelta(days=7)
-            previous_start = now - timedelta(days=14)
-            previous_end = recent_start
+            cutoff_30_days = now - timedelta(days=30)
+            cutoff_60_days = now - timedelta(days=60)
             
-            # Get recent period data
-            recent_stmt = select(WorkflowExecution).where(
-                and_(
-                    WorkflowExecution.client_id == client_id,
-                    WorkflowExecution.is_production == True,
-                    WorkflowExecution.started_at >= recent_start,
-                    WorkflowExecution.started_at < now
-                )
-            )
-            
-            recent_result = await db.execute(recent_stmt)
-            recent_executions = recent_result.scalars().all()
-            
-            # Get previous period data
+            # Get all-time totals up to 30 days ago (previous period baseline)
             previous_stmt = select(WorkflowExecution).where(
                 and_(
                     WorkflowExecution.client_id == client_id,
                     WorkflowExecution.is_production == True,
-                    WorkflowExecution.started_at >= previous_start,
-                    WorkflowExecution.started_at < previous_end
+                    WorkflowExecution.started_at < cutoff_30_days
                 )
             )
             
             previous_result = await db.execute(previous_stmt)
             previous_executions = previous_result.scalars().all()
             
-            # Calculate metrics for both periods
-            recent_total = len(recent_executions)
-            recent_successful = len([e for e in recent_executions if e.is_successful])
-            recent_times = [e.duration_seconds for e in recent_executions if e.duration_seconds]
-            recent_avg_time = sum(recent_times) / len(recent_times) if recent_times else 0
+            # Get all-time totals up to now (current period)
+            current_stmt = select(WorkflowExecution).where(
+                and_(
+                    WorkflowExecution.client_id == client_id,
+                    WorkflowExecution.is_production == True
+                )
+            )
             
+            current_result = await db.execute(current_stmt)
+            current_executions = current_result.scalars().all()
+            
+            # Calculate cumulative metrics for both periods
             previous_total = len(previous_executions)
             previous_successful = len([e for e in previous_executions if e.is_successful])
             previous_times = [e.duration_seconds for e in previous_executions if e.duration_seconds]
             previous_avg_time = sum(previous_times) / len(previous_times) if previous_times else 0
             
-            # Calculate trends with proper bounds
+            current_total = len(current_executions)
+            current_successful = len([e for e in current_executions if e.is_successful])
+            current_times = [e.duration_seconds for e in current_executions if e.duration_seconds]
+            current_avg_time = sum(current_times) / len(current_times) if current_times else 0
+            
+            # Calculate trends showing growth in all-time totals
             execution_trend = 0.0
-            if previous_total == 0 and recent_total > 0:
+            if previous_total == 0 and current_total > 0:
                 execution_trend = 100.0
             elif previous_total > 0:
-                execution_trend = ((recent_total - previous_total) / previous_total) * 100
+                execution_trend = ((current_total - previous_total) / previous_total) * 100
                 execution_trend = max(-100.0, min(500.0, execution_trend))
-            elif recent_total == 0 and previous_total > 0:
+            elif current_total == 0 and previous_total > 0:
                 execution_trend = -100.0
             
-            recent_success_rate = (recent_successful / recent_total * 100) if recent_total > 0 else 0
+            # Success rate trend (change in overall success rate)
+            current_success_rate = (current_successful / current_total * 100) if current_total > 0 else 0
             previous_success_rate = (previous_successful / previous_total * 100) if previous_total > 0 else 0
-            success_rate_trend = recent_success_rate - previous_success_rate
+            success_rate_trend = current_success_rate - previous_success_rate
             success_rate_trend = max(-100.0, min(100.0, success_rate_trend))
             
+            # Performance trend (improvement in average execution time)
             performance_trend = 0.0
-            if previous_avg_time > 0 and recent_avg_time > 0:
-                performance_trend = ((previous_avg_time - recent_avg_time) / previous_avg_time) * 100
+            if previous_avg_time > 0 and current_avg_time > 0:
+                performance_trend = ((previous_avg_time - current_avg_time) / previous_avg_time) * 100
                 performance_trend = max(-100.0, min(100.0, performance_trend))
             
             return MetricsTrend(
@@ -666,7 +650,7 @@ class EnhancedMetricsService:
             )
             
         except Exception as e:
-            logger.warning(f"Failed to calculate trends from raw data for client {client_id}: {e}")
+            logger.warning(f"Failed to calculate trends from cumulative data for client {client_id}: {e}")
             return MetricsTrend(execution_trend=0.0, success_rate_trend=0.0, performance_trend=0.0)
     
     async def _get_last_sync_time(self, db: AsyncSession, client_id: int) -> Optional[datetime]:
