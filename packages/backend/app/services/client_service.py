@@ -231,10 +231,15 @@ class ClientService:
         from app.services.persistent_metrics import PersistentMetricsCollector
         
         try:
+            # Create a new collector instance to avoid shared state issues
             collector = PersistentMetricsCollector()
             
             # Sync workflows first
             api_key = encryption_manager.decrypt(client.n8n_api_key_encrypted)
+            
+            # Force a fresh session by refreshing the client object
+            await db.refresh(client)
+            
             workflows_result = await collector._sync_workflows(db, client, api_key)
             
             # Sync recent executions (last 500)
@@ -253,6 +258,8 @@ class ClientService:
             
         except Exception as e:
             logger.error(f"Immediate sync failed for client {client.id}: {e}")
+            # Rollback the transaction to ensure clean state
+            await db.rollback()
             return {
                 "status": "error",
                 "error": str(e),
