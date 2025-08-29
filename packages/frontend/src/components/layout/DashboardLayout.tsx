@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
   BarChart3,
+  BookOpen,
   Bot,
   Building2,
   Calendar,
@@ -147,6 +148,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       icon: Activity,
       show: true,
       description: 'Workflow analytics'
+    },
+    {
+      name: 'Dependencies',
+      href: isAdmin ? '/admin/dependencies' : '/dependencies',
+      icon: BookOpen,
+      show: true,
+      description: isAdmin ? 'Manage platform guides' : 'Platform setup guides'
     },
     {
       name: 'Clients',

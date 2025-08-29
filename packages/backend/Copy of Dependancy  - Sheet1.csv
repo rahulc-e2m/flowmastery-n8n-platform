@@ -1,0 +1,32 @@
+Service/Platform,Where to get them,How to Generate Guide,Documentation Link
+Apollo.io,https://developer.apollo.io/keys/,https://app.tango.us/app/workflow/Create-API-Key-in-Apollo-9b6dddc155ba40849985c6340ee6475c,🔐 How to Generate Your Apollo API Key – Step-by-Step Guide
+Hunter.io,https://hunter.io/api-keys,https://app.tango.us/app/workflow/Create-API-Key-in-Hunter-io-774240707c444db69d6acdfa61331e64,Create an API Key in Hunter
+OAuth Screen and Setup Credentials,https://console.cloud.google.com/welcome,https://app.tango.us/app/workflow/Create-OAuth-Client-and-Update-Google-Sheets-a637b3dfaa2f4b1ea7173449016804a7,https://docs.google.com/document/d/1i-3zWeZix6SpMyW-aHPoMYb9iVSujISrDZZMyIiLC3Y/edit?tab=t.0#heading=h.beaqjun44h57
+Sheets,https://console.cloud.google.com/marketplace/product/google/sheets.googleapis.com,https://app.tango.us/app/workflow/Enable-Google-APIs-c9d4223265b24869bc10a4925b1389eb,Google Sheets API - Enable & Setup Guide
+Docs,https://console.cloud.google.com/marketplace/product/google/docs.googleapis.com,https://app.tango.us/app/workflow/Enable-Google-APIs-c9d4223265b24869bc10a4925b1389eb,Google Docs API - Enable & Setup Guide
+Gmail,https://console.cloud.google.com/marketplace/product/google/gmail.googleapis.com,https://app.tango.us/app/workflow/Enable-Google-APIs-c9d4223265b24869bc10a4925b1389eb,Google Gmail API - Enable & Setup Guide
+Drive,https://console.cloud.google.com/marketplace/product/google/drive.googleapis.com,https://app.tango.us/app/workflow/Enable-Google-APIs-c9d4223265b24869bc10a4925b1389eb,Google Drive API - Enable & Setup Guide
+Apify,https://console.apify.com/settings/integrations,https://app.tango.us/app/workflow/Create-API-Token-in-Apify-489be0928e8e413c9d104d02830b43e2,How to Generate an Apify API Key
+OpenAI Api Key,https://platform.openai.com/account/api-keys,https://app.tango.us/app/workflow/Create-API-Key-in-OpenAI-Platform-3c216b15aca9469890b28aad38178a29,How to Generate an OpenAI API Key
+N8N account,https://n8n.io/,,n8n Client Login Access Requirements
+SerpAPI,https://serpapi.com/manage-api-key,https://app.tango.us/app/workflow/Regenerate-and-Manage-SerpApi-Key-902ef269058c42c7b3c30c3684266dfc,How to Generate a SerpApi API Key
+newsAPI,https://newsapi.org/account,,📰 How to Get an API Key from NewsAPI
+TwitterAPI.io API Key,https://twitterapi.io/dashboard,,How to Generate an API Key from TwitterAPI
+Youtube,https://console.cloud.google.com/marketplace/product/google/youtube.googleapis.com,https://app.tango.us/app/workflow/Enable-Google-APIs-c9d4223265b24869bc10a4925b1389eb,Youtube Data API v3 - Enable & Setup Guide
+Reddit,https://www.reddit.com/prefs/apps,,How to Generate a Reddit API Key (via Reddit Developer Apps)
+ScrapingBee API, https://www.scrapingbee.com/,,🔐 How to Get Your ScrapingBee API Key
+YouTube Transcript API Key (via RapidAPI),https://rapidapi.com/solid-api-solid-api-default/api/youtube-transcript3,,🎬 How to Get API Key for YouTube Transcript API on RapidAPI
+Azure for Microsoft 365,https://portal.azure.com/,,🔐 How to Get Client ID and Client Secret in Azure Portal
+OpenAPI Credits,https://platform.openai.com/settings/organization/billing/overview,https://app.tango.us/app/workflow/Add-Credits-in-OpenAI-833fd2e1e83e48cf99dfe6c2bcb981f1,🔐 How to Add Credits to Your OpenAI Account
+Gemini Api Key,https://aistudio.google.com/apikey,https://app.tango.us/app/workflow/Sign-In-and-Authenticate-Google-AI-Studio-0f4487d8416246baa777cf7c1dd5cf55,🔐 How to Generate Your Gemini API Key – Step-by-Step Guide
+ Supabase API KEY,https://supabase.com/dashboard/project/tzojjgrcavfycpyudepq/settings/api,https://app.tango.us/app/workflow/Copy-API-Keys-in-Supabase-777614dd516043b0bc51756c36381bda,Supabase API Key Setup for n8n - Complete Documentation
+Postgres ( Supabase ) Credentials,https://supabase.com/dashboard/project/tzojjgrcavfycpyudepq?showConnect=true,https://app.tango.us/app/workflow/Connect-Supabase-to-N8N-Workflow-ec6886fcd02e45008d06a0510a98df92,PostgreSQL in n8n via Supabase Transaction Pooler - Complete Documentation
+Google Sheets Trigger  (Cloud),,https://app.tango.us/app/workflow/Manage-Google-Sheets-OAuth2-Credentials-562869a5b19442609235c0e49af935f8,🔐 How to Set Up Google Sheets OAuth2 Credentials in n8n Cloud – Step-by-Step Guide
+TypeForm Api Key,https://admin.typeform.com/,https://app.tango.us/app/workflow/Create-Typeform-API-Credential-in-n8n-6e2faef09c734f119eb62c0608bdde31,🔐 How to Generate Your Typeform API Token – Step-by-Step Guide
+Slack App: Bot Mentions,Slack API: Applications,    ,Slack App Setup Guide: Responding to @App Mentions
+SupaData,https://dash.supadata.ai/,https://app.tango.us/app/workflow/Api-Key-in-Supadata-15fd0bc739eb4c979b07c31440e2e2bd,🔐 How to Generate Your Supadata API Key – Step-by-Step Guide
+Slack App: Socket Mode,Slack API: Applications,,🔐 How to Generate Your Slack Bot API Credentials (Socket Mode) – Step-by-Step Guide
+,,,
+,,,
+,,,
+,           ,,

@@ -16,6 +16,8 @@ import { UsersPage } from '@/pages/admin/UsersPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
 import HomePage from '@/pages/HomePage'
 import { SettingsPage } from '@/pages/SettingsPage'
+import { DependenciesPage } from '@/pages/DependenciesPage'
+import { AdminDependenciesPage } from '@/pages/admin/AdminDependenciesPage'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -86,6 +88,16 @@ function AppRoutes() {
           <ProtectedRoute>
             <DashboardLayout>
               <WorkflowsPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dependencies"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <DependenciesPage />
             </DashboardLayout>
           </ProtectedRoute>
         }
@@ -198,6 +210,16 @@ function AppRoutes() {
           <ProtectedRoute requireAdmin>
             <DashboardLayout>
               <UsersPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/dependencies"
+        element={
+          <ProtectedRoute requireAdmin>
+            <DashboardLayout>
+              <AdminDependenciesPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

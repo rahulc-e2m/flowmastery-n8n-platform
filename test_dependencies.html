@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Test Dependencies API</title>
+</head>
+<body>
+    <h1>Test Dependencies API</h1>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="testDependencies()">Test Dependencies</button>
+    <pre id="result"></pre>
+
+    <script>
+        let authToken = null;
+        
+        async function testLogin() {
+            try {
+                const response = await fetch('http://localhost:8000/api/v1/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@admin.com',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                
+                if (data.access_token) {
+                    authToken = data.access_token;
+                    localStorage.setItem('auth_token', authToken);
+                    console.log('Login successful, token stored');
+                }
+            } catch (error) {
+                document.getElementById('result').textContent = 'Login error: ' + error.message;
+            }
+        }
+        
+        async function testDependencies() {
+            try {
+                const token = authToken || localStorage.getItem('auth_token');
+                if (!token) {
+                    document.getElementById('result').textContent = 'No auth token found. Please login first.';
+                    return;
+                }
+                
+                const response = await fetch('http://localhost:8000/api/v1/dependencies/', {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const data = await response.json();
+                document.getElementById('result').textContent = JSON.stringify(data, null, 2);
+                console.log('Dependencies:', data);
+            } catch (error) {
+                document.getElementById('result').textContent = 'Dependencies error: ' + error.message;
+            }
+        }
+    </script>
+</body>
+</html>
