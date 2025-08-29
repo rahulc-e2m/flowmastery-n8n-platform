@@ -94,6 +94,12 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const workflowSubOptions = [
     {
+      name: 'All Workflows',
+      href: '/workflows',
+      icon: Activity,
+      description: 'View and manage all workflows'
+    },
+    {
       name: 'Chatbot Workflows',
       href: '/chatbots',
       icon: MessageCircle,
