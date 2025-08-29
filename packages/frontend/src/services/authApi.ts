@@ -9,7 +9,10 @@ import type {
   AcceptInvitationRequest
 } from '@/types/auth'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://1d03f1f3201b.ngrok-free.app'
+
+// Debug: Log the API URL being used
+console.log('AuthApi using API_BASE_URL:', API_BASE_URL)
 
 // Create axios instance
 const api = axios.create({
@@ -32,15 +35,32 @@ api.interceptors.request.use((config) => {
   return config
 })
 
-// Handle auth errors
+// Handle auth errors and redirects
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('auth_token')
       localStorage.removeItem('user')
       window.location.href = '/login'
+      return Promise.reject(error)
     }
+    
+    // Handle 307 redirects caused by missing trailing slash
+    if (error.response?.status === 307) {
+      const redirectLocation = error.response.headers.location
+      if (redirectLocation) {
+        // Ensure the redirect URL uses HTTPS
+        const httpsLocation = redirectLocation.replace(/^http:/, 'https:')
+        const config = error.config
+        config.url = httpsLocation
+        config.baseURL = '' // Clear baseURL to use full URL
+        
+        // Retry the request with the corrected URL
+        return api.request(config)
+      }
+    }
+    
     return Promise.reject(error)
   }
 )

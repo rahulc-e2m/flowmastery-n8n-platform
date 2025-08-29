@@ -20,7 +20,15 @@ export const DependencyCard: React.FC<DependencyCardProps> = ({
 }) => {
   const handleLinkClick = (url: string | undefined) => {
     if (url) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      // Check if the URL is valid
+      try {
+        new URL(url);
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } catch (error) {
+        // If URL is invalid, show an alert or handle gracefully
+        console.error('Invalid URL:', url);
+        alert('Invalid documentation link. Please contact your administrator.');
+      }
     }
   };
 

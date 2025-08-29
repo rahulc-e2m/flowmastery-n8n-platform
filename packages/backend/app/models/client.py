@@ -32,6 +32,7 @@ class Client(Base, TimestampMixin):
     user = relationship("User", back_populates="client", foreign_keys="User.client_id")
     created_by_admin = relationship("User", foreign_keys=[created_by_admin_id])
     workflows = relationship("Workflow", back_populates="client", cascade="all, delete-orphan")
+    chatbots = relationship("Chatbot", back_populates="client", cascade="all, delete-orphan")
     sync_state = relationship("SyncState", back_populates="client", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self) -> str:

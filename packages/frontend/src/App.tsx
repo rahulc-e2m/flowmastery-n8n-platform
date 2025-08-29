@@ -14,6 +14,8 @@ import { MetricsPage } from '@/pages/MetricsPage'
 import { ClientsPage } from '@/pages/admin/ClientsPage'
 import { UsersPage } from '@/pages/admin/UsersPage'
 import { WorkflowsPage } from '@/pages/WorkflowsPage'
+import { ChatbotListPage } from '@/pages/ChatbotListPage'
+import { ChatbotPage } from '@/pages/ChatbotPage'
 import HomePage from '@/pages/HomePage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DependenciesPage } from '@/pages/DependenciesPage'
@@ -127,7 +129,27 @@ function AppRoutes() {
         element={
           <ProtectedRoute>
             <DashboardLayout>
-              <WorkflowsPage workflowType="chatbot" />
+              <ChatbotListPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chatbots"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ChatbotListPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/chatbots/:id"
+        element={
+          <ProtectedRoute>
+            <DashboardLayout>
+              <ChatbotPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -38,6 +38,11 @@ export class ClientApi {
     return response.data
   }
 
+  // Alias for consistency with other APIs
+  static async getAll(): Promise<Client[]> {
+    return this.getClients()
+  }
+
   static async getClient(clientId: string): Promise<Client> {
     const response = await api.get<Client>(`/clients/${clientId}`)
     return response.data

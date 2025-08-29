@@ -57,7 +57,7 @@ interface DashboardLayoutProps {
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
-  const [hoveredItem, setHoveredItem] = useState<string | null>(null)
+  const [clickedItem, setClickedItem] = useState<string | null>(null)
   const { user, logout, isAdmin, isClient } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
@@ -95,33 +95,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const workflowSubOptions = [
     {
       name: 'Chatbot Workflows',
-      href: '/workflows/chatbot',
+      href: '/chatbots',
       icon: MessageCircle,
       description: 'AI-powered chatbot interfaces'
-    },
-    {
-      name: 'Email Automation',
-      href: '/workflows/email',
-      icon: Mail,
-      description: 'Automated email sequences'
-    },
-    {
-      name: 'Calendar Integration',
-      href: '/workflows/calendar',
-      icon: Calendar,
-      description: 'Schedule and booking workflows'
-    },
-    {
-      name: 'Document Processing',
-      href: '/workflows/documents',
-      icon: FileText,
-      description: 'Automated document workflows'
-    },
-    {
-      name: 'Custom Workflows',
-      href: '/workflows/custom',
-      icon: Bot,
-      description: 'Build your own workflows'
     }
   ]
 
@@ -217,13 +193,17 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               key={item.name}
               className="relative"
             >
-              <div
-                onMouseEnter={() => item.hasSubMenu && !sidebarCollapsed && setHoveredItem(item.name)}
-                onMouseLeave={() => item.hasSubMenu && setHoveredItem(null)}
-              >
+              <div>
                 <Link
-                  to={item.href}
-                  onClick={() => setSidebarOpen(false)}
+                  to={item.hasSubMenu ? '#' : item.href}
+                  onClick={(e) => {
+                    if (item.hasSubMenu) {
+                      e.preventDefault()
+                      setClickedItem(clickedItem === item.name ? null : item.name)
+                    } else {
+                      setSidebarOpen(false)
+                    }
+                  }}
                   title={sidebarCollapsed ? item.name : undefined}
                 >
                   <motion.div
@@ -258,7 +238,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                           {item.name}
                           {item.hasSubMenu && (
                             <ChevronDown className={`w-3 h-3 ml-2 text-muted-foreground transition-transform ${
-                              hoveredItem === item.name ? 'rotate-180' : ''
+                              clickedItem === item.name ? 'rotate-180' : ''
                             }`} />
                           )}
                         </div>
@@ -286,7 +266,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                 </Link>
                 
                 {/* Submenu - Simple show/hide without complex animations */}
-                {item.hasSubMenu && hoveredItem === item.name && !sidebarCollapsed && (
+                {item.hasSubMenu && clickedItem === item.name && !sidebarCollapsed && (
                   <div className="mt-2 ml-4 bg-background/95 backdrop-blur-md border border-border/50 rounded-lg shadow-lg">
                     <div className="p-2">
                       <div className="space-y-1">
@@ -296,7 +276,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                             to={subOption.href}
                             onClick={() => {
                               setSidebarOpen(false)
-                              setHoveredItem(null)
+                              setClickedItem(null)
                             }}
                           >
                             <div className="flex items-center space-x-3 px-3 py-2 rounded-lg text-sm hover:bg-accent/50 transition-colors cursor-pointer group">

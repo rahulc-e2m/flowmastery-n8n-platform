@@ -30,12 +30,13 @@ export default defineConfig({
       '.ngrok-free.app',
       '38289e599661.ngrok-free.app',
       '1d03f1f3201b.ngrok-free.app',
-      'f873af8a7e31.ngrok-free.app'
+      '7ef78ab4e2e3.ngrok-free.app'
     ],
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
-        changeOrigin: true
+        target: process.env.VITE_API_URL || 'https://1d03f1f3201b.ngrok-free.app',
+        changeOrigin: true,
+        secure: true
       }
     }
   },
