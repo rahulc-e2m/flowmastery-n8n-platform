@@ -83,6 +83,14 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
     
+    # Add middleware to handle ngrok headers
+    @app.middleware("http")
+    async def add_ngrok_headers(request, call_next):
+        response = await call_next(request)
+        # Add ngrok bypass header to response (for CORS)
+        response.headers["ngrok-skip-browser-warning"] = "true"
+        return response
+    
     # Setup trusted hosts
     app.add_middleware(
         TrustedHostMiddleware,

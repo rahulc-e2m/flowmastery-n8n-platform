@@ -48,18 +48,8 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
       mode: 'onChange' // Enable real-time validation
     })
 
-    // Watch form values for debugging
+    // Watch form values for validation
     const watchedValues = watch()
-    
-    // Debug form state
-    useEffect(() => {
-      console.log('Form state:', { 
-        errors, 
-        isValid, 
-        watchedValues, 
-        isSubmitting 
-      })
-    }, [errors, isValid, watchedValues, isSubmitting])
 
     useEffect(() => {
       const fetchInvitation = async () => {
@@ -92,15 +82,14 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
     }, [token, navigate, embedded])
 
     const onSubmit = async (data: AcceptInvitationFormData) => {
-      console.log('Form submitted with data:', data)
       if (!token) {
-        console.log('No token available')
+        toast.error('Invalid invitation token')
         return
       }
 
       try {
         setIsSubmitting(true)
-        console.log('Submitting invitation acceptance...')
+        
         const response = await AuthApi.acceptInvitation({
           token,
           password: data.password,
@@ -118,7 +107,6 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
           navigate('/dashboard')
         }
       } catch (error: any) {
-        console.error('Invitation acceptance error:', error)
         const message = error.response?.data?.detail || 'Failed to create account'
         toast.error(message)
       } finally {
