@@ -7,7 +7,7 @@ settings = get_settings()
 
 # Create sync engine for database operations
 sync_engine = create_engine(
-    settings.DATABASE_URL.replace("+asyncpg", ""),
+    settings.get_database_url().replace("+asyncpg", ""),
     pool_pre_ping=True,
     pool_recycle=300,
 )

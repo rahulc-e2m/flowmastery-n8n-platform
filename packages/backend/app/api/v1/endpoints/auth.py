@@ -2,15 +2,18 @@
 
 from datetime import timedelta
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from app.database import get_db
 from app.models.user import User
 from app.models.invitation import Invitation
 from app.core.dependencies import get_current_user, get_current_admin_user
 from app.core.auth import create_access_token
+from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.services.auth_service import AuthService
 from app.schemas.auth import (
     UserLogin, 
@@ -25,9 +28,14 @@ from app.config import settings
 
 router = APIRouter()
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_user_identifier)
+
 
 @router.post("/login", response_model=Token)
+@limiter.limit(RATE_LIMITS["auth_login"])
 async def login(
+    request: Request,
     user_credentials: UserLogin,
     db: AsyncSession = Depends(get_db)
 ):
@@ -83,7 +91,9 @@ async def update_user_profile(
 
 
 @router.post("/invitations", response_model=InvitationResponse)
+@limiter.limit(RATE_LIMITS["invitation_create"])
 async def create_invitation(
+    request: Request,
     invitation_data: InvitationCreate,
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)

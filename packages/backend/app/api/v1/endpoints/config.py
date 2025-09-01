@@ -80,8 +80,8 @@ async def get_app_config_status() -> Dict[str, Any]:
         "app_version": settings.APP_VERSION,
         "debug": settings.DEBUG,
         "environment": {
-            "host": settings.HOST,
-            "port": settings.PORT,
+            "host": settings.BACKEND_HOST,
+            "port": settings.BACKEND_PORT,
             "cors_origins": settings.CORS_ORIGINS
         },
         "services": {

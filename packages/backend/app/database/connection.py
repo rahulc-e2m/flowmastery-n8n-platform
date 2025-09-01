@@ -9,9 +9,9 @@ from app.config import settings
 
 # Create async engine
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    settings.get_database_url(),
     echo=settings.DB_ECHO,
-    poolclass=NullPool if "sqlite" in settings.DATABASE_URL else None,
+    poolclass=NullPool if "sqlite" in settings.get_database_url() else None,
     future=True
 )
 

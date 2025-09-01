@@ -2,17 +2,23 @@
 
 import uuid
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from typing import Dict, Any
+from slowapi import Limiter
 
 from app.schemas.chat import ChatMessage, ChatResponse
 from app.config import settings
+from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 
 router = APIRouter()
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_user_identifier)
+
 
 @router.post("/", response_model=ChatResponse)
-async def chat_endpoint(chat_message: ChatMessage) -> ChatResponse:
+@limiter.limit(RATE_LIMITS["chat"])
+async def chat_endpoint(request: Request, chat_message: ChatMessage) -> ChatResponse:
     """Main chat endpoint with integrated chatbot service"""
     
     try:

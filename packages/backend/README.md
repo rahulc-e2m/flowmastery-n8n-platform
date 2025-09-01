@@ -84,8 +84,8 @@ The API will be available at `http://localhost:8000` with interactive docs at `h
 Key environment variables in `.env`:
 
 ```bash
-# Database
-DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/flowmastery
+# Database - Use environment variables for credentials
+DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@localhost:5432/${POSTGRES_DB}
 
 # Security
 SECRET_KEY=your-secret-key-change-in-production

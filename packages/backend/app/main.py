@@ -1,9 +1,12 @@
 """FastAPI application entry point"""
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from contextlib import asynccontextmanager
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 from app.config import settings
 from app.api.v1.router import api_router
@@ -12,11 +15,26 @@ from app.core.exceptions import setup_exception_handlers
 from app.utils.logging import setup_logging
 
 
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
     setup_logging()
+    
+    # Log security configuration
+    allowed_hosts = settings.get_allowed_hosts_list()
+    cors_methods = settings.get_cors_methods_list()
+    cors_headers = settings.get_cors_headers_list()
+    
+    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"📡 Debug mode: {settings.DEBUG}")
+    print(f"🛡️  Allowed hosts: {', '.join(allowed_hosts)}")
+    print(f"🌐 CORS methods: {', '.join(cors_methods)}")
+    print(f"📋 CORS headers: {len(cors_headers)} headers configured")
     
     # Initialize database
     from app.database import engine
@@ -74,13 +92,17 @@ def create_app() -> FastAPI:
         lifespan=lifespan
     )
     
+    # Add rate limiter state and exception handler
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+    
     # Setup CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.get_cors_origins_list(),
         allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
+        allow_methods=settings.get_cors_methods_list(),
+        allow_headers=settings.get_cors_headers_list(),
     )
     
     # Add middleware to handle ngrok headers
@@ -92,9 +114,10 @@ def create_app() -> FastAPI:
         return response
     
     # Setup trusted hosts
+    allowed_hosts = settings.get_allowed_hosts_list()
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*"]  # Configure properly in production
+        allowed_hosts=allowed_hosts
     )
     
     # Setup custom middleware
@@ -134,15 +157,10 @@ app = create_app()
 if __name__ == "__main__":
     import uvicorn
     
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
-    print(f"📡 Debug mode: {settings.DEBUG}")
-    print(f"🔗 n8n Integration: {'✅' if settings.N8N_API_URL else '❌'}")
-    print(f"🤖 AI Services: {'✅' if settings.GEMINI_API_KEY else '❌'}")
-    
     uvicorn.run(
         "app.main:app",
-        host=settings.HOST,
-        port=settings.PORT,
+        host=settings.BACKEND_HOST,
+        port=settings.BACKEND_PORT,
         reload=settings.DEBUG,
         log_level=settings.LOG_LEVEL.lower()
     )

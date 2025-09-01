@@ -107,13 +107,13 @@ class ClientService:
             await db.commit()
             await db.refresh(client)
             
-            # Immediately fetch n8n data in the background
+            # Queue background sync task
             try:
                 sync_result = await ClientService._immediate_sync_n8n_data(db, client)
-                logger.info(f"Immediate sync completed for client {client_id}: {sync_result}")
+                logger.info(f"Sync task queued for client {client_id}: {sync_result}")
             except Exception as e:
-                logger.warning(f"Immediate sync failed for client {client_id}, will retry via Celery: {e}")
-                # Don't fail the configuration, data will be synced later by Celery
+                logger.warning(f"Failed to queue sync task for client {client_id}: {e}")
+                # Don't fail the configuration, data can be synced manually later
             
             return client
             
@@ -228,38 +228,27 @@ class ClientService:
         client: Client
     ) -> Dict[str, Any]:
         """Immediately sync n8n data for a client after configuration"""
-        from app.services.persistent_metrics import PersistentMetricsCollector
-        
         try:
-            # Create a new collector instance to avoid shared state issues
-            collector = PersistentMetricsCollector()
+            # Instead of doing immediate sync which can cause greenlet issues,
+            # we'll trigger a Celery task for background processing
+            from app.tasks.metrics_tasks import sync_client_metrics
             
-            # Sync workflows first
-            api_key = encryption_manager.decrypt(client.n8n_api_key_encrypted)
-            
-            # Force a fresh session by refreshing the client object
-            await db.refresh(client)
-            
-            workflows_result = await collector._sync_workflows(db, client, api_key)
-            
-            # Sync recent executions (last 500)
-            executions_result = await collector._sync_executions(db, client, api_key, limit=500)
+            # Trigger async sync via Celery
+            task = sync_client_metrics.delay(client.id)
             
             result = {
                 "status": "success",
-                "workflows_synced": workflows_result,
-                "executions_synced": executions_result,
+                "message": "Sync task queued successfully",
+                "task_id": task.id,
                 "client_id": client.id,
                 "client_name": client.name
             }
             
-            logger.info(f"Immediate sync successful for client {client.id}: {result}")
+            logger.info(f"Sync task queued for client {client.id}: {task.id}")
             return result
             
         except Exception as e:
-            logger.error(f"Immediate sync failed for client {client.id}: {e}")
-            # Rollback the transaction to ensure clean state
-            await db.rollback()
+            logger.error(f"Failed to queue sync task for client {client.id}: {e}")
             return {
                 "status": "error",
                 "error": str(e),
