@@ -14,6 +14,7 @@ from ....schemas.chatbot import (
 )
 from ....services.chatbot_service import ChatbotService
 from ..dependencies import get_current_user, require_admin
+from ....core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -53,6 +54,8 @@ async def get_chatbot(
 
 
 @router.post("/", response_model=ChatbotResponse, status_code=status.HTTP_201_CREATED)
+@validate_input(max_string_length=2000, allow_html_fields=["description"])
+@sanitize_response()
 async def create_chatbot(
     chatbot_data: ChatbotCreate,
     db: AsyncSession = Depends(get_db),
@@ -69,6 +72,8 @@ async def create_chatbot(
 
 
 @router.patch("/{chatbot_id}", response_model=ChatbotResponse)
+@validate_input(max_string_length=2000, allow_html_fields=["description"])
+@sanitize_response()
 async def update_chatbot(
     chatbot_id: str,
     chatbot_data: ChatbotUpdate,

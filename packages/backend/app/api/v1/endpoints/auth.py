@@ -27,6 +27,7 @@ from app.schemas.auth import (
     UserProfileUpdate
 )
 from app.config import settings
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -36,6 +37,8 @@ limiter = Limiter(key_func=get_user_identifier)
 
 @router.post("/login", response_model=Token)
 @limiter.limit(RATE_LIMITS["auth_login"])
+@validate_input(validate_emails=True, max_string_length=255)
+@sanitize_response()
 async def login(
     request: Request,
     response: Response,
@@ -99,6 +102,7 @@ async def login(
 
 @router.post("/refresh", response_model=TokenRefreshResponse)
 @limiter.limit(RATE_LIMITS["auth_refresh"])
+@sanitize_response()
 async def refresh_token(
     request: Request,
     response: Response,
@@ -215,6 +219,8 @@ async def get_auth_status(
 
 
 @router.put("/profile", response_model=UserResponse)
+@validate_input(max_string_length=255)
+@sanitize_response()
 async def update_user_profile(
     profile_data: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -235,6 +241,8 @@ async def update_user_profile(
 
 @router.post("/invitations", response_model=InvitationResponse)
 @limiter.limit(RATE_LIMITS["invitation_create"])
+@validate_input(validate_emails=True, max_string_length=500)
+@sanitize_response()
 async def create_invitation(
     request: Request,
     invitation_data: InvitationCreate,
@@ -337,6 +345,8 @@ async def get_invitation_details(
 
 
 @router.post("/invitations/accept", response_model=Token)
+@validate_input(validate_emails=True, max_string_length=500)
+@sanitize_response()
 async def accept_invitation(
     accept_data: InvitationAccept,
     response: Response,

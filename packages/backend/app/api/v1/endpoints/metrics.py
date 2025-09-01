@@ -24,6 +24,7 @@ from app.schemas.metrics import (
     AdminMetricsResponse,
     HistoricalMetrics
 )
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -182,6 +183,7 @@ async def get_my_historical_metrics(
 
 
 @router.post("/admin/quick-sync")
+@sanitize_response()
 async def quick_sync_all_metrics(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -263,6 +265,8 @@ async def quick_sync_all_metrics(
 
 # Admin endpoints for metrics management
 @router.post("/admin/sync/{client_id}")
+@validate_input(max_string_length=100)
+@sanitize_response()
 async def force_sync_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -288,6 +292,7 @@ async def force_sync_client(
 
 
 @router.post("/admin/sync-all")
+@sanitize_response()
 async def force_sync_all_clients(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -530,6 +535,7 @@ async def get_my_execution_stats(
 
 
 @router.post("/admin/refresh-cache")
+@sanitize_response()
 async def refresh_metrics_cache(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -659,6 +665,8 @@ async def get_data_freshness(
 
 
 @router.post("/admin/trigger-aggregation")
+@validate_input(max_string_length=50)
+@sanitize_response()
 async def trigger_daily_aggregation(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
@@ -693,6 +701,7 @@ async def trigger_daily_aggregation(
 
 
 @router.post("/admin/trigger-historical-aggregation")
+@sanitize_response()
 async def trigger_historical_aggregation(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),

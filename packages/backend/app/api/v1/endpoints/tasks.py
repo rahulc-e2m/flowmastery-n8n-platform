@@ -6,6 +6,7 @@ from datetime import date
 
 from app.models.user import User
 from app.core.dependencies import get_current_admin_user, get_current_user
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -59,6 +60,8 @@ async def get_worker_stats(
 
 # Metrics Collection Tasks
 @router.post("/sync-client/{client_id}")
+@validate_input(max_string_length=100)
+@sanitize_response()
 async def trigger_client_sync(
     client_id: str,
     current_user: User = Depends(get_current_user)
@@ -88,6 +91,7 @@ async def trigger_client_sync(
 
 
 @router.post("/sync-all")
+@sanitize_response()
 async def trigger_all_clients_sync(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
@@ -109,6 +113,7 @@ async def trigger_all_clients_sync(
 
 
 @router.post("/aggregation/daily")
+@sanitize_response()
 async def trigger_daily_aggregation(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
@@ -130,6 +135,7 @@ async def trigger_daily_aggregation(
 
 
 @router.post("/health-check")
+@sanitize_response()
 async def trigger_health_check(
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:

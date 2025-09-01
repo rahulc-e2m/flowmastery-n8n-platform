@@ -12,6 +12,7 @@ from app.schemas.dependency import (
     DependencyResponse, 
     DependencyListResponse
 )
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter(prefix="/dependencies", tags=["dependencies"])
 
@@ -67,6 +68,8 @@ async def get_dependency(
 
 
 @router.post("/", response_model=DependencyResponse)
+@validate_input(max_string_length=1000, validate_urls=True)
+@sanitize_response()
 async def create_dependency(
     dependency_data: DependencyCreate,
     current_user: User = Depends(require_admin),
@@ -80,6 +83,8 @@ async def create_dependency(
 
 
 @router.put("/{dependency_id}", response_model=DependencyResponse)
+@validate_input(max_string_length=1000, validate_urls=True)
+@sanitize_response()
 async def update_dependency(
     dependency_id: UUID,
     dependency_data: DependencyUpdate,

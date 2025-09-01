@@ -16,11 +16,14 @@ from app.schemas.client import (
     N8nConnectionTestResponse,
     ClientSyncResponse
 )
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
 
 @router.post("/", response_model=ClientResponse)
+@validate_input(validate_emails=True, validate_urls=True, max_string_length=500)
+@sanitize_response()
 async def create_client(
     client_data: ClientCreate,
     db: AsyncSession = Depends(get_db),
@@ -80,6 +83,8 @@ async def get_client(
 
 
 @router.put("/{client_id}", response_model=ClientResponse)
+@validate_input(validate_emails=True, validate_urls=True, max_string_length=500)
+@sanitize_response()
 async def update_client(
     client_id: str,
     client_data: ClientUpdate,
@@ -102,6 +107,8 @@ async def update_client(
 
 
 @router.post("/{client_id}/n8n-config", response_model=ClientSyncResponse)
+@validate_input(validate_urls=True, max_string_length=1000)
+@sanitize_response()
 async def configure_n8n_api(
     client_id: str,
     n8n_config: ClientN8nConfig,
@@ -145,6 +152,8 @@ async def delete_client(
 
 
 @router.post("/test-n8n-connection", response_model=N8nConnectionTestResponse)
+@validate_input(validate_urls=True, max_string_length=1000)
+@sanitize_response()
 async def test_n8n_connection(
     n8n_config: ClientN8nConfig,
     admin_user: User = Depends(get_current_admin_user)

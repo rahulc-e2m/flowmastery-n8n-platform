@@ -13,6 +13,7 @@ from app.core.dependencies import (
     get_current_user,
 )
 from app.models import Workflow, WorkflowExecution, ExecutionStatus, Client
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -133,6 +134,8 @@ async def list_my_workflows(
 
 
 @router.patch("/{workflow_db_id}")
+@validate_input(max_string_length=100)
+@sanitize_response()
 async def update_workflow_time_saved(
     workflow_db_id: int,
     payload: dict,

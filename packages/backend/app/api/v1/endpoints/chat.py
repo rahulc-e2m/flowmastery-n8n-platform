@@ -9,6 +9,7 @@ from slowapi import Limiter
 from app.schemas.chat import ChatMessage, ChatResponse
 from app.config import settings
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 
@@ -18,6 +19,8 @@ limiter = Limiter(key_func=get_user_identifier)
 
 @router.post("/", response_model=ChatResponse)
 @limiter.limit(RATE_LIMITS["chat"])
+@validate_input(max_string_length=5000, sanitize_strings=True)
+@sanitize_response()
 async def chat_endpoint(request: Request, chat_message: ChatMessage) -> ChatResponse:
     """Main chat endpoint with integrated chatbot service"""
     
