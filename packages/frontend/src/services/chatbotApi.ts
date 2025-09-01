@@ -22,13 +22,11 @@ api.interceptors.request.use((config) => {
   return Promise.reject(error)
 })
 
-// Add auth token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
+// Configure axios for cookie-based auth
+api.defaults.withCredentials = true
 
+// Add headers to requests
+api.interceptors.request.use((config) => {
   // Add ngrok bypass header to skip browser warning
   config.headers['ngrok-skip-browser-warning'] = 'true'
 
@@ -45,8 +43,6 @@ api.interceptors.response.use(
     console.error('ChatbotApi Error:', error.response?.status, error.config?.url, error.response?.headers)
     
     if (error.response?.status === 401) {
-      localStorage.removeItem('auth_token')
-      localStorage.removeItem('user')
       window.location.href = '/login'
       return Promise.reject(error)
     }

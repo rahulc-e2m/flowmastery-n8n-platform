@@ -64,7 +64,11 @@ async def flowmastery_exception_handler(request: Request, exc: FlowMasteryExcept
 
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions"""
-    logger.warning(f"HTTP exception: {exc.detail}")
+    # Don't log auth-related 401s as warnings to reduce noise
+    if exc.status_code == 401 and "access token" in exc.detail.lower():
+        logger.debug(f"Authentication required: {exc.detail}")
+    else:
+        logger.warning(f"HTTP exception: {exc.detail}")
     
     return JSONResponse(
         status_code=exc.status_code,

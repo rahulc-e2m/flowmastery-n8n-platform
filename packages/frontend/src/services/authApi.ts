@@ -22,15 +22,11 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Include cookies in requests
 })
 
-// Add auth token to requests
+// Add headers to requests
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  
   // Add ngrok bypass header to skip browser warning
   config.headers['ngrok-skip-browser-warning'] = 'true'
   
@@ -67,8 +63,7 @@ api.interceptors.response.use(
         // If we're already refreshing, queue this request
         return new Promise((resolve, reject) => {
           failedQueue.push({ resolve, reject })
-        }).then(token => {
-          originalRequest.headers.Authorization = `Bearer ${token}`
+        }).then(() => {
           return api(originalRequest)
         }).catch(err => {
           return Promise.reject(err)
@@ -78,47 +73,24 @@ api.interceptors.response.use(
       originalRequest._retry = true
       isRefreshing = true
 
-      const refreshToken = localStorage.getItem('refresh_token')
-      
-      if (refreshToken) {
-        try {
-          // Try to refresh the token
-          const response = await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {
-            refresh_token: refreshToken
-          })
+      try {
+        // Try to refresh the token using cookies
+        await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {}, {
+          withCredentials: true
+        })
 
-          const { access_token, refresh_token: newRefreshToken } = response.data
-          
-          // Update stored tokens
-          localStorage.setItem('auth_token', access_token)
-          localStorage.setItem('refresh_token', newRefreshToken)
-          
-          // Update the authorization header
-          api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`
-          originalRequest.headers.Authorization = `Bearer ${access_token}`
-          
-          processQueue(null, access_token)
-          
-          // Retry the original request
-          return api(originalRequest)
-        } catch (refreshError) {
-          // Refresh failed, log out user
-          processQueue(refreshError, null)
-          localStorage.removeItem('auth_token')
-          localStorage.removeItem('refresh_token')
-          localStorage.removeItem('user')
-          window.location.href = '/login'
-          return Promise.reject(refreshError)
-        } finally {
-          isRefreshing = false
-        }
-      } else {
-        // No refresh token, log out user
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('refresh_token')
-        localStorage.removeItem('user')
+        // Token refreshed successfully (stored in httpOnly cookie)
+        processQueue(null)
+        
+        // Retry the original request
+        return api(originalRequest)
+      } catch (refreshError) {
+        // Refresh failed, log out user
+        processQueue(refreshError, null)
         window.location.href = '/login'
-        return Promise.reject(error)
+        return Promise.reject(refreshError)
+      } finally {
+        isRefreshing = false
       }
     }
     
@@ -187,8 +159,13 @@ export class AuthApi {
     return response.data
   }
 
-  static async refreshToken(refreshToken: string): Promise<TokenRefreshResponse> {
-    const response = await api.post<TokenRefreshResponse>('/auth/refresh', { refresh_token: refreshToken })
+  static async refreshToken(): Promise<TokenRefreshResponse> {
+    const response = await api.post<TokenRefreshResponse>('/auth/refresh', {})
+    return response.data
+  }
+
+  static async logout(): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/auth/logout', {})
     return response.data
   }
 }

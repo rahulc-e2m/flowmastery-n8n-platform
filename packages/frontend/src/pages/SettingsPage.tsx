@@ -59,8 +59,6 @@ export function SettingsPage() {
       // Update the auth context by refreshing the current user
       try {
         const currentUser = await AuthApi.getCurrentUser()
-        // Update localStorage with new user data
-        localStorage.setItem('user', JSON.stringify(currentUser))
         
         // Force a re-login to update the context
         // This is a simple way to refresh the user context

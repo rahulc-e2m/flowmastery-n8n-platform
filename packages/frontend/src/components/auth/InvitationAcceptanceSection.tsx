@@ -104,11 +104,7 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
           password: data.password,
         })
 
-        // Auto-login the user
-        localStorage.setItem('auth_token', response.access_token)
-        localStorage.setItem('refresh_token', response.refresh_token)
-        localStorage.setItem('user', JSON.stringify(response.user))
-        
+        // User is now auto-logged in via httpOnly cookies
         toast.success('Account created successfully! Welcome to FlowMastery.')
         
         if (onSuccess) {

@@ -66,27 +66,20 @@ class ApiService {
   ): Promise<T> {
     const url = `${API_BASE_URL}${endpoint}`
     
-    // Add auth token if available
-    const token = localStorage.getItem('auth_token')
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
       ...options.headers,
     }
     
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
-    }
-    
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include', // Include cookies in requests
     })
 
     if (!response.ok) {
       if (response.status === 401) {
         // Handle unauthorized - redirect to login
-        localStorage.removeItem('auth_token')
-        localStorage.removeItem('user')
         window.location.href = '/login'
       }
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)

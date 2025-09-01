@@ -56,7 +56,8 @@ const HomePage: React.FC = () => {
   const hasInvitation = Boolean(invitationToken)
   
   const { data: configStatus } = useConfigStatus()
-  const { data: metricsData, isLoading: metricsLoading } = useMetrics(true)
+  // Only fetch metrics if user has invitation token (suggesting they might be authenticated soon)
+  const { data: metricsData, isLoading: metricsLoading } = useMetrics(true, hasInvitation)
   const { refreshFast } = useRefreshMetrics()
 
   const workflows: WorkflowShowcase[] = [

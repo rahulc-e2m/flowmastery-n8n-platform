@@ -1,8 +1,8 @@
 """FastAPI dependencies for authentication and authorization"""
 
 from typing import Optional
-from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import Depends, HTTPException, status, Request
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
@@ -11,15 +11,23 @@ from app.models.user import User
 from app.models.client import Client
 from app.core.auth import verify_token
 
-security = HTTPBearer()
+
 
 
 async def get_current_user(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
+    request: Request,
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    """Get the current authenticated user"""
-    token = credentials.credentials
+    """Get the current authenticated user from httpOnly cookie"""
+    token = request.cookies.get("access_token")
+    
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No access token found in cookies",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
     payload = verify_token(token)
     
     user_id_str = payload.get("sub")
@@ -123,3 +131,35 @@ def verify_client_access(client_id: str):
         )
     
     return _verify_client_access
+
+
+
+
+
+async def get_optional_user(
+    request: Request,
+    db: AsyncSession = Depends(get_db)
+) -> Optional[User]:
+    """Get the current authenticated user from httpOnly cookie, return None if not authenticated"""
+    token = request.cookies.get("access_token")
+    
+    if not token:
+        return None
+    
+    try:
+        payload = verify_token(token)
+        
+        user_id_str = payload.get("sub")
+        if user_id_str is None:
+            return None
+        
+        # Get user from database
+        result = await db.execute(select(User).where(User.id == user_id_str))
+        user = result.scalar_one_or_none()
+        
+        if user is None or not user.is_active:
+            return None
+        
+        return user
+    except Exception:
+        return None

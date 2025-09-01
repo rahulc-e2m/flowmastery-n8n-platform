@@ -1,8 +1,8 @@
-"""Authentication endpoints"""
+"""Authentication endpoints with cookie support"""
 
 from datetime import timedelta
 from typing import List
-from fastapi import APIRouter, Depends, HTTPException, status, Request
+from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from slowapi import Limiter
@@ -11,7 +11,7 @@ from slowapi.util import get_remote_address
 from app.database import get_db
 from app.models.user import User
 from app.models.invitation import Invitation
-from app.core.dependencies import get_current_user, get_current_admin_user
+from app.core.dependencies import get_current_user, get_current_admin_user, get_optional_user
 from app.core.auth import create_access_token, create_refresh_token, verify_token
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.services.auth_service import AuthService
@@ -38,10 +38,11 @@ limiter = Limiter(key_func=get_user_identifier)
 @limiter.limit(RATE_LIMITS["auth_login"])
 async def login(
     request: Request,
+    response: Response,
     user_credentials: UserLogin,
     db: AsyncSession = Depends(get_db)
 ):
-    """Authenticate user and return JWT token"""
+    """Authenticate user and return JWT token via httpOnly cookies"""
     user = await AuthService.authenticate_user(
         db, user_credentials.email, user_credentials.password
     )
@@ -69,9 +70,28 @@ async def login(
         expires_delta=refresh_token_expires
     )
     
+    # Set httpOnly cookies for tokens
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax"
+    )
+    
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax"
+    )
+    
     return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token="",  # Don't return token in response body for security
+        refresh_token="", # Don't return token in response body for security
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         user=UserResponse.model_validate(user)
     )
@@ -81,13 +101,22 @@ async def login(
 @limiter.limit(RATE_LIMITS["auth_refresh"])
 async def refresh_token(
     request: Request,
-    refresh_data: RefreshTokenRequest,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
-    """Refresh access token using refresh token"""
+    """Refresh access token using refresh token from cookie"""
+    # Get refresh token from cookie
+    refresh_token_value = request.cookies.get("refresh_token")
+    
+    if not refresh_token_value:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No refresh token found",
+        )
+    
     try:
         # Verify refresh token
-        payload = verify_token(refresh_data.refresh_token, token_type="refresh")
+        payload = verify_token(refresh_token_value, token_type="refresh")
         user_id = payload.get("sub")
         
         if not user_id:
@@ -122,9 +151,28 @@ async def refresh_token(
             expires_delta=refresh_token_expires
         )
         
+        # Set new httpOnly cookies
+        response.set_cookie(
+            key="access_token",
+            value=new_access_token,
+            max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+            httponly=True,
+            secure=settings.ENVIRONMENT.lower() == "production",
+            samesite="lax"
+        )
+        
+        response.set_cookie(
+            key="refresh_token", 
+            value=new_refresh_token,
+            max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+            httponly=True,
+            secure=settings.ENVIRONMENT.lower() == "production",
+            samesite="lax"
+        )
+        
         return TokenRefreshResponse(
-            access_token=new_access_token,
-            refresh_token=new_refresh_token,
+            access_token="",  # Don't return token in response body
+            refresh_token="", # Don't return token in response body
             expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
         )
         
@@ -137,12 +185,33 @@ async def refresh_token(
         )
 
 
-@router.get("/me", response_model=UserResponse)
+@router.post("/logout")
+async def logout(response: Response):
+    """Logout user by clearing cookies"""
+    response.delete_cookie(key="access_token")
+    response.delete_cookie(key="refresh_token")
+    return {"message": "Logged out successfully"}
+
+
+@router.get("/me")
 async def get_current_user_info(
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_optional_user)
 ):
     """Get current user information"""
-    return UserResponse.model_validate(current_user)
+    if current_user:
+        return UserResponse.model_validate(current_user)
+    return None
+
+
+@router.get("/status")
+async def get_auth_status(
+    current_user: User = Depends(get_optional_user)
+):
+    """Check authentication status without throwing errors"""
+    return {
+        "authenticated": current_user is not None,
+        "user": UserResponse.model_validate(current_user) if current_user else None
+    }
 
 
 @router.put("/profile", response_model=UserResponse)
@@ -270,6 +339,7 @@ async def get_invitation_details(
 @router.post("/invitations/accept", response_model=Token)
 async def accept_invitation(
     accept_data: InvitationAccept,
+    response: Response,
     db: AsyncSession = Depends(get_db)
 ):
     """Accept an invitation and create user account"""
@@ -291,9 +361,28 @@ async def accept_invitation(
         expires_delta=refresh_token_expires
     )
     
+    # Set httpOnly cookies for tokens
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax"
+    )
+    
+    response.set_cookie(
+        key="refresh_token", 
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax"
+    )
+    
     return Token(
-        access_token=access_token,
-        refresh_token=refresh_token,
+        access_token="",  # Don't return token in response body
+        refresh_token="", # Don't return token in response body
         expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         user=UserResponse.model_validate(user)
     )
