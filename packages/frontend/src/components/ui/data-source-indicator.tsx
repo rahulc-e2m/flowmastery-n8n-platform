@@ -1,4 +1,4 @@
-import React from 'react'
+
 import { formatDistanceToNow } from 'date-fns'
 import { Clock, CheckCircle2, AlertTriangle, XCircle, Wifi } from 'lucide-react'
 import { motion } from 'framer-motion'

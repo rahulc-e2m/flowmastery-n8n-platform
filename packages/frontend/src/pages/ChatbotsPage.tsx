@@ -13,14 +13,12 @@ import {
   Search, 
   Settings, 
   Play, 
-  Pause, 
   MessageSquare,
   Users,
   Clock,
   TrendingUp,
   Copy,
-  ExternalLink,
-  Filter
+  ExternalLink
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

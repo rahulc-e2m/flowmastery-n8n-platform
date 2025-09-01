@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -36,7 +36,7 @@ type AcceptInvitationFormData = z.infer<typeof acceptInvitationSchema>
 export function AcceptInvitationForm() {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
-  const { login } = useAuth()
+  useAuth()
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [invitation, setInvitation] = useState<InvitationDetails | null>(null)
@@ -86,7 +86,7 @@ export function AcceptInvitationForm() {
 
     try {
       setIsSubmitting(true)
-      const response = await AuthApi.acceptInvitation({
+      await AuthApi.acceptInvitation({
         token,
         password: data.password,
       })

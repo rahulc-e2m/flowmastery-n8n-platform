@@ -27,7 +27,7 @@ interface ChatMessage {
   timestamp: Date
 }
 
-import { ChatbotApi, type Chatbot } from '@/services/chatbotApi'
+import { ChatbotApi } from '@/services/chatbotApi'
 
 export function ChatbotPage() {
   const { id } = useParams<{ id: string }>()

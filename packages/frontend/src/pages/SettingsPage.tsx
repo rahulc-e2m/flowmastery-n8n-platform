@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { 
   User, 
@@ -21,10 +21,10 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
-import { fadeInUp, staggerContainer, staggerItem } from '@/lib/animations'
+import { staggerContainer, staggerItem } from '@/lib/animations'
 
 export function SettingsPage() {
-  const { user, login } = useAuth()
+  const { user } = useAuth()
   const [isEditing, setIsEditing] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   
@@ -51,14 +51,14 @@ export function SettingsPage() {
       setIsLoading(true)
       
       // Call the API to update the user profile
-      const updatedUser = await AuthApi.updateProfile({
+      await AuthApi.updateProfile({
         first_name: formData.firstName.trim() || undefined,
         last_name: formData.lastName.trim() || undefined,
       })
       
       // Update the auth context by refreshing the current user
       try {
-        const currentUser = await AuthApi.getCurrentUser()
+        await AuthApi.getCurrentUser()
         
         // Force a re-login to update the context
         // This is a simple way to refresh the user context

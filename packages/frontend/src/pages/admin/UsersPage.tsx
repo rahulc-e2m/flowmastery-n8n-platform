@@ -1,15 +1,13 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { AuthApi } from '@/services/authApi'
 import { ClientApi } from '@/services/clientApi'
 import { 
   UserPlus, 
   Mail, 
-  Clock, 
   CheckCircle, 
   XCircle,
-  Copy,
-  RefreshCw
+  Copy
 } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -109,21 +107,6 @@ export function UsersPage() {
   const revokeInvitation = async (invitationId: string, email: string) => {
     if (window.confirm(`Are you sure you want to revoke the invitation for ${email}? This action cannot be undone.`)) {
       revokeInvitationMutation.mutate(invitationId)
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'pending':
-        return <Badge variant="secondary"><Clock className="w-3 h-3 mr-1" />Pending</Badge>
-      case 'accepted':
-        return <Badge variant="default"><CheckCircle className="w-3 h-3 mr-1" />Accepted</Badge>
-      case 'expired':
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Expired</Badge>
-      case 'revoked':
-        return <Badge variant="destructive"><XCircle className="w-3 h-3 mr-1" />Revoked</Badge>
-      default:
-        return <Badge variant="outline">{status}</Badge>
     }
   }
 

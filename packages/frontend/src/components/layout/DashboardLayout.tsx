@@ -4,33 +4,25 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useQuery } from '@tanstack/react-query'
 import {
   Activity,
-  BarChart3,
   BookOpen,
-  Bot,
   Building2,
   Calendar,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
-  FileText,
   Home,
   LogOut,
-  Mail,
   Menu,
   MessageCircle,
   Settings,
-  Shield,
   User,
-  UserPlus,
   Users,
-  Workflow,
-  X,
   Zap,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { MetricsApi } from '@/services/metricsApi'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,9 +37,7 @@ import {
   fadeInRight, 
   navItemHover, 
   buttonTap, 
-  slideUpModal,
-  staggerContainer,
-  staggerItem
+  slideUpModal
 } from '@/lib/animations'
 
 interface DashboardLayoutProps {
@@ -58,7 +48,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [clickedItem, setClickedItem] = useState<string | null>(null)
-  const { user, logout, isAdmin, isClient } = useAuth()
+  const { user, logout, isAdmin } = useAuth()
   const location = useLocation()
   const navigate = useNavigate()
 
@@ -80,12 +70,23 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   }
 
   // Fetch metrics data to get last_updated timestamp
-  const { data: metricsData } = useQuery({
-    queryKey: isAdmin ? ['admin-metrics'] : ['my-metrics'],
-    queryFn: isAdmin ? MetricsApi.getAllClientsMetrics : MetricsApi.getMyMetrics,
+  const { data: adminMetricsData } = useQuery({
+    queryKey: ['admin-metrics'],
+    queryFn: MetricsApi.getAllClientsMetrics,
     refetchInterval: 300000, // 5 minutes
     staleTime: 240000, // 4 minutes
+    enabled: isAdmin
   })
+
+  const { data: clientMetricsData } = useQuery({
+    queryKey: ['my-metrics'],
+    queryFn: MetricsApi.getMyMetrics,
+    refetchInterval: 300000, // 5 minutes
+    staleTime: 240000, // 4 minutes
+    enabled: !isAdmin
+  })
+
+  const metricsData = isAdmin ? adminMetricsData : clientMetricsData
 
   const handleLogout = () => {
     logout()
@@ -192,7 +193,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
       {/* Navigation */}
       <nav className="flex-1 px-4 py-6 space-y-2">
-        {navigation.filter(item => item.show).map((item, index) => {
+        {navigation.filter(item => item.show).map((item) => {
           const isItemActive = isActive(item.href)
           return (
             <div
@@ -276,7 +277,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="mt-2 ml-4 bg-background/95 backdrop-blur-md border border-border/50 rounded-lg shadow-lg">
                     <div className="p-2">
                       <div className="space-y-1">
-                        {item.subOptions?.map((subOption, subIndex) => (
+                        {item.subOptions?.map((subOption) => (
                           <Link
                             key={subOption.name}
                             to={subOption.href}

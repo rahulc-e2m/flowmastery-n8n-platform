@@ -1,4 +1,3 @@
-import React from 'react'
 import { Moon, Sun, Monitor } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Button } from '@/components/ui/button'

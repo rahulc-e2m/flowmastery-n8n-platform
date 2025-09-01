@@ -7,7 +7,6 @@ import type {
   Invitation,
   InvitationDetails,
   AcceptInvitationRequest,
-  RefreshTokenRequest,
   TokenRefreshResponse
 } from '@/types/auth'
 

@@ -6,8 +6,6 @@ import {
   ExternalLink, 
   Loader2, 
   AlertCircle, 
-  Edit, 
-  Trash2,
   Save,
   X
 } from 'lucide-react';

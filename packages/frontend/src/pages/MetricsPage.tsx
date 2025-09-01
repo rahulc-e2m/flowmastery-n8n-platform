@@ -1,14 +1,12 @@
-import React, { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
 import { useAuth } from '@/contexts/AuthContext'
-import { motion, AnimatePresence } from 'framer-motion'
+import { motion } from 'framer-motion'
 import {
   BarChart3,
   Activity,
   TrendingUp,
-  TrendingDown,
   Clock,
   CheckCircle,
   XCircle,
@@ -17,7 +15,7 @@ import {
   Timer,
   Eye
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 
@@ -25,7 +23,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { TrendIndicator } from '@/components/ui/trend-indicator'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line, Area, AreaChart } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Area, AreaChart } from 'recharts'
 import { formatDistanceToNow } from 'date-fns'
 import { 
   fadeInUp, 
@@ -110,7 +108,6 @@ export function MetricsPage() {
 
 function AdminMetricsView({
   adminMetrics,
-  clients,
   isLoading
 }: any) {
   if (isLoading) {
@@ -208,7 +205,7 @@ function AdminMetricsView({
             initial="initial"
             animate="animate"
           >
-            {overallStats.map((stat, index) => (
+            {overallStats.map((stat) => (
               <motion.div key={stat.title} variants={staggerItem}>
                 <AnimatedCard key={stat.title} className="overflow-hidden">
                   <CardContent className="p-6">
@@ -302,7 +299,7 @@ function AdminMetricsView({
                         paddingAngle={5}
                         dataKey="value"
                       >
-                        {pieData.map((entry, index) => (
+                        {pieData.map((entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={entry.color} />
                         ))}
                       </Pie>
@@ -451,14 +448,6 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
     last_execution: workflow.last_execution
   })) || []
 
-  const pieData = sortedWorkflows.slice(0, 6).map((workflow: any, index: number) => ({
-    name: workflow.workflow_name.length > 20 ? 
-      workflow.workflow_name.substring(0, 20) + '...' : 
-      workflow.workflow_name,
-    value: workflow.total_executions,
-    color: COLORS[index % COLORS.length],
-  })) || []
-
   return (
     <div className="p-6 space-y-8">
       {/* Header */}
@@ -483,7 +472,7 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
         initial="initial"
         animate="animate"
       >
-        {stats.map((stat, index) => (
+        {stats.map((stat) => (
           <motion.div key={stat.title} variants={staggerItem}>
             <AnimatedCard key={stat.title} className="overflow-hidden">
               <CardContent className="p-6">

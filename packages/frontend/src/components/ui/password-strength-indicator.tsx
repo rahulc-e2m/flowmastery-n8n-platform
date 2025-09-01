@@ -1,11 +1,9 @@
-import React from 'react'
 import { Check, X } from 'lucide-react'
 import { 
   validatePasswordStrength, 
   getPasswordStrengthLabel, 
   getPasswordStrengthColor,
-  getPasswordStrengthBarColor,
-  type PasswordStrength 
+  getPasswordStrengthBarColor
 } from '@/lib/password'
 
 interface PasswordStrengthIndicatorProps {

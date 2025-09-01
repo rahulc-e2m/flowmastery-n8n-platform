@@ -15,7 +15,7 @@ const api = axios.create({
 
 // Add request logging for debugging
 api.interceptors.request.use((config) => {
-  console.log('ChatbotApi Request:', config.method?.toUpperCase(), config.url || config.baseURL + config.url)
+  console.log('ChatbotApi Request:', config.method?.toUpperCase(), config.url || (config.baseURL || '') + (config.url || ''))
   return config
 }, (error) => {
   console.error('ChatbotApi Request Error:', error)

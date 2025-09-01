@@ -1,11 +1,10 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { motion } from 'framer-motion'
 import {
   Plus,
   MessageCircle,
-  Settings,
   Trash2,
   ExternalLink,
   Building2,
@@ -15,7 +14,7 @@ import {
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -198,7 +197,7 @@ export function ChatbotListPage() {
             setShowCreateDialog(true)
             // Pre-fill client_id for non-admin users
             if (!isAdmin && user?.client_id) {
-              setFormData(prev => ({ ...prev, client_id: user.client_id }))
+              setFormData(prev => ({ ...prev, client_id: user.client_id! }))
             }
           }}
           className="flex items-center space-x-2"

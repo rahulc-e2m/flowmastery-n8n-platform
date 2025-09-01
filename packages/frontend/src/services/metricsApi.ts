@@ -4,7 +4,6 @@ import type {
   ClientWorkflowMetrics,
   AdminMetricsResponse,
   HistoricalMetrics,
-  AggregationPeriod,
   MetricsFilters
 } from '@/types/metrics'
 

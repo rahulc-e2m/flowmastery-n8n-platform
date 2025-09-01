@@ -246,9 +246,9 @@ export const spring = {
 export const createDelayedAnimation = (delay: number, variants: Variants) => ({
   ...variants,
   animate: {
-    ...variants.animate,
+    ...(typeof variants.animate === 'object' ? variants.animate : {}),
     transition: {
-      ...variants.animate?.transition,
+      ...(typeof variants.animate === 'object' && variants.animate?.transition ? variants.animate.transition : {}),
       delay
     }
   }

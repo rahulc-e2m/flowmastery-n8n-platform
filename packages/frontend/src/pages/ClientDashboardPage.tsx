@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useParams, useNavigate } from 'react-router-dom'
 import { MetricsApi } from '@/services/metricsApi'
@@ -9,18 +9,15 @@ import {
   ArrowLeft,
   Activity,
   CheckCircle,
-  XCircle,
   Clock,
   TrendingUp,
-  TrendingDown,
   Zap,
   Timer,
-  Calendar,
   RefreshCw,
   Building2,
   BarChart3
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -31,7 +28,7 @@ import { AnimatedCard } from '@/components/ui/animated-card'
 import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { TrendIndicator } from '@/components/ui/trend-indicator'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
-import { formatDistanceToNow } from 'date-fns'
+
 import { 
   fadeInUp, 
   staggerContainer, 
@@ -249,7 +246,7 @@ export function ClientDashboardPage() {
         initial="initial"
         animate="animate"
       >
-        {stats.map((stat, index) => (
+        {stats.map((stat) => (
           <motion.div key={stat.title} variants={staggerItem}>
             <MetricCard {...stat} />
           </motion.div>
@@ -443,7 +440,7 @@ function MetricCard({ title, value, icon: Icon, color, trend, description }: any
           )}
         </div>
         <motion.div 
-          className={`p-3 rounded-xl shadow-sm ${colorClasses[color] || colorClasses.blue}`}
+          className={`p-3 rounded-xl shadow-sm ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}
           initial={{ opacity: 0, scale: 0, rotate: -45 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
           transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}

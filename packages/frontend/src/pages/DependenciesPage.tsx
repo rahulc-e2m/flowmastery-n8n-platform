@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, BookOpen, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DependencyCard } from '@/components/ui/DependencyCard';
 import { dependencyApi, Dependency } from '@/services/dependencyApi';

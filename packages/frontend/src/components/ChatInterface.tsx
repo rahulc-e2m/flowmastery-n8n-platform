@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { 
   Send, 
@@ -15,9 +14,7 @@ import {
   Maximize2, 
   Minimize2,
   X,
-  Lightbulb,
-  Clock,
-  CheckCircle
+  Lightbulb
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 

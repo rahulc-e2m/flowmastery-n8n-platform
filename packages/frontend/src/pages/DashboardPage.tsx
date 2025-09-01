@@ -6,20 +6,15 @@ import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
 import { motion } from 'framer-motion'
 import { 
-  BarChart3, 
   Building2, 
-  Users, 
   Activity,
   TrendingUp,
   Clock,
   CheckCircle,
-  XCircle,
   Zap,
-  ArrowUpRight,
-  ArrowDownRight,
   RefreshCw
 } from 'lucide-react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -29,7 +24,7 @@ import { DataSourceIndicator } from '@/components/ui/data-source-indicator'
 import { TrendIndicator } from '@/components/ui/trend-indicator'
 import { ClientMetricsCard } from '@/components/dashboard/ClientMetricsCard'
 import { formatDistanceToNow } from 'date-fns'
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
+import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts'
 import { 
   fadeInUp, 
   staggerContainer, 
@@ -40,25 +35,14 @@ import {
 const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4']
 
 export function DashboardPage() {
-  const { user, isAdmin, isClient } = useAuth()
-  const navigate = useNavigate()
+  const { isAdmin, isClient } = useAuth()
 
   // Admin dashboard data
   const { data: adminMetrics, isLoading: adminLoading } = useQuery({
     queryKey: ['admin-metrics'],
     queryFn: MetricsApi.getAllClientsMetrics,
     enabled: isAdmin,
-    refetchInterval: (data) => {
-      // More frequent polling if data is stale
-      if (!data?.last_updated) return 15000 // 15 seconds if no timestamp
-      
-      const lastUpdate = new Date(data.last_updated)
-      const now = new Date()
-      const ageMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60)
-      
-      // If data is older than 10 minutes, poll more frequently
-      return ageMinutes > 10 ? 15000 : 30000
-    },
+    refetchInterval: 30000, // 30 seconds
     staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
   })
 
@@ -73,17 +57,7 @@ export function DashboardPage() {
     queryKey: ['my-metrics'],
     queryFn: MetricsApi.getMyMetrics,
     enabled: isClient,
-    refetchInterval: (data) => {
-      // More frequent polling if data is stale
-      if (!data?.last_updated) return 15000 // 15 seconds if no timestamp
-      
-      const lastUpdate = new Date(data.last_updated)
-      const now = new Date()
-      const ageMinutes = (now.getTime() - lastUpdate.getTime()) / (1000 * 60)
-      
-      // If data is older than 10 minutes, poll more frequently
-      return ageMinutes > 10 ? 15000 : 30000
-    },
+    refetchInterval: 30000, // 30 seconds
     staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
   })
 
@@ -114,7 +88,7 @@ export function DashboardPage() {
   return null
 }
 
-function AdminDashboard({ metrics, clients, isLoading }: any) {
+function AdminDashboard({ metrics, isLoading }: any) {
   const navigate = useNavigate()
   const [isRefreshing, setIsRefreshing] = React.useState(false)
 
@@ -223,7 +197,7 @@ function AdminDashboard({ metrics, clients, isLoading }: any) {
         initial="initial"
         animate="animate"
       >
-        {stats.map((stat, index) => (
+        {stats.map((stat) => (
           <motion.div key={stat.title} variants={staggerItem}>
             <MetricCard {...stat} />
           </motion.div>
@@ -307,7 +281,7 @@ function MetricCard({ title, value, icon: Icon, color, trend, description }: any
           )}
         </div>
         <motion.div 
-          className={`p-3 rounded-xl shadow-sm ${colorClasses[color] || colorClasses.blue}`}
+          className={`p-3 rounded-xl shadow-sm ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}
           initial={{ opacity: 0, scale: 0, rotate: -45 }}
           animate={{ opacity: 1, scale: 1, rotate: 0 }}
           transition={{ delay: 0.15, type: 'spring', stiffness: 200 }}
@@ -456,7 +430,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
         initial="initial"
         animate="animate"
       >
-        {stats.map((stat, index) => (
+        {stats.map((stat) => (
           <motion.div key={stat.title} variants={staggerItem}>
             <MetricCard {...stat} />
           </motion.div>
@@ -517,7 +491,7 @@ function ClientDashboard({ metrics, workflows, isLoading }: any) {
                     paddingAngle={5}
                     dataKey="value"
                   >
-                    {pieData.map((entry, index) => (
+                    {pieData.map((entry: any, index: number) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>

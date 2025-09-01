@@ -1,4 +1,4 @@
-import React, { useState, useEffect, forwardRef } from 'react'
+import { useState, useEffect, forwardRef } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
@@ -99,7 +99,7 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
       try {
         setIsSubmitting(true)
         
-        const response = await AuthApi.acceptInvitation({
+        await AuthApi.acceptInvitation({
           token,
           password: data.password,
         })

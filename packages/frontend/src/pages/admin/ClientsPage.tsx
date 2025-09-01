@@ -1,12 +1,11 @@
-import React, { useState } from 'react'
+import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ClientApi, type N8nConnectionTestResponse, type ClientSyncResponse } from '@/services/clientApi'
+import { ClientApi, type N8nConnectionTestResponse } from '@/services/clientApi'
 import { 
   Building2, 
   Plus, 
   Settings, 
   Trash2, 
-  Edit,
   CheckCircle,
   XCircle,
   ExternalLink,
@@ -20,13 +19,12 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
 import { formatDistanceToNow } from 'date-fns'
-import type { Client, ClientCreate, ClientN8nConfig } from '@/types/client'
+import type { Client, ClientN8nConfig } from '@/types/client'
 
 const createClientSchema = z.object({
   name: z.string().min(1, 'Client name is required'),
@@ -68,7 +66,7 @@ export function ClientsPage() {
   const configureN8nMutation = useMutation({
     mutationFn: ({ clientId, config }: { clientId: string; config: ClientN8nConfig }) =>
       ClientApi.configureN8nApi(clientId, config),
-    onSuccess: (data: ClientSyncResponse) => {
+    onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       setConfigDialogOpen(false)
       setSelectedClient(null)
@@ -96,7 +94,7 @@ export function ClientsPage() {
 
   const triggerSyncMutation = useMutation({
     mutationFn: ClientApi.triggerImmediateSync,
-    onSuccess: (data) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       toast.success('Immediate sync completed successfully!')
     },

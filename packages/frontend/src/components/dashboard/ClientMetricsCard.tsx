@@ -1,15 +1,12 @@
-import React from 'react'
+
 import { motion } from 'framer-motion'
 import { 
   Activity, 
   CheckCircle, 
-  XCircle, 
   Clock, 
-  Timer,
   TrendingUp, 
   TrendingDown,
-  ArrowUpRight,
-  ArrowDownRight
+  ArrowUpRight
 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'

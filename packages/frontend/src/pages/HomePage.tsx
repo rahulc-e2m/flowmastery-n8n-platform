@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Progress } from '@/components/ui/progress'
+
 import { Skeleton } from '@/components/ui/skeleton'
 import { 
   Bot, 
@@ -15,7 +15,7 @@ import {
   Settings,
   Play,
   Clock,
-  Eye,
+
   Users,
   CheckCircle,
   Activity,
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { formatNumber } from '@/lib/utils'
-import { useMetrics, useConfigStatus, useRefreshMetrics } from '@/hooks/useMetrics'
+import { useMetrics } from '@/hooks/useMetrics'
 
 
 interface WorkflowShowcase {
@@ -55,10 +55,10 @@ const HomePage: React.FC = () => {
   const invitationToken = searchParams.get('token')
   const hasInvitation = Boolean(invitationToken)
   
-  const { data: configStatus } = useConfigStatus()
+
   // Only fetch metrics if user has invitation token (suggesting they might be authenticated soon)
   const { data: metricsData, isLoading: metricsLoading } = useMetrics(true, hasInvitation)
-  const { refreshFast } = useRefreshMetrics()
+
 
   const workflows: WorkflowShowcase[] = [
     {
@@ -163,15 +163,15 @@ const HomePage: React.FC = () => {
     ? (metricsData ? [
         {
           label: "Active Workflows",
-          value: metricsData.workflows.active_workflows.toString(),
-          trend: Math.round((metricsData.workflows.active_workflows / Math.max(1, metricsData.workflows.total_workflows)) * 100),
+          value: metricsData.active_workflows.toString(),
+          trend: Math.round((metricsData.active_workflows / Math.max(1, metricsData.total_workflows)) * 100),
           icon: <Play className="h-4 w-4" />,
           isLoading: metricsLoading,
           gradient: "from-blue-500 to-cyan-500"
         },
         {
           label: "Total Executions",
-          value: formatNumber(metricsData.executions.total_executions),
+          value: formatNumber(metricsData.total_executions),
           trend: 23,
           icon: <Activity className="h-4 w-4" />,
           isLoading: metricsLoading,
@@ -179,7 +179,7 @@ const HomePage: React.FC = () => {
         },
         {
           label: "Time Saved",
-          value: `${metricsData.derived_metrics.time_saved_hours}h`,
+          value: `${metricsData.time_saved_hours || 0}h`,
           trend: 8,
           icon: <Clock className="h-4 w-4" />,
           isLoading: metricsLoading,
@@ -187,8 +187,8 @@ const HomePage: React.FC = () => {
         },
         {
           label: "Success Rate",
-          value: `${metricsData.executions.success_rate?.toFixed(1) || '0.0'}%`,
-          trend: metricsData.executions.success_rate > 90 ? 5 : -2,
+          value: `${metricsData.success_rate?.toFixed(1) || '0.0'}%`,
+          trend: metricsData.success_rate > 90 ? 5 : -2,
           icon: <CheckCircle className="h-4 w-4" />,
           isLoading: metricsLoading,
           gradient: "from-orange-500 to-red-500"
