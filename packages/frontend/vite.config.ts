@@ -34,7 +34,7 @@ export default defineConfig({
     ],
     proxy: {
       '/api': {
-        target: process.env.VITE_API_URL || 'https://1d03f1f3201b.ngrok-free.app',
+        target: process.env.VITE_API_URL || 'https://localhost:8000',
         changeOrigin: true,
         secure: true
       }

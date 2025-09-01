@@ -1,7 +1,7 @@
 // Legacy API service - kept for backward compatibility
 // New multi-tenant APIs are in separate files: authApi.ts, clientApi.ts, metricsApi.ts
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://1d03f1f3201b.ngrok-free.app'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // Debug: Log the actual environment variable value
 console.log('Environment VITE_API_URL:', import.meta.env.VITE_API_URL)

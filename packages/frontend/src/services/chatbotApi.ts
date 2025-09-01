@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://1d03f1f3201b.ngrok-free.app'
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // Debug: Log the API URL being used
 console.log('ChatbotApi using API_BASE_URL:', API_BASE_URL)
