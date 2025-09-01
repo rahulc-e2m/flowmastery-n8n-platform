@@ -21,9 +21,24 @@ async def create_admin_user():
         print("❌ Email is required")
         return
     
-    password = getpass("Enter admin password: ").strip()
-    if len(password) < 8:
-        print("❌ Password must be at least 8 characters")
+    password = getpass("Enter admin password (min 12 chars, uppercase, lowercase, digit, special char): ").strip()
+    if len(password) < 12:
+        print("❌ Password must be at least 12 characters")
+        return
+    
+    # Validate password strength
+    import re
+    if not re.search(r'[A-Z]', password):
+        print("❌ Password must contain at least one uppercase letter")
+        return
+    if not re.search(r'[a-z]', password):
+        print("❌ Password must contain at least one lowercase letter")
+        return
+    if not re.search(r'\d', password):
+        print("❌ Password must contain at least one digit")
+        return
+    if not re.search(r'[!@#$%^&*(),.?":{}|<>]', password):
+        print("❌ Password must contain at least one special character (!@#$%^&*(),.?\":{}|<>)")
         return
     
     confirm_password = getpass("Confirm password: ").strip()

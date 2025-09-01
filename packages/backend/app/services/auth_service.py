@@ -10,9 +10,10 @@ from app.models.user import User
 from app.models.client import Client
 from app.models.invitation import Invitation
 from app.core.auth import verify_password, get_password_hash, create_access_token
-from app.core.security import generate_invitation_token
+from app.core.security import generate_invitation_token, validate_invitation_token, is_invitation_token_expired
 from app.schemas.auth import UserCreate, UserLogin, InvitationCreate, InvitationAccept
 from app.services.email_service import send_invitation_email
+from app.config import settings
 
 
 class AuthService:
@@ -131,6 +132,15 @@ class AuthService:
         accept_data: InvitationAccept
     ) -> User:
         """Accept an invitation and create user account"""
+        # First validate the token timestamp
+        try:
+            token_payload = validate_invitation_token(accept_data.token, max_age_hours=settings.INVITATION_TOKEN_EXPIRE_HOURS)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid or expired invitation token: {str(e)}"
+            )
+        
         # Find invitation by token
         result = await db.execute(
             select(Invitation).where(Invitation.token == accept_data.token)
@@ -154,7 +164,8 @@ class AuthService:
                 detail="Invitation has already been used or expired"
             )
         
-        if invitation.is_expired:
+        # Check both token timestamp and database expiry
+        if invitation.is_expired or is_invitation_token_expired(accept_data.token, max_age_hours=settings.INVITATION_TOKEN_EXPIRE_HOURS):
             invitation.status = "expired"
             await db.commit()
             raise HTTPException(
@@ -171,9 +182,26 @@ class AuthService:
     
     @staticmethod
     async def get_invitation_by_token(db: AsyncSession, token: str) -> Optional[Invitation]:
-        """Get invitation by token"""
+        """Get invitation by token with timestamp validation"""
+        # First validate the token timestamp
+        try:
+            validate_invitation_token(token, max_age_hours=settings.INVITATION_TOKEN_EXPIRE_HOURS)
+        except ValueError:
+            # Token is invalid or expired based on timestamp
+            return None
+        
         result = await db.execute(select(Invitation).where(Invitation.token == token))
-        return result.scalar_one_or_none()
+        invitation = result.scalar_one_or_none()
+        
+        # Double-check expiration at database level too
+        if invitation and (invitation.is_expired or is_invitation_token_expired(token, max_age_hours=settings.INVITATION_TOKEN_EXPIRE_HOURS)):
+            # Mark as expired in database if not already
+            if invitation.status == "pending":
+                invitation.status = "expired"
+                await db.commit()
+            return None
+            
+        return invitation
     
     @staticmethod
     async def revoke_invitation(db: AsyncSession, invitation_id: str) -> Invitation:

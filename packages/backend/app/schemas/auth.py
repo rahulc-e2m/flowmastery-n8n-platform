@@ -1,5 +1,6 @@
 """Authentication schemas"""
 
+import re
 from datetime import datetime
 from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator
@@ -22,7 +23,32 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     """Schema for creating a user"""
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=12)
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        """Validate password meets security requirements"""
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        
+        # Check for digit
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)')
+        
+        return v
 
 
 class UserResponse(UserBase):
@@ -45,8 +71,23 @@ class UserLogin(BaseModel):
 class Token(BaseModel):
     """Schema for JWT token response"""
     access_token: str
+    refresh_token: str
     token_type: str = "bearer"
+    expires_in: int  # Access token expiration in seconds
     user: UserResponse
+
+
+class RefreshTokenRequest(BaseModel):
+    """Schema for refresh token request"""
+    refresh_token: str
+
+
+class TokenRefreshResponse(BaseModel):
+    """Schema for token refresh response"""
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
+    expires_in: int  # Access token expiration in seconds
 
 
 class InvitationCreate(BaseModel):
@@ -79,13 +120,63 @@ class InvitationResponse(BaseModel):
 class InvitationAccept(BaseModel):
     """Schema for accepting an invitation"""
     token: str
-    password: str = Field(..., min_length=8)
+    password: str = Field(..., min_length=12)
+    
+    @field_validator('password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        """Validate password meets security requirements"""
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        
+        # Check for digit
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)')
+        
+        return v
 
 
 class PasswordChange(BaseModel):
     """Schema for changing password"""
     current_password: str
-    new_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=12)
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        """Validate password meets security requirements"""
+        if len(v) < 12:
+            raise ValueError('Password must be at least 12 characters long')
+        
+        # Check for uppercase letter
+        if not re.search(r'[A-Z]', v):
+            raise ValueError('Password must contain at least one uppercase letter')
+        
+        # Check for lowercase letter
+        if not re.search(r'[a-z]', v):
+            raise ValueError('Password must contain at least one lowercase letter')
+        
+        # Check for digit
+        if not re.search(r'\d', v):
+            raise ValueError('Password must contain at least one digit')
+        
+        # Check for special character
+        if not re.search(r'[!@#$%^&*(),.?":{}|<>]', v):
+            raise ValueError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>)')
+        
+        return v
 
 
 class UserProfileUpdate(BaseModel):

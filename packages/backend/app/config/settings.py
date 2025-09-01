@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     
     # Security
     SECRET_KEY: str = Field(..., description="Cryptographic secret key for JWT and encryption")
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=4320, description="Access token expiration in minutes")
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = Field(default=30, description="Access token expiration in minutes")
+    REFRESH_TOKEN_EXPIRE_DAYS: int = Field(default=7, description="Refresh token expiration in days")
     ALGORITHM: str = Field(default="HS256", description="JWT algorithm")
     ENCRYPTION_KEY: str = Field(..., description="Encryption key for sensitive data")
     
@@ -96,6 +97,9 @@ class Settings(BaseSettings):
     
     # Environment
     ENVIRONMENT: str = Field(default="development", description="Application environment")
+    
+    # Invitation Token Security
+    INVITATION_TOKEN_EXPIRE_HOURS: int = Field(default=48, description="Invitation token expiration in hours")
     
     # Frontend URLs (for Docker)
     REACT_APP_API_URL: Optional[str] = Field(default=None, description="React app API URL")

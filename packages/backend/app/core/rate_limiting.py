@@ -51,6 +51,7 @@ def get_strict_rate_limit() -> str:
 # Rate limit configurations for different endpoint types
 RATE_LIMITS = {
     "auth_login": "5/minute",           # Login attempts
+    "auth_refresh": "10/minute",        # Token refresh attempts
     "auth_accept": "3/minute",          # Invitation acceptance  
     "auth_general": "10/minute",        # Other auth operations
     "invitation_create": "10/hour",     # Creating invitations (admin)

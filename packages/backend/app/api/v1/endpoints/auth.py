@@ -12,12 +12,14 @@ from app.database import get_db
 from app.models.user import User
 from app.models.invitation import Invitation
 from app.core.dependencies import get_current_user, get_current_admin_user
-from app.core.auth import create_access_token
+from app.core.auth import create_access_token, create_refresh_token, verify_token
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.services.auth_service import AuthService
 from app.schemas.auth import (
     UserLogin, 
     Token, 
+    RefreshTokenRequest,
+    TokenRefreshResponse,
     InvitationCreate, 
     InvitationResponse,
     InvitationAccept,
@@ -51,16 +53,88 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Create tokens
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role}
+    
     access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email, "role": user.role},
+        data=token_data,
         expires_delta=access_token_expires
+    )
+    
+    refresh_token = create_refresh_token(
+        data=token_data,
+        expires_delta=refresh_token_expires
     )
     
     return Token(
         access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         user=UserResponse.model_validate(user)
     )
+
+
+@router.post("/refresh", response_model=TokenRefreshResponse)
+@limiter.limit(RATE_LIMITS["auth_refresh"])
+async def refresh_token(
+    request: Request,
+    refresh_data: RefreshTokenRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Refresh access token using refresh token"""
+    try:
+        # Verify refresh token
+        payload = verify_token(refresh_data.refresh_token, token_type="refresh")
+        user_id = payload.get("sub")
+        
+        if not user_id:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid refresh token",
+            )
+        
+        # Get user from database to ensure they still exist and are active
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        
+        if not user or not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User not found or inactive",
+            )
+        
+        # Create new tokens
+        access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+        
+        token_data = {"sub": str(user.id), "email": user.email, "role": user.role}
+        
+        new_access_token = create_access_token(
+            data=token_data,
+            expires_delta=access_token_expires
+        )
+        
+        new_refresh_token = create_refresh_token(
+            data=token_data,
+            expires_delta=refresh_token_expires
+        )
+        
+        return TokenRefreshResponse(
+            access_token=new_access_token,
+            refresh_token=new_refresh_token,
+            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
+        )
+        
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid refresh token",
+        )
 
 
 @router.get("/me", response_model=UserResponse)
@@ -201,15 +275,26 @@ async def accept_invitation(
     """Accept an invitation and create user account"""
     user = await AuthService.accept_invitation(db, accept_data)
     
-    # Create access token for the new user
+    # Create tokens for the new user
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    refresh_token_expires = timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    
+    token_data = {"sub": str(user.id), "email": user.email, "role": user.role}
+    
     access_token = create_access_token(
-        data={"sub": str(user.id), "email": user.email, "role": user.role},
+        data=token_data,
         expires_delta=access_token_expires
+    )
+    
+    refresh_token = create_refresh_token(
+        data=token_data,
+        expires_delta=refresh_token_expires
     )
     
     return Token(
         access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         user=UserResponse.model_validate(user)
     )
 

@@ -30,8 +30,12 @@ async def lifespan(app: FastAPI):
     cors_methods = settings.get_cors_methods_list()
     cors_headers = settings.get_cors_headers_list()
     
+    is_production = settings.ENVIRONMENT.lower() == "production"
+    
     print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"🌍 Environment: {settings.ENVIRONMENT}")
     print(f"📡 Debug mode: {settings.DEBUG}")
+    print(f"📚 API Docs: {'disabled (production)' if is_production else 'enabled (/docs)'}")
     print(f"🛡️  Allowed hosts: {', '.join(allowed_hosts)}")
     print(f"🌐 CORS methods: {', '.join(cors_methods)}")
     print(f"📋 CORS headers: {len(cors_headers)} headers configured")
@@ -83,12 +87,17 @@ async def lifespan(app: FastAPI):
 def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
     
+    # Disable API documentation in production for security
+    is_production = settings.ENVIRONMENT.lower() == "production"
+    docs_url = None if is_production else "/docs"
+    redoc_url = None if is_production else "/redoc"
+    
     app = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description="Modern backend API for FlowMastery with n8n integration",
-        docs_url="/docs" if settings.DEBUG else None,
-        redoc_url="/redoc" if settings.DEBUG else None,
+        docs_url=docs_url,
+        redoc_url=redoc_url,
         lifespan=lifespan
     )
     
@@ -132,11 +141,13 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         """Root endpoint"""
+        is_production = settings.ENVIRONMENT.lower() == "production"
         return {
             "message": f"{settings.APP_NAME} API",
             "version": settings.APP_VERSION,
             "status": "running",
-            "docs": "/docs" if settings.DEBUG else "disabled"
+            "environment": settings.ENVIRONMENT,
+            "docs": "disabled (production)" if is_production else "/docs"
         }
     
     @app.get("/health")

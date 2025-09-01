@@ -10,11 +10,20 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { PasswordStrengthIndicator } from '@/components/ui/password-strength-indicator'
+import { validatePasswordStrength } from '@/lib/password'
 import { toast } from 'sonner'
 import type { InvitationDetails } from '@/types/auth'
 
 const acceptInvitationSchema = z.object({
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: z.string()
+    .min(12, 'Password must be at least 12 characters')
+    .refine((password) => {
+      const strength = validatePasswordStrength(password)
+      return strength.isValid
+    }, {
+      message: 'Password must contain uppercase, lowercase, digit, and special character'
+    }),
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: "Passwords don't match",
@@ -97,6 +106,7 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
 
         // Auto-login the user
         localStorage.setItem('auth_token', response.access_token)
+        localStorage.setItem('refresh_token', response.refresh_token)
         localStorage.setItem('user', JSON.stringify(response.user))
         
         toast.success('Account created successfully! Welcome to FlowMastery.')
@@ -215,7 +225,7 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Create a secure password (min 8 characters)"
+                    placeholder="Create a secure password (min 12 characters)"
                     {...register('password')}
                     className={errors.password ? 'border-red-500 pr-10' : 'pr-10'}
                   />
@@ -233,6 +243,14 @@ export const InvitationAcceptanceSection = forwardRef<HTMLDivElement, Invitation
                 </div>
                 {errors.password && (
                   <p className="text-sm text-red-500">{errors.password.message}</p>
+                )}
+                
+                {/* Password Strength Indicator */}
+                {watchedValues.password && (
+                  <PasswordStrengthIndicator 
+                    password={watchedValues.password} 
+                    className="mt-3"
+                  />
                 )}
               </div>
 
