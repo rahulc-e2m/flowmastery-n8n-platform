@@ -30,6 +30,12 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "postgresql+asyncpg://user:password@localhost:5432/flowmastery"
     DB_ECHO: bool = False
+    DB_SSL_MODE: Optional[str] = None
+    
+    # Database connection components (for Docker)
+    POSTGRES_DB: Optional[str] = None
+    POSTGRES_USER: Optional[str] = None
+    POSTGRES_PASSWORD: Optional[str] = None
     
     # Email
     SMTP_HOST: Optional[str] = None
@@ -44,11 +50,13 @@ class Settings(BaseSettings):
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_PASSWORD: Optional[str] = None
     CACHE_TTL: int = 300  # 5 minutes
     
     # n8n Integration
     N8N_API_URL: Optional[str] = None
     N8N_API_KEY: Optional[str] = None
+    N8N_BASE_URL: Optional[str] = None
     
     # AI Services
     GEMINI_API_KEY: Optional[str] = None
@@ -64,6 +72,16 @@ class Settings(BaseSettings):
     
     # Rate Limiting
     RATE_LIMIT_PER_MINUTE: int = 60
+    
+    # Environment
+    ENVIRONMENT: Optional[str] = "development"
+    
+    # Security & Encryption
+    ENCRYPTION_KEY: Optional[str] = None
+    
+    # Frontend URLs (for Docker)
+    REACT_APP_API_URL: Optional[str] = None
+    VITE_API_URL: Optional[str] = None
     
     def get_cors_origins_list(self) -> List[str]:
         """Get CORS origins as a list"""
