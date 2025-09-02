@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     # Database connection components (required for Docker)
     POSTGRES_DB: str = Field(default="metrics_dashboard", description="PostgreSQL database name")
     POSTGRES_USER: str = Field(default="postgres", description="PostgreSQL username")
-    POSTGRES_PASSWORD: str = Field(..., description="PostgreSQL password")
+    POSTGRES_PASSWORD: str = Field(default="postgres", description="PostgreSQL password")
     
     # Email
     SMTP_HOST: Optional[str] = Field(default=None, description="SMTP server host")
@@ -136,7 +136,7 @@ class Settings(BaseSettings):
         if isinstance(self.CORS_ALLOW_HEADERS, str):
             headers = [header.strip() for header in self.CORS_ALLOW_HEADERS.split(",") if header.strip()]
             # Ensure essential headers are always included
-            essential_headers = ["Content-Type", "Authorization", "Accept", "Origin"]
+            essential_headers: list[str] = ["Content-Type", "Authorization", "Accept", "Origin"]
             for header in essential_headers:
                 if header not in [h.lower() for h in headers] and header.lower() not in [h.lower() for h in headers]:
                     headers.append(header)
@@ -163,4 +163,4 @@ def get_settings() -> Settings:
 
 
 # Global settings instance
-settings = get_settings()
+settings: Settings = get_settings()

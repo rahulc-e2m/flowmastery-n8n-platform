@@ -1,5 +1,8 @@
 """FastAPI application entry point"""
 
+from typing import Any, Literal
+
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -88,11 +91,11 @@ def create_app() -> FastAPI:
     """Create and configure FastAPI application"""
     
     # Disable API documentation in production for security
-    is_production = settings.ENVIRONMENT.lower() == "production"
-    docs_url = None if is_production else "/docs"
-    redoc_url = None if is_production else "/redoc"
+    is_production: bool = settings.ENVIRONMENT.lower() == "production"
+    docs_url: Literal['/docs'] | None = None if is_production else "/docs"
+    redoc_url: Literal['/redoc'] | None = None if is_production else "/redoc"
     
-    app = FastAPI(
+    app: Any = FastAPI(
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description="Modern backend API for FlowMastery with n8n integration",
