@@ -50,8 +50,8 @@ class TestDataGenerator:
     def generate_n8n_config(self) -> Dict[str, Any]:
         """Generate n8n configuration data"""
         return {
-            "n8n_api_url": f"https://n8n-{self.fake.uuid4()[:8]}.example.com/api/v1",
-            "n8n_api_key": self.fake.uuid4()
+            "n8n_api_url": "https://overlaplab.app.n8n.cloud/api/v1",
+            "n8n_api_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIzMmJiYmQxZC1jZjRkLTQxZDMtOGFmNi0xMjVjZjU1MmRjMzgiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwiaWF0IjoxNzU2MjE3Nzg2LCJleHAiOjE3NTg3ODM2MDB9.SCoKt4Ie5hOSePS30LKQpCKoSXU5I9OJ0fV9syY4j8M"
         }
     
     def generate_login_credentials(self, is_admin: bool = False) -> Dict[str, str]:
@@ -59,7 +59,7 @@ class TestDataGenerator:
         if is_admin:
             return {
                 "email": "vivek.soni@e2m.solutions",
-                "password": "AdminPassword123!"  # This should match your actual admin password
+                "password": "13December200@@@" 
             }
         else:
             return {
@@ -104,6 +104,14 @@ class TestDataGenerator:
             "offset": random.randint(0, 500),
             "status": random.choice(["SUCCESS", "ERROR", "RUNNING", None]),
             "workflow_id": random.randint(1, 50) if random.random() > 0.5 else None
+        }
+    
+    def generate_admin_sync_params(self) -> Dict[str, Any]:
+        """Generate parameters for admin sync operations"""
+        return {
+            "force_refresh": random.choice([True, False]),
+            "include_historical": random.choice([True, False]),
+            "sync_executions": random.choice([True, False])
         }
     
     def generate_workflow_data(self, client_id: str) -> Dict[str, Any]:

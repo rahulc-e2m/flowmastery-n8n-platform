@@ -92,12 +92,22 @@ API_ENDPOINTS = {
     "clients_sync": f"{settings.api_base_url}/clients/{{client_id}}/sync-n8n",
     
     # Metrics endpoints
-    "metrics_admin": f"{settings.api_base_url}/metrics/admin",
+    "metrics_admin": f"{settings.api_base_url}/metrics/all",
     "metrics_client": f"{settings.api_base_url}/metrics/client/{{client_id}}",
     "metrics_my": f"{settings.api_base_url}/metrics/my-metrics",
     "metrics_workflows": f"{settings.api_base_url}/metrics/client/{{client_id}}/workflows",
-    "metrics_executions": f"{settings.api_base_url}/metrics/client/{{client_id}}/executions",
+    "metrics_my_workflows": f"{settings.api_base_url}/metrics/my-workflows",
     "metrics_historical": f"{settings.api_base_url}/metrics/client/{{client_id}}/historical",
+    "metrics_my_historical": f"{settings.api_base_url}/metrics/my-historical",
+    "metrics_executions": f"{settings.api_base_url}/metrics/client/{{client_id}}/executions",
+    "metrics_my_executions": f"{settings.api_base_url}/metrics/my-executions",
+    "metrics_execution_stats": f"{settings.api_base_url}/metrics/client/{{client_id}}/execution-stats",
+    "metrics_my_execution_stats": f"{settings.api_base_url}/metrics/my-execution-stats",
+    "metrics_admin_sync": f"{settings.api_base_url}/metrics/admin/sync/{{client_id}}",
+    "metrics_admin_sync_all": f"{settings.api_base_url}/metrics/admin/sync-all",
+    "metrics_admin_quick_sync": f"{settings.api_base_url}/metrics/admin/quick-sync",
+    "metrics_admin_refresh_cache": f"{settings.api_base_url}/metrics/admin/refresh-cache",
+    "metrics_admin_data_freshness": f"{settings.api_base_url}/metrics/admin/data-freshness",
     
     # Health check endpoints
     "health_basic": f"{settings.BASE_URL}/health/",
@@ -108,6 +118,9 @@ API_ENDPOINTS = {
     "cache_clear_all": f"{settings.api_base_url}/cache/all",
     
     # Task endpoints
+    "tasks_status": f"{settings.api_base_url}/tasks/status/{{task_id}}",
+    "tasks_worker_stats": f"{settings.api_base_url}/tasks/worker-stats",
+    "tasks_sync_client": f"{settings.api_base_url}/tasks/sync-client/{{client_id}}",
     "tasks_sync_all": f"{settings.api_base_url}/tasks/sync-all",
     "tasks_aggregation": f"{settings.api_base_url}/tasks/aggregation/daily"
 }

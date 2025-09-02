@@ -3,6 +3,7 @@
 import json
 import random
 import uuid
+import time
 from locust import HttpUser, task, between, SequentialTaskSet
 from locust.exception import ResponseError
 
@@ -16,19 +17,62 @@ class ClientManagementTaskSet(SequentialTaskSet):
     """Sequential client management operations for load testing"""
     
     def on_start(self):
-        """Initialize test session"""
+        """Initialize test session with improved authentication"""
         self.auth_helper = AuthHelper(self.client)
         self.api_client = APIClient(self.client)
         self.created_clients = []
+        self.access_token = None
+        self.login_time = None
         
-        # Login as admin for client management operations
-        success = self.auth_helper.admin_login()
-        if not success:
-            print("Failed to login as admin for client management tests")
+        # Perform initial login with better error handling
+        self.perform_login()
+    
+    def perform_login(self):
+        """Perform admin login with correct credentials"""
+        credentials = {
+            "email": "vivek.soni@e2m.solutions",
+            "password": "13December200@@@"
+        }
+        
+        try:
+            response = self.client.post(
+                "/api/v1/auth/login",
+                json=credentials,
+                headers={"Content-Type": "application/json"},
+                name="admin_login"
+            )
+            
+            if response.status_code == 200:
+                # Store tokens from cookies
+                self.access_token = response.cookies.get("access_token")
+                self.login_time = time.time()
+                return True
+            else:
+                print(f"Login failed with status: {response.status_code}")
+                return False
+                
+        except Exception as e:
+            print(f"Login exception: {e}")
+            return False
+    
+    def ensure_authenticated(self):
+        """Ensure user is authenticated"""
+        if not self.access_token:
+            return self.perform_login()
+        
+        # Check if we need to refresh (every 20 minutes)
+        current_time = time.time()
+        if self.login_time and (current_time - self.login_time) > 1200:
+            return self.perform_login()
+        
+        return True
     
     @task(15)
     def test_create_client(self):
-        """Test client creation performance"""
+        """Test client creation with improved authentication handling"""
+        if not self.ensure_authenticated():
+            return
+        
         client_data = test_data_generator.generate_client_data()
         
         with self.client.post(
@@ -50,15 +94,22 @@ class ClientManagementTaskSet(SequentialTaskSet):
                 except json.JSONDecodeError:
                     response.failure("Invalid JSON response")
             elif response.status_code == 401:
-                # Re-authenticate and retry
-                self.auth_helper.admin_login()
-                response.failure("Authentication expired during client creation")
+                # Re-authenticate and mark as authentication issue
+                if self.perform_login():
+                    response.failure("Re-authenticated successfully")
+                else:
+                    response.failure("Authentication failed")
+            elif response.status_code == 429:
+                response.failure("Rate limited - too many requests")
             else:
                 response.failure(f"Client creation failed with status {response.status_code}")
     
     @task(25)
     def test_list_clients(self):
-        """Test client listing performance"""
+        """Test client listing with improved authentication handling"""
+        if not self.ensure_authenticated():
+            return
+        
         with self.client.get(
             "/api/v1/clients/",
             headers={"Content-Type": "application/json"},
@@ -75,8 +126,12 @@ class ClientManagementTaskSet(SequentialTaskSet):
                 except json.JSONDecodeError:
                     response.failure("Invalid JSON response")
             elif response.status_code == 401:
-                self.auth_helper.admin_login()
-                response.failure("Authentication expired during client listing")
+                if self.perform_login():
+                    response.failure("Re-authenticated successfully")
+                else:
+                    response.failure("Authentication failed")
+            elif response.status_code == 429:
+                response.failure("Rate limited - too many requests")
             else:
                 response.failure(f"Client listing failed with status {response.status_code}")
     
