@@ -102,6 +102,7 @@ class PersistentMetricsCollector:
                         # Update existing workflow
                         existing_workflow.name = n8n_workflow.get("name", "Unnamed Workflow")
                         existing_workflow.active = n8n_workflow.get("active", False)
+                        existing_workflow.archived = n8n_workflow.get("isArchived", False)
                         existing_workflow.last_synced_at = datetime.now(timezone.utc)
                         
                         # Update metadata if available
@@ -120,6 +121,7 @@ class PersistentMetricsCollector:
                             client_id=client.id,
                             name=n8n_workflow.get("name", "Unnamed Workflow"),
                             active=n8n_workflow.get("active", False),
+                            archived=n8n_workflow.get("isArchived", False),
                             last_synced_at=current_time,
                             created_at=current_time,  # Explicitly set created_at
                             updated_at=current_time   # Explicitly set updated_at
@@ -328,12 +330,8 @@ class PersistentMetricsCollector:
                 if not workflows:
                     break
                 
-                # Filter out archived workflows
-                active_workflows = [
-                    workflow for workflow in workflows 
-                    if not workflow.get('isArchived', False)
-                ]
-                all_workflows.extend(active_workflows)
+                # Include ALL workflows (archived and non-archived) for proper sync
+                all_workflows.extend(workflows)
                 
                 next_cursor = data.get('nextCursor')
                 if not next_cursor:

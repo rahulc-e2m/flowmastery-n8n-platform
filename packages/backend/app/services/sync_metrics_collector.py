@@ -113,31 +113,26 @@ class SyncMetricsCollector:
                 data = response.json()
                 if isinstance(data, dict) and 'data' in data:
                     batch_workflows = data['data']
-                    # Filter out archived workflows
-                    active_workflows = [
-                        workflow for workflow in batch_workflows 
-                        if not workflow.get('isArchived', False)
-                    ]
-                    workflows.extend(active_workflows)
+                    # Include ALL workflows (archived and non-archived) for proper sync
+                    workflows.extend(batch_workflows)
                     cursor = data.get('nextCursor')
                     if not cursor:
                         break
                 else:
                     # Handle non-paginated response
                     batch_data = data if isinstance(data, list) else [data]
-                    # Filter out archived workflows
-                    active_workflows = [
-                        workflow for workflow in batch_data 
-                        if not workflow.get('isArchived', False)
-                    ]
-                    workflows.extend(active_workflows)
+                    # Include ALL workflows (archived and non-archived) for proper sync
+                    workflows.extend(batch_data)
                     break
                     
                 page += 1
                 if page > 10:  # Safety limit
                     break
             
-            logger.info(f"Synced {len(workflows)} non-archived workflows for client {client.id}")
+            # Count active vs archived workflows for logging
+            active_count = sum(1 for wf in workflows if not wf.get('isArchived', False))
+            archived_count = len(workflows) - active_count
+            logger.info(f"Synced {len(workflows)} workflows for client {client.id} ({active_count} active, {archived_count} archived)")
             
             # Store workflows in database
             workflow_ids = []
@@ -153,6 +148,7 @@ class SyncMetricsCollector:
                         n8n_workflow_id=wf_data.get('id'),
                         name=wf_data.get('name', 'Unnamed'),
                         active=wf_data.get('active', False),
+                        archived=wf_data.get('isArchived', False),
                         nodes=len(wf_data.get('nodes', [])),
                         n8n_created_at=datetime.fromisoformat(wf_data['createdAt'].replace('Z', '+00:00')) 
                             if wf_data.get('createdAt') else None,
@@ -166,6 +162,7 @@ class SyncMetricsCollector:
                 else:
                     workflow.name = wf_data.get('name', 'Unnamed')
                     workflow.active = wf_data.get('active', False)
+                    workflow.archived = wf_data.get('isArchived', False)
                     workflow.nodes = len(wf_data.get('nodes', []))
                     workflow.n8n_updated_at = datetime.fromisoformat(wf_data['updatedAt'].replace('Z', '+00:00')) if wf_data.get('updatedAt') else None
                     workflow.last_synced_at = datetime.now(timezone.utc)
