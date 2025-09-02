@@ -120,7 +120,7 @@ export function TrendIndicator({
     return (
       <span className={cn(sizes.container, 'text-muted-foreground', className)}>
         {!hideIcon && <Minus className={cn(sizes.icon, 'inline mr-1')} />}
-        {showValue && <span className={sizes.value}>No change</span>}
+        {showValue && <span className={sizes.value}>Stable</span>}
       </span>
     )
   }

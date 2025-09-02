@@ -137,15 +137,15 @@ function AdminMetricsView({
       icon: Zap,
       color: 'purple',
       trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
-      description: 'Last 30 days'
+      description: 'All time total'
     },
     {
-      title: 'Avg Hours Saved',
+      title: 'Avg Performance',
       value: adminMetrics?.total_time_saved_hours ? `${adminMetrics.total_time_saved_hours}h` : '0h',
       icon: Timer,
       color: 'orange',
-      trend: { value: Math.abs(adminMetrics?.trends?.execution_trend || 0), isPositive: (adminMetrics?.trends?.execution_trend || 0) >= 0 },
-      description: 'Average time saved per client'
+      trend: { value: Math.abs(adminMetrics?.trends?.performance_trend || 0), isPositive: (adminMetrics?.trends?.performance_trend || 0) >= 0 },
+      description: 'Performance improvement'
     },
     {
       title: 'Overall Success Rate',
@@ -214,7 +214,11 @@ function AdminMetricsView({
                         <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                         <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
                         {stat.trend && (
-                          <TrendIndicator value={stat.trend.value} isPositive={stat.trend.isPositive} />
+                          <TrendIndicator 
+                            value={stat.trend.value} 
+                            isPositive={stat.trend.isPositive} 
+                            prefix="vs 30 days ago"
+                          />
                         )}
                       </div>
                       <div className={`p-3 rounded-xl bg-gradient-to-br ${
@@ -481,7 +485,11 @@ function ClientMetricsView({ metrics, workflows, isLoading }: any) {
                     <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
                     <p className="text-3xl font-bold tracking-tight">{stat.value}</p>
                     {stat.trend && (
-                      <TrendIndicator value={stat.trend.value} isPositive={stat.trend.isPositive} />
+                      <TrendIndicator 
+                        value={stat.trend.value} 
+                        isPositive={stat.trend.isPositive} 
+                        prefix="vs 30 days ago"
+                      />
                     )}
                   </div>
                   <div className={`p-3 rounded-xl bg-gradient-to-br ${
