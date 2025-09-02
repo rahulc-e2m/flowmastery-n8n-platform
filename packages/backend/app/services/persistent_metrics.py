@@ -37,7 +37,8 @@ class PersistentMetricsCollector:
         results = {"synced_clients": 0, "errors": [], "total_workflows": 0, "total_executions": 0}
         
         # Get all clients with n8n configuration
-        clients = await ClientService.get_all_clients(db)
+        client_service = ClientService()
+        clients = await client_service.get_all_clients(db)
         
         for client in clients:
             try:
@@ -57,7 +58,8 @@ class PersistentMetricsCollector:
     
     async def sync_client_data(self, db: AsyncSession, client_id: str) -> Dict[str, Any]:
         """Sync workflows and executions for a specific client"""
-        client = await ClientService.get_client_by_id(db, client_id)
+        client_service = ClientService()
+        client = await client_service.get_client_by_id(db, client_id)
         if not client:
             raise ValueError(f"Client {client_id} not found")
         
@@ -302,7 +304,7 @@ class PersistentMetricsCollector:
             raise
     
     async def _fetch_n8n_workflows(self, n8n_url: str, api_key: str) -> List[Dict[str, Any]]:
-        """Fetch workflows from n8n API"""
+        """Fetch workflows from n8n API, excluding archived workflows"""
         import httpx
         
         all_workflows = []
@@ -325,8 +327,13 @@ class PersistentMetricsCollector:
                 workflows = data.get('data', [])
                 if not workflows:
                     break
-                    
-                all_workflows.extend(workflows)
+                
+                # Filter out archived workflows
+                active_workflows = [
+                    workflow for workflow in workflows 
+                    if not workflow.get('isArchived', False)
+                ]
+                all_workflows.extend(active_workflows)
                 
                 next_cursor = data.get('nextCursor')
                 if not next_cursor:

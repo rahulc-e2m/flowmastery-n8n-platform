@@ -112,20 +112,32 @@ class SyncMetricsCollector:
                 
                 data = response.json()
                 if isinstance(data, dict) and 'data' in data:
-                    workflows.extend(data['data'])
+                    batch_workflows = data['data']
+                    # Filter out archived workflows
+                    active_workflows = [
+                        workflow for workflow in batch_workflows 
+                        if not workflow.get('isArchived', False)
+                    ]
+                    workflows.extend(active_workflows)
                     cursor = data.get('nextCursor')
                     if not cursor:
                         break
                 else:
                     # Handle non-paginated response
-                    workflows.extend(data if isinstance(data, list) else [data])
+                    batch_data = data if isinstance(data, list) else [data]
+                    # Filter out archived workflows
+                    active_workflows = [
+                        workflow for workflow in batch_data 
+                        if not workflow.get('isArchived', False)
+                    ]
+                    workflows.extend(active_workflows)
                     break
                     
                 page += 1
                 if page > 10:  # Safety limit
                     break
             
-            logger.info(f"Synced {len(workflows)} workflows for client {client.id}")
+            logger.info(f"Synced {len(workflows)} non-archived workflows for client {client.id}")
             
             # Store workflows in database
             workflow_ids = []

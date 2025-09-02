@@ -59,6 +59,7 @@ class N8nClient:
             return False
         
         try:
+            # Use a simple API call for health check - archived status doesn't matter here
             response = await self.request('GET', '/workflows', params={'limit': 1})
             return response is not None
         except Exception as e:
@@ -112,15 +113,22 @@ class N8nClient:
     
     # Workflow methods
     async def get_workflows(self, active: Optional[bool] = None, limit: int = 100) -> List[Dict[str, Any]]:
-        """Get workflows"""
+        """Get workflows, excluding archived workflows"""
         params = {'limit': min(limit, 250)}
         if active is not None:
             params['active'] = str(active).lower()
         
         response = await self.request('GET', '/workflows', params=params)
         if response and isinstance(response, dict) and 'data' in response:
-            return response['data']
-        return response or []
+            workflows = response['data']
+        else:
+            workflows = response or []
+        
+        # Filter out archived workflows
+        return [
+            workflow for workflow in workflows 
+            if not workflow.get('isArchived', False)
+        ]
     
     async def get_workflow(self, workflow_id: str) -> Optional[Dict[str, Any]]:
         """Get single workflow"""
