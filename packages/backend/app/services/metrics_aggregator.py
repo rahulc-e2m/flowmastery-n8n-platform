@@ -246,7 +246,12 @@ class MetricsAggregator:
         total_workflows = None
         active_workflows = None
         if not workflow_id:
-            workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+            workflows_stmt = select(Workflow).where(
+                and_(
+                    Workflow.client_id == client_id,
+                    Workflow.archived == False
+                )
+            )
             workflows_result = await db.execute(workflows_stmt)
             workflows = workflows_result.scalars().all()
             
@@ -282,7 +287,10 @@ class MetricsAggregator:
             
             # Get workflow minutes for all workflows
             workflow_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
-                Workflow.client_id == client_id
+                and_(
+                    Workflow.client_id == client_id,
+                    Workflow.archived == False
+                )
             )
             workflow_minutes_result = await db.execute(workflow_minutes_stmt)
             workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflow_minutes_result.all()}
@@ -372,7 +380,12 @@ class MetricsAggregator:
     ) -> List[MetricsAggregation]:
         """Compute period aggregations for all workflows of a client"""
         # Get all workflows for the client
-        workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+        workflows_stmt = select(Workflow).where(
+            and_(
+                Workflow.client_id == client_id,
+                Workflow.archived == False
+            )
+        )
         workflows_result = await db.execute(workflows_stmt)
         workflows = workflows_result.scalars().all()
         
@@ -685,7 +698,12 @@ class MetricsAggregator:
         total_workflows = None
         active_workflows = None
         if not workflow_id:
-            workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+            workflows_stmt = select(Workflow).where(
+                and_(
+                    Workflow.client_id == client_id,
+                    Workflow.archived == False
+                )
+            )
             workflows_result = db.execute(workflows_stmt)
             workflows = workflows_result.scalars().all()
             
@@ -721,7 +739,10 @@ class MetricsAggregator:
             
             # Get workflow minutes for all workflows
             workflow_minutes_stmt = select(Workflow.id, Workflow.time_saved_per_execution_minutes).where(
-                Workflow.client_id == client_id
+                and_(
+                    Workflow.client_id == client_id,
+                    Workflow.archived == False
+                )
             )
             workflow_minutes_result = db.execute(workflow_minutes_stmt)
             workflow_minutes = {wid: (mins if mins is not None else 30) for wid, mins in workflow_minutes_result.all()}
@@ -800,7 +821,12 @@ class MetricsAggregator:
     ) -> List[MetricsAggregation]:
         """Synchronous version of _compute_workflow_period_aggregations"""
         # Get all workflows for the client
-        workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+        workflows_stmt = select(Workflow).where(
+            and_(
+                Workflow.client_id == client_id,
+                Workflow.archived == False
+            )
+        )
         workflows_result = db.execute(workflows_stmt)
         workflows = workflows_result.scalars().all()
         

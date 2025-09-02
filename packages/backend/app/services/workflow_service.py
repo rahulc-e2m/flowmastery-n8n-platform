@@ -66,6 +66,9 @@ class WorkflowService(BaseService[Workflow]):
                 
                 if active is not None:
                     query = query.where(Workflow.active == active)
+                
+                # Always exclude archived workflows
+                query = query.where(Workflow.archived == False)
 
                 query = query.group_by(Workflow.id, Client.name).order_by(desc(func.max(WorkflowExecution.started_at)))
 
@@ -120,7 +123,12 @@ class WorkflowService(BaseService[Workflow]):
                 ).select_from(Workflow).outerjoin(
                     WorkflowExecution,
                     and_(Workflow.id == WorkflowExecution.workflow_id, WorkflowExecution.is_production == True),
-                ).where(Workflow.client_id == user.client_id)
+                ).where(
+                    and_(
+                        Workflow.client_id == user.client_id,
+                        Workflow.archived == False  # Exclude archived workflows
+                    )
+                )
 
                 if active is not None:
                     query = query.where(Workflow.active == active)

@@ -34,6 +34,7 @@ class Workflow(Base, TimestampMixin):
     # Workflow details
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    archived: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     
     # Workflow metadata
     tags: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # JSON string of tags

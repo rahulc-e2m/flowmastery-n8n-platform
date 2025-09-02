@@ -124,8 +124,13 @@ class MetricsService(MetricsServiceLayerMixin):
                 raise ValueError(f"Client {client_id} not found")
             
             try:
-                # Get workflows from database
-                workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+                # Get workflows from database, excluding archived ones
+                workflows_stmt = select(Workflow).where(
+                    and_(
+                        Workflow.client_id == client_id,
+                        Workflow.archived == False
+                    )
+                )
                 workflows_result = await db.execute(workflows_stmt)
                 workflows = workflows_result.scalars().all()
                 
@@ -228,8 +233,13 @@ class MetricsService(MetricsServiceLayerMixin):
             client_metrics = await self.get_client_metrics(db, client_id, user_id=user_id)
             
             try:
-                # Get workflows from database
-                workflows_stmt = select(Workflow).where(Workflow.client_id == client_id)
+                # Get workflows from database, excluding archived ones
+                workflows_stmt = select(Workflow).where(
+                    and_(
+                        Workflow.client_id == client_id,
+                        Workflow.archived == False
+                    )
+                )
                 workflows_result = await db.execute(workflows_stmt)
                 workflows = workflows_result.scalars().all()
                 
