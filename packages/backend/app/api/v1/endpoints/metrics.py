@@ -16,7 +16,7 @@ from app.core.dependencies import (
     get_current_client_user,
     get_current_user,
 )
-from app.services.enhanced_metrics_service import enhanced_metrics_service
+from app.services.metrics_service import metrics_service
 from app.services.persistent_metrics import persistent_metrics_collector
 from app.schemas.metrics import (
     ClientMetrics,
@@ -35,7 +35,7 @@ async def get_all_clients_metrics(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Get metrics for all clients (admin only)"""
-    return await enhanced_metrics_service.get_admin_metrics(db)
+    return await metrics_service.get_admin_metrics(db)
 
 
 @router.get("/client/{client_id}", response_model=ClientMetrics)
@@ -53,7 +53,7 @@ async def get_client_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_client_metrics(db, client_id)
+        return await metrics_service.get_client_metrics(db, client_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -76,7 +76,7 @@ async def get_client_workflow_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_client_workflow_metrics(db, client_id)
+        return await metrics_service.get_client_workflow_metrics(db, client_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -103,7 +103,7 @@ async def get_client_historical_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_historical_metrics(
+        return await metrics_service.get_historical_metrics(
             db, client_id, period_type, start_date, end_date, workflow_id
         )
     except ValueError as e:
@@ -126,7 +126,7 @@ async def get_my_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_client_metrics(db, current_user.client_id)
+        return await metrics_service.get_client_metrics(db, current_user.client_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -147,7 +147,7 @@ async def get_my_workflow_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_client_workflow_metrics(db, current_user.client_id)
+        return await metrics_service.get_client_workflow_metrics(db, current_user.client_id)
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -172,7 +172,7 @@ async def get_my_historical_metrics(
         )
     
     try:
-        return await enhanced_metrics_service.get_historical_metrics(
+        return await metrics_service.get_historical_metrics(
             db, current_user.client_id, period_type, start_date, end_date, workflow_id
         )
     except ValueError as e:
@@ -223,7 +223,7 @@ async def quick_sync_all_metrics(
                 
                 # Warm cache for this client immediately after sync
                 try:
-                    await enhanced_metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                    await metrics_service.get_client_metrics(db, client.id, use_cache=False)
                 except Exception as cache_error:
                     logger.warning(f"Failed to warm cache for client {client.id}: {cache_error}")
                     
@@ -240,7 +240,7 @@ async def quick_sync_all_metrics(
         
         # Warm admin metrics cache
         try:
-            await enhanced_metrics_service.get_admin_metrics(db)
+            await metrics_service.get_admin_metrics(db)
         except Exception as cache_error:
             logger.warning(f"Failed to warm admin metrics cache: {cache_error}")
         
@@ -560,13 +560,13 @@ async def refresh_metrics_cache(
         warmed_clients = []
         for client in clients:
             try:
-                await enhanced_metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                await metrics_service.get_client_metrics(db, client.id, use_cache=False)
                 warmed_clients.append(client.id)
             except Exception as e:
                 logger.warning(f"Failed to warm cache for client {client.id}: {e}")
         
         # Warm admin metrics cache
-        await enhanced_metrics_service.get_admin_metrics(db)
+        await metrics_service.get_admin_metrics(db)
         
         return {
             "message": "Cache refreshed successfully",

@@ -1,6 +1,8 @@
-"""Authentication endpoints with cookie support"""
+"""Authentication endpoints with cookie support and service layer protection"""
 
-from datetime import timedelta
+import asyncio
+import logging
+from datetime import datetime, timedelta
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,11 +30,102 @@ from app.schemas.auth import (
 )
 from app.config import settings
 from app.core.decorators import validate_input, sanitize_response
+from app.services.cache.redis import redis_client
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_user_identifier)
+
+
+class AuthServiceMixin:
+    """Service layer mixin for authentication operations"""
+    
+    @staticmethod
+    async def _check_auth_rate_limit(user_identifier: str, operation: str, limit: int = 10, window: int = 300) -> bool:
+        """Check rate limit for auth operations (stricter limits for security)"""
+        try:
+            current_time = int(datetime.utcnow().timestamp())
+            window_start = current_time - window
+            rate_limit_key = f"rate_limit:auth:{operation}:{user_identifier}"
+            
+            pipe = redis_client.pipeline()
+            pipe.zremrangebyscore(rate_limit_key, 0, window_start)
+            pipe.zcard(rate_limit_key)
+            pipe.zadd(rate_limit_key, {str(current_time): current_time})
+            pipe.expire(rate_limit_key, window)
+            
+            results = await pipe.execute()
+            current_requests = results[1]
+            
+            return current_requests < limit
+        except Exception as e:
+            logger.warning(f"Auth rate limiter error: {e}")
+            return True  # Fail open but log the issue
+    
+    @staticmethod
+    async def _log_auth_event(event_type: str, user_id: str = None, email: str = None, success: bool = True, details: str = None):
+        """Log authentication events for security monitoring"""
+        try:
+            log_data = {
+                "event_type": event_type,
+                "timestamp": datetime.utcnow().isoformat(),
+                "user_id": user_id,
+                "email": email,
+                "success": success,
+                "details": details
+            }
+            
+            # Store in Redis for security monitoring (expire after 30 days)
+            auth_log_key = f"auth_log:{datetime.utcnow().strftime('%Y-%m-%d')}:{event_type}:{user_id or email or 'unknown'}"
+            await redis_client.setex(auth_log_key, 30 * 24 * 60 * 60, str(log_data))
+            
+            # Also log to application logs
+            if success:
+                logger.info(f"Auth event: {event_type} - {email or user_id} - {details or 'success'}")
+            else:
+                logger.warning(f"Auth event failed: {event_type} - {email or user_id} - {details or 'failed'}")
+                
+        except Exception as e:
+            logger.error(f"Failed to log auth event: {e}")
+    
+    @staticmethod
+    async def _check_brute_force_protection(identifier: str) -> bool:
+        """Check for brute force attacks"""
+        try:
+            # Check failed login attempts in the last hour
+            failed_key = f"auth_failures:{identifier}"
+            failed_count = await redis_client.get(failed_key)
+            
+            if failed_count and int(failed_count) >= 5:  # 5 failed attempts
+                return False
+            
+            return True
+        except Exception as e:
+            logger.warning(f"Brute force check error: {e}")
+            return True  # Fail open
+    
+    @staticmethod
+    async def _record_auth_failure(identifier: str):
+        """Record authentication failure for brute force protection"""
+        try:
+            failed_key = f"auth_failures:{identifier}"
+            pipe = redis_client.pipeline()
+            pipe.incr(failed_key)
+            pipe.expire(failed_key, 3600)  # 1 hour
+            await pipe.execute()
+        except Exception as e:
+            logger.warning(f"Failed to record auth failure: {e}")
+    
+    @staticmethod
+    async def _clear_auth_failures(identifier: str):
+        """Clear authentication failures on successful login"""
+        try:
+            failed_key = f"auth_failures:{identifier}"
+            await redis_client.delete(failed_key)
+        except Exception as e:
+            logger.warning(f"Failed to clear auth failures: {e}")
 
 
 @router.post("/login", response_model=Token)
@@ -45,16 +138,52 @@ async def login(
     user_credentials: UserLogin,
     db: AsyncSession = Depends(get_db)
 ):
-    """Authenticate user and return JWT token via httpOnly cookies"""
-    user = await AuthService.authenticate_user(
-        db, user_credentials.email, user_credentials.password
-    )
+    """Authenticate user and return JWT token via httpOnly cookies with service layer protection"""
+    client_ip = request.client.host if request.client else "unknown"
+    user_identifier = f"{user_credentials.email}:{client_ip}"
     
-    if not user:
+    # Enhanced rate limiting for login attempts
+    if not await AuthServiceMixin._check_auth_rate_limit(user_identifier, "login", limit=5, window=300):
+        await AuthServiceMixin._log_auth_event("login_rate_limited", email=user_credentials.email, success=False, details=f"IP: {client_ip}")
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many login attempts. Please try again later."
+        )
+    
+    # Brute force protection
+    if not await AuthServiceMixin._check_brute_force_protection(user_identifier):
+        await AuthServiceMixin._log_auth_event("login_brute_force_blocked", email=user_credentials.email, success=False, details=f"IP: {client_ip}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Account temporarily locked due to multiple failed attempts"
+        )
+    
+    try:
+        user = await AuthService.authenticate_user(
+            db, user_credentials.email, user_credentials.password
+        )
+        
+        if not user:
+            await AuthServiceMixin._record_auth_failure(user_identifier)
+            await AuthServiceMixin._log_auth_event("login_failed", email=user_credentials.email, success=False, details="Invalid credentials")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect email or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        
+        # Clear any previous failures on successful login
+        await AuthServiceMixin._clear_auth_failures(user_identifier)
+        await AuthServiceMixin._log_auth_event("login_success", user_id=user.id, email=user.email, success=True, details=f"IP: {client_ip}")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await AuthServiceMixin._log_auth_event("login_error", email=user_credentials.email, success=False, details=str(e))
+        logger.error(f"Login error for {user_credentials.email}: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Authentication service temporarily unavailable"
         )
     
     # Create tokens
@@ -249,9 +378,22 @@ async def create_invitation(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
 ):
-    """Create a new invitation (admin only)"""
-    invitation = await AuthService.create_invitation(db, invitation_data, admin_user)
-    return InvitationResponse.model_validate(invitation)
+    """Create a new invitation (admin only) with service layer protection"""
+    # Rate limiting for invitation creation
+    if not await AuthServiceMixin._check_auth_rate_limit(admin_user.id, "create_invitation", limit=10, window=300):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many invitation creation attempts"
+        )
+    
+    try:
+        invitation = await AuthService.create_invitation(db, invitation_data, admin_user)
+        await AuthServiceMixin._log_auth_event("invitation_created", user_id=admin_user.id, email=invitation_data.email, success=True)
+        return InvitationResponse.model_validate(invitation)
+    except Exception as e:
+        await AuthServiceMixin._log_auth_event("invitation_creation_failed", user_id=admin_user.id, email=invitation_data.email, success=False, details=str(e))
+        logger.error(f"Invitation creation failed: {e}")
+        raise
 
 
 @router.get("/invitations", response_model=List[InvitationResponse])

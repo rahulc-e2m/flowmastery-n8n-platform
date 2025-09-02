@@ -2,7 +2,7 @@
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, desc
@@ -72,7 +72,7 @@ class PersistentMetricsCollector:
             "client_id": client_id,
             "workflows_synced": workflows_synced,
             "executions_synced": executions_synced,
-            "sync_time": datetime.utcnow()
+            "sync_time": datetime.now(timezone.utc)
         }
     
     async def _sync_workflows(self, db: AsyncSession, client: Client, api_key: str) -> int:
@@ -100,7 +100,7 @@ class PersistentMetricsCollector:
                         # Update existing workflow
                         existing_workflow.name = n8n_workflow.get("name", "Unnamed Workflow")
                         existing_workflow.active = n8n_workflow.get("active", False)
-                        existing_workflow.last_synced_at = datetime.utcnow()
+                        existing_workflow.last_synced_at = datetime.now(timezone.utc)
                         
                         # Update metadata if available
                         if "updatedAt" in n8n_workflow:
@@ -112,7 +112,7 @@ class PersistentMetricsCollector:
                                 pass
                     else:
                         # Create new workflow
-                        current_time = datetime.utcnow()
+                        current_time = datetime.now(timezone.utc)
                         new_workflow = Workflow(
                             n8n_workflow_id=workflow_id,
                             client_id=client.id,
@@ -203,7 +203,7 @@ class PersistentMetricsCollector:
                     new_status = self._map_execution_status(n8n_execution)
                     if existing_execution.status != new_status:
                         existing_execution.status = new_status
-                        existing_execution.last_synced_at = datetime.utcnow()
+                        existing_execution.last_synced_at = datetime.now(timezone.utc)
                         
                         # Update timing if finished
                         if "stoppedAt" in n8n_execution and n8n_execution["stoppedAt"]:
@@ -227,7 +227,7 @@ class PersistentMetricsCollector:
                         status=self._map_execution_status(n8n_execution),
                         mode=self._map_execution_mode(n8n_execution.get("mode", "")),
                         is_production=True,  # Already filtered for production
-                        last_synced_at=datetime.utcnow()
+                        last_synced_at=datetime.now(timezone.utc)
                     )
                     
                     # Set timestamps

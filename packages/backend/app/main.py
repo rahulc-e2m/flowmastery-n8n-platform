@@ -1,5 +1,7 @@
 """FastAPI application entry point"""
 
+import logging
+from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
@@ -7,6 +9,8 @@ from contextlib import asynccontextmanager
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+
+logger = logging.getLogger(__name__)
 
 from app.config import settings
 from app.api.v1.router import api_router
@@ -64,6 +68,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"⚠️  Redis connection failed: {e}")
     
+    # Initialize service layer
+    try:
+        from app.services import initialize_services
+        initialize_services()
+        print("✅ Service layer initialized")
+    except Exception as e:
+        print(f"⚠️  Service layer initialization failed: {e}")
+    
     # Note: Celery workers are started separately via docker-compose
     print("✅ Application startup complete")
     
@@ -114,6 +126,32 @@ def create_app() -> FastAPI:
         allow_headers=settings.get_cors_headers_list(),
     )
     
+    # Add service layer monitoring middleware
+    @app.middleware("http")
+    async def service_layer_monitoring(request, call_next):
+        start_time = datetime.utcnow()
+        
+        # Add request ID for tracing
+        import uuid
+        request_id = str(uuid.uuid4())
+        request.state.request_id = request_id
+        
+        response = await call_next(request)
+        
+        # Log slow requests
+        execution_time = (datetime.utcnow() - start_time).total_seconds()
+        if execution_time > 5.0:  # Log requests taking more than 5 seconds
+            logger.warning(
+                f"Slow request: {request.method} {request.url.path} "
+                f"took {execution_time:.2f}s (request_id: {request_id})"
+            )
+        
+        # Add performance headers
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Response-Time"] = f"{execution_time:.3f}s"
+        
+        return response
+    
     # Add middleware to handle ngrok headers
     @app.middleware("http")
     async def add_ngrok_headers(request, call_next):
@@ -157,6 +195,58 @@ def create_app() -> FastAPI:
             "status": "healthy",
             "version": settings.APP_VERSION
         }
+    
+    @app.get("/health/service-layer")
+    async def service_layer_health():
+        """Service layer health check endpoint"""
+        try:
+            from app.services.cache.redis import redis_client
+            
+            # Test Redis connection
+            redis_healthy = False
+            try:
+                await redis_client.ping()
+                redis_healthy = True
+            except Exception as e:
+                logger.warning(f"Redis health check failed: {e}")
+            
+            # Test database connection
+            db_healthy = False
+            try:
+                from app.database import engine
+                async with engine.begin() as conn:
+                    await conn.execute("SELECT 1")
+                db_healthy = True
+            except Exception as e:
+                logger.warning(f"Database health check failed: {e}")
+            
+            # Check service layer components
+            service_layer_status = {
+                "redis_cache": "healthy" if redis_healthy else "unhealthy",
+                "database": "healthy" if db_healthy else "unhealthy",
+                "rate_limiting": "enabled",
+                "circuit_breaker": "enabled",
+                "caching": "enabled",
+                "monitoring": "enabled"
+            }
+            
+            overall_healthy = redis_healthy and db_healthy
+            
+            return {
+                "status": "healthy" if overall_healthy else "degraded",
+                "version": settings.APP_VERSION,
+                "service_layer": service_layer_status,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            logger.error(f"Service layer health check failed: {e}")
+            return {
+                "status": "unhealthy",
+                "version": settings.APP_VERSION,
+                "error": str(e),
+                "timestamp": datetime.utcnow().isoformat()
+            }
     
     return app
 

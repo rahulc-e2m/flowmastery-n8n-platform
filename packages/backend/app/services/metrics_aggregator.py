@@ -1,7 +1,7 @@
 """Metrics aggregation service for computing historical statistics"""
 
 import logging
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from typing import Dict, Any, List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
@@ -199,7 +199,7 @@ class MetricsAggregator:
             # No new executions found for this period
             if existing_agg:
                 # Keep existing aggregation, just update the computed_at timestamp
-                existing_agg.computed_at = datetime.utcnow()
+                existing_agg.computed_at = datetime.now(timezone.utc)
                 await db.commit()
                 return existing_agg
             return None  # No data to aggregate at all
@@ -316,7 +316,7 @@ class MetricsAggregator:
             existing_agg.error_count = failed_executions
             existing_agg.time_saved_hours = time_saved_hours
             existing_agg.productivity_score = productivity_score
-            existing_agg.computed_at = datetime.utcnow()
+            existing_agg.computed_at = datetime.now(timezone.utc)
             
             aggregation = existing_agg
         else:
@@ -343,7 +343,7 @@ class MetricsAggregator:
                 error_count=failed_executions,
                 time_saved_hours=time_saved_hours,
                 productivity_score=productivity_score,
-                computed_at=datetime.utcnow()
+                computed_at=datetime.now(timezone.utc)
             )
             
             db.add(aggregation)
@@ -397,7 +397,7 @@ class MetricsAggregator:
         
         try:
             # Clean up old raw executions
-            execution_cutoff = datetime.utcnow() - timedelta(days=raw_execution_retention_days)
+            execution_cutoff = datetime.now(timezone.utc) - timedelta(days=raw_execution_retention_days)
             
             # Only delete executions that have been aggregated
             # Keep recent executions for real-time queries
@@ -412,7 +412,7 @@ class MetricsAggregator:
             results["executions_deleted"] = executions_result.rowcount
             
             # Clean up old aggregations (keep longer retention)
-            aggregation_cutoff = datetime.utcnow() - timedelta(days=aggregation_retention_months * 30)
+            aggregation_cutoff = datetime.now(timezone.utc) - timedelta(days=aggregation_retention_months * 30)
             
             delete_aggregations_stmt = delete(MetricsAggregation).where(
                 MetricsAggregation.created_at < aggregation_cutoff
@@ -638,7 +638,7 @@ class MetricsAggregator:
             # No new executions found for this period
             if existing_agg:
                 # Keep existing aggregation, just update the computed_at timestamp
-                existing_agg.computed_at = datetime.utcnow()
+                existing_agg.computed_at = datetime.now(timezone.utc)
                 db.commit()
                 return existing_agg
             return None  # No data to aggregate at all
@@ -755,7 +755,7 @@ class MetricsAggregator:
             existing_agg.error_count = failed_executions
             existing_agg.time_saved_hours = time_saved_hours
             existing_agg.productivity_score = productivity_score
-            existing_agg.computed_at = datetime.utcnow()
+            existing_agg.computed_at = datetime.now(timezone.utc)
             
             aggregation = existing_agg
         else:
@@ -782,7 +782,7 @@ class MetricsAggregator:
                 error_count=failed_executions,
                 time_saved_hours=time_saved_hours,
                 productivity_score=productivity_score,
-                computed_at=datetime.utcnow()
+                computed_at=datetime.now(timezone.utc)
             )
             
             db.add(aggregation)
@@ -825,7 +825,7 @@ class MetricsAggregator:
         
         try:
             # Clean up old raw executions
-            execution_cutoff = datetime.utcnow() - timedelta(days=raw_execution_retention_days)
+            execution_cutoff = datetime.now(timezone.utc) - timedelta(days=raw_execution_retention_days)
             
             # Only delete executions that have been aggregated
             # Keep recent executions for real-time queries
@@ -840,7 +840,7 @@ class MetricsAggregator:
             results["executions_deleted"] = executions_result.rowcount
             
             # Clean up old aggregations (keep longer retention)
-            aggregation_cutoff = datetime.utcnow() - timedelta(days=aggregation_retention_months * 30)
+            aggregation_cutoff = datetime.now(timezone.utc) - timedelta(days=aggregation_retention_months * 30)
             
             delete_aggregations_stmt = delete(MetricsAggregation).where(
                 MetricsAggregation.created_at < aggregation_cutoff

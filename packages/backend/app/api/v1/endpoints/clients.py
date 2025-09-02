@@ -30,7 +30,8 @@ async def create_client(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Create a new client (admin only)"""
-    client = await ClientService.create_client(db, client_data, admin_user)
+    client_service = ClientService()
+    client = await client_service.create_client(db, client_data, admin_user)
     
     response = ClientResponse.model_validate(client)
     response.has_n8n_api_key = bool(client.n8n_api_key_encrypted)
@@ -44,7 +45,8 @@ async def list_clients(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """List all clients (admin only)"""
-    clients = await ClientService.get_all_clients(db)
+    client_service = ClientService()
+    clients = await client_service.get_all_clients(db, use_cache=True)
     
     response_clients = []
     for client in clients:
@@ -68,7 +70,9 @@ async def get_client(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client"
         )
-    client = await ClientService.get_client_by_id(db, client_id)
+    
+    client_service = ClientService()
+    client = await client_service.get_client_by_id(db, client_id, use_cache=True)
     
     if not client:
         raise HTTPException(
@@ -92,7 +96,8 @@ async def update_client(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Update client details (admin only)"""
-    client = await ClientService.update_client(db, client_id, client_data)
+    client_service = ClientService()
+    client = await client_service.update_client(db, client_id, client_data, admin_user)
     
     if not client:
         raise HTTPException(
@@ -116,7 +121,8 @@ async def configure_n8n_api(
     admin_user: User = Depends(get_current_admin_user)
 ) -> ClientSyncResponse:
     """Configure n8n API settings for a client and immediately sync data (admin only)"""
-    client = await ClientService.configure_n8n_api(db, client_id, n8n_config)
+    client_service = ClientService()
+    client = await client_service.configure_n8n_api(db, client_id, n8n_config, admin_user)
     
     if not client:
         raise HTTPException(
@@ -140,7 +146,8 @@ async def delete_client(
     admin_user: User = Depends(get_current_admin_user)
 ):
     """Delete a client (admin only)"""
-    success = await ClientService.delete_client(db, client_id)
+    client_service = ClientService()
+    success = await client_service.delete_client(db, client_id, admin_user)
     
     if not success:
         raise HTTPException(
@@ -174,7 +181,8 @@ async def trigger_immediate_sync(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
     """Manually trigger immediate n8n data sync for a client (admin only)"""
-    client = await ClientService.get_client_by_id(db, client_id)
+    client_service = ClientService()
+    client = await client_service.get_client_by_id(db, client_id, use_cache=False)
     
     if not client:
         raise HTTPException(
@@ -189,7 +197,7 @@ async def trigger_immediate_sync(
         )
     
     try:
-        sync_result = await ClientService._immediate_sync_n8n_data(db, client)
+        sync_result = await client_service._immediate_sync_n8n_data(db, client)
         return {
             "message": "Immediate sync completed successfully",
             "sync_result": sync_result

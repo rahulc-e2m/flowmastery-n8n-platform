@@ -16,7 +16,7 @@ class MetricsService:
     """Service for collecting and calculating n8n metrics"""
     
     def __init__(self):
-        self.cache_ttl = 45  # Cache for 45 seconds
+        self.cache_ttl = 30  # Cache for 30 seconds - shorter to ensure fresh data
     
     async def get_workflows_metrics(self) -> Dict[str, Any]:
         """Get workflow-related metrics"""

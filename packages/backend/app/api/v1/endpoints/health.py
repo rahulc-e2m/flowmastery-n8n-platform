@@ -1,12 +1,9 @@
 """Health check endpoints"""
 
-from datetime import datetime
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
 
-from app.config import settings
-from app.services.n8n.client import n8n_client
-from app.services.cache.redis import redis_client
+from app.services.health_service import health_service
 
 router = APIRouter()
 
@@ -21,75 +18,40 @@ class HealthResponse(BaseModel):
 @router.get("/", response_model=HealthResponse)
 async def health_check():
     """Basic health check"""
-    return HealthResponse(
-        status="healthy",
-        timestamp=datetime.now().isoformat(),
-        version=settings.APP_VERSION,
-        services={}
-    )
+    result = await health_service.get_basic_health()
+    
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error
+        )
+    
+    return HealthResponse(**result.data)
 
 
 @router.get("/detailed", response_model=HealthResponse)
 async def detailed_health_check():
     """Detailed health check with service status"""
-    services = {}
+    result = await health_service.get_detailed_health()
     
-    # Check Redis
-    try:
-        redis_healthy = await redis_client.ping()
-        services["redis"] = {
-            "status": "healthy" if redis_healthy else "unhealthy",
-            "url": settings.REDIS_URL
-        }
-    except Exception as e:
-        services["redis"] = {
-            "status": "error",
-            "error": str(e)
-        }
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error
+        )
     
-    # Check n8n
-    try:
-        if settings.N8N_API_URL and settings.N8N_API_KEY:
-            n8n_healthy = await n8n_client.health_check()
-            services["n8n"] = {
-                "status": "healthy" if n8n_healthy else "unhealthy",
-                "url": settings.N8N_API_URL,
-                "configured": True
-            }
-        else:
-            services["n8n"] = {
-                "status": "not_configured",
-                "configured": False
-            }
-    except Exception as e:
-        services["n8n"] = {
-            "status": "error",
-            "error": str(e),
-            "configured": bool(settings.N8N_API_URL and settings.N8N_API_KEY)
-        }
+    return HealthResponse(**result.data)
+
+
+@router.get("/services")
+async def get_service_metrics():
+    """Get service performance metrics"""
+    result = await health_service.get_service_metrics()
     
-    # Check AI services
-    services["ai"] = {
-        "gemini": {
-            "configured": bool(settings.GEMINI_API_KEY),
-            "status": "configured" if settings.GEMINI_API_KEY else "not_configured"
-        },
-        "openai": {
-            "configured": bool(settings.OPENAI_API_KEY),
-            "status": "configured" if settings.OPENAI_API_KEY else "not_configured"
-        }
-    }
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error
+        )
     
-    # Overall status
-    overall_status = "healthy"
-    if any(service.get("status") == "error" for service in services.values() if isinstance(service, dict)):
-        overall_status = "degraded"
-    elif any(service.get("status") == "unhealthy" for service in services.values() if isinstance(service, dict)):
-        overall_status = "unhealthy"
-    
-    return HealthResponse(
-        status=overall_status,
-        timestamp=datetime.now().isoformat(),
-        version=settings.APP_VERSION,
-        services=services
-    )
+    return result.data

@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, update, delete
 from sqlalchemy.exc import IntegrityError
 from uuid import UUID
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.models.dependency import Dependency
 from app.schemas.dependency import DependencyCreate, DependencyUpdate, DependencyResponse, DependencyListResponse
@@ -127,7 +127,7 @@ class DependencyService:
                 k: v for k, v in dependency_data.model_dump().items() 
                 if v is not None
             }
-            update_data["updated_at"] = datetime.utcnow()
+            update_data["updated_at"] = datetime.now(timezone.utc)
             
             # Update dependency
             stmt = (

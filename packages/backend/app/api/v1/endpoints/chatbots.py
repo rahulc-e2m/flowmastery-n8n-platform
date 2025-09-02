@@ -1,31 +1,126 @@
-"""Chatbot endpoints"""
+"""Chatbot endpoints with service layer protection"""
 
-from typing import List
+import asyncio
+import logging
+from datetime import datetime
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ....database.connection import get_db
-from ....models import User
-from ....schemas.chatbot import (
+from app.database import get_db
+from app.models.user import User
+from app.schemas.chatbot import (
     ChatbotCreate,
     ChatbotUpdate,
     ChatbotResponse,
     ChatbotListResponse
 )
-from ....services.chatbot_service import ChatbotService
-from ..dependencies import get_current_user, require_admin
-from ....core.decorators import validate_input, sanitize_response
+from app.services.chatbot_service import ChatbotService
+from app.core.dependencies import get_current_user, get_current_admin_user
+from app.core.decorators import validate_input, sanitize_response
+from app.services.cache.redis import redis_client
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
+
+
+class ChatbotServiceMixin:
+    """Service layer mixin for chatbot operations"""
+    
+    @staticmethod
+    async def _check_chatbot_rate_limit(user_id: str, operation: str, limit: int = 30, window: int = 60) -> bool:
+        """Check rate limit for chatbot operations"""
+        try:
+            current_time = int(datetime.utcnow().timestamp())
+            window_start = current_time - window
+            rate_limit_key = f"rate_limit:chatbots:{operation}:{user_id}"
+            
+            pipe = redis_client.pipeline()
+            pipe.zremrangebyscore(rate_limit_key, 0, window_start)
+            pipe.zcard(rate_limit_key)
+            pipe.zadd(rate_limit_key, {str(current_time): current_time})
+            pipe.expire(rate_limit_key, window)
+            
+            results = await pipe.execute()
+            current_requests = results[1]
+            
+            return current_requests < limit
+        except Exception as e:
+            logger.warning(f"Chatbot rate limiter error: {e}")
+            return True  # Fail open
+    
+    @staticmethod
+    async def _get_chatbot_cache(key: str) -> Optional[dict]:
+        """Get chatbot data from cache"""
+        try:
+            value = await redis_client.get(f"chatbot_cache:{key}")
+            if value:
+                import json
+                return json.loads(value)
+            return None
+        except Exception as e:
+            logger.warning(f"Chatbot cache get error: {e}")
+            return None
+    
+    @staticmethod
+    async def _set_chatbot_cache(key: str, value: dict, ttl: int = 300) -> bool:
+        """Set chatbot data in cache"""
+        try:
+            import json
+            serialized_value = json.dumps(value, default=str)
+            await redis_client.setex(f"chatbot_cache:{key}", ttl, serialized_value)
+            return True
+        except Exception as e:
+            logger.warning(f"Chatbot cache set error: {e}")
+            return False
+    
+    @staticmethod
+    async def _invalidate_chatbot_cache(pattern: str) -> bool:
+        """Invalidate chatbot cache entries"""
+        try:
+            keys = await redis_client.keys(f"chatbot_cache:{pattern}")
+            if keys:
+                await redis_client.delete(*keys)
+            return True
+        except Exception as e:
+            logger.warning(f"Chatbot cache invalidation error: {e}")
+            return False
 
 
 @router.get("/", response_model=ChatbotListResponse)
 async def get_all_chatbots(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(require_admin)
+    current_user: User = Depends(get_current_admin_user)
 ):
-    """Get all chatbots (admin only)"""
-    return await ChatbotService.get_all_chatbots(db)
+    """Get all chatbots (admin only) with service layer protection"""
+    # Rate limiting
+    if not await ChatbotServiceMixin._check_chatbot_rate_limit(current_user.id, "list_all"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded"
+        )
+    
+    # Try cache first
+    cache_key = "all_chatbots"
+    cached_result = await ChatbotServiceMixin._get_chatbot_cache(cache_key)
+    if cached_result:
+        logger.debug("Cache hit for all chatbots")
+        return ChatbotListResponse(**cached_result)
+    
+    try:
+        result = await ChatbotService.get_all_chatbots(db)
+        
+        # Cache the result
+        result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.__dict__
+        await ChatbotServiceMixin._set_chatbot_cache(cache_key, result_dict, ttl=180)
+        
+        return result
+    except Exception as e:
+        logger.error(f"Error getting all chatbots: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to retrieve chatbots"
+        )
 
 
 @router.get("/my", response_model=ChatbotListResponse)
@@ -61,13 +156,36 @@ async def create_chatbot(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Create a new chatbot"""
+    """Create a new chatbot with service layer protection"""
+    # Rate limiting for creation (lower limit)
+    if not await ChatbotServiceMixin._check_chatbot_rate_limit(current_user.id, "create", limit=5, window=300):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded for chatbot creation"
+        )
+    
     try:
-        return await ChatbotService.create_chatbot(db, chatbot_data, current_user)
+        result = await ChatbotService.create_chatbot(db, chatbot_data, current_user)
+        
+        # Invalidate relevant caches
+        await ChatbotServiceMixin._invalidate_chatbot_cache("all_chatbots")
+        await ChatbotServiceMixin._invalidate_chatbot_cache(f"user_chatbots:{current_user.id}")
+        if current_user.client_id:
+            await ChatbotServiceMixin._invalidate_chatbot_cache(f"client_chatbots:{current_user.client_id}")
+        
+        logger.info(f"Created chatbot {result.id} by user {current_user.id}")
+        return result
+        
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    except Exception as e:
+        logger.error(f"Error creating chatbot: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to create chatbot"
         )
 
 

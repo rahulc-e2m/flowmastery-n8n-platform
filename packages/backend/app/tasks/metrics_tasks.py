@@ -46,11 +46,13 @@ def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
             from app.services.cache.redis import redis_client
             import asyncio
             
-            # Clear client-specific cache
+            # Clear client-specific cache more aggressively
             cache_keys = [
                 f"enhanced_client_metrics:{client_id}",
                 f"client_metrics:{client_id}",
-                f"client_workflows:{client_id}"
+                f"client_workflows:{client_id}",
+                f"metrics_cache:enhanced_client_metrics:{client_id}",
+                f"metrics_cache:client_metrics:{client_id}"
             ]
             
             # Run cache clearing in async context
@@ -59,7 +61,8 @@ def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
                     await redis_client.delete(key)
                 # Also clear admin metrics cache since it includes this client
                 await redis_client.clear_pattern("admin_metrics:*")
-                await redis_client.clear_pattern("enhanced_client_metrics:*")
+                await redis_client.clear_pattern("metrics_cache:*")
+                logger.info(f"Cleared all metrics cache after syncing client {client_id}")
             
             # Execute cache clearing
             try:
@@ -131,11 +134,14 @@ def sync_all_clients_metrics(self) -> Dict[str, Any]:
             import asyncio
             
             async def clear_all_cache():
-                # Clear all metrics-related cache
+                # Clear all metrics-related cache more aggressively
                 await redis_client.clear_pattern("enhanced_client_metrics:*")
                 await redis_client.clear_pattern("client_metrics:*")
                 await redis_client.clear_pattern("client_workflows:*")
                 await redis_client.clear_pattern("admin_metrics:*")
+                await redis_client.clear_pattern("metrics_cache:*")
+                await redis_client.clear_pattern("fast_metrics")
+                await redis_client.clear_pattern("dashboard_metrics_*")
                 logger.info("Cleared all metrics cache after sync")
             
             # Execute cache clearing

@@ -1,7 +1,7 @@
 """Metrics aggregation models for persistent storage"""
 
 import uuid
-from datetime import datetime, date
+from datetime import datetime, date, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Date, Float, Enum
 from sqlalchemy.dialects.postgresql import UUID
@@ -83,7 +83,7 @@ class MetricsAggregation(Base, TimestampMixin):
     computed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         nullable=False, 
-        default=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc)
     )
     
     # Relationships

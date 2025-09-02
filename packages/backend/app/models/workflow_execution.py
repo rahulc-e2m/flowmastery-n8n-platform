@@ -1,7 +1,7 @@
 """Workflow execution model for persistent storage"""
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import String, Integer, ForeignKey, Boolean, DateTime, Text, Float, Enum
 from sqlalchemy.dialects.postgresql import UUID
@@ -95,7 +95,7 @@ class WorkflowExecution(Base, TimestampMixin):
     last_synced_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), 
         nullable=False, 
-        default=datetime.utcnow
+        default=lambda: datetime.now(timezone.utc)
     )
     
     # Relationships

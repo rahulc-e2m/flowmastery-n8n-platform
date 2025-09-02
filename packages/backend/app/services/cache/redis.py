@@ -152,6 +152,57 @@ class RedisClient:
         except Exception as e:
             logger.error(f"Cache hash get failed for key {key}: {e}")
             return None
+    
+    async def setex(self, key: str, seconds: int, value: Any) -> bool:
+        """Set key with expiration"""
+        try:
+            # Try JSON first, fallback to pickle
+            try:
+                serialized = json.dumps(value, default=str).encode('utf-8')
+            except (TypeError, ValueError):
+                serialized = pickle.dumps(value)
+            
+            await self.client.setex(key, seconds, serialized)
+            return True
+        except Exception as e:
+            logger.error(f"Cache setex failed for key {key}: {e}")
+            return False
+    
+    async def keys(self, pattern: str) -> list:
+        """Get keys matching pattern"""
+        try:
+            return await self.client.keys(pattern)
+        except Exception as e:
+            logger.error(f"Cache keys failed for pattern {pattern}: {e}")
+            return []
+    
+    def pipeline(self):
+        """Get Redis pipeline"""
+        return self.client.pipeline()
+    
+    async def zadd(self, key: str, mapping: dict) -> int:
+        """Add to sorted set"""
+        try:
+            return await self.client.zadd(key, mapping)
+        except Exception as e:
+            logger.error(f"Cache zadd failed for key {key}: {e}")
+            return 0
+    
+    async def zremrangebyscore(self, key: str, min_score: float, max_score: float) -> int:
+        """Remove from sorted set by score range"""
+        try:
+            return await self.client.zremrangebyscore(key, min_score, max_score)
+        except Exception as e:
+            logger.error(f"Cache zremrangebyscore failed for key {key}: {e}")
+            return 0
+    
+    async def zcard(self, key: str) -> int:
+        """Get sorted set cardinality"""
+        try:
+            return await self.client.zcard(key)
+        except Exception as e:
+            logger.error(f"Cache zcard failed for key {key}: {e}")
+            return 0
 
 
 # Global client instance
