@@ -8,7 +8,7 @@ from datetime import datetime
 class ChatMessage(BaseModel):
     """Chat message request"""
     message: str = Field(..., min_length=1, max_length=2000, description="User message")
-    chatbot_id: Optional[str] = Field(None, description="Chatbot identifier")
+    chatbot_id: str = Field(..., description="Chatbot identifier")
     conversation_id: Optional[str] = Field(None, description="Conversation identifier")
 
 

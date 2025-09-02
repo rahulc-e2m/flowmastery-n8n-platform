@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   ArrowLeft,
@@ -10,7 +10,8 @@ import {
   Settings,
   X,
   MessageCircle,
-  Building2
+  Building2,
+  ArrowDown
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -31,13 +32,17 @@ import { ChatbotApi } from '@/services/chatbotApi'
 
 export function ChatbotPage() {
   const { id } = useParams<{ id: string }>()
+  const queryClient = useQueryClient()
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [webhookUrl, setWebhookUrl] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [conversationId, setConversationId] = useState<string | null>(null)
+  const [showScrollButton, setShowScrollButton] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Fetch chatbot details
   const { data: chatbot, isLoading: isChatbotLoading } = useQuery({
@@ -46,25 +51,79 @@ export function ChatbotPage() {
     enabled: !!id
   })
 
+  // Fetch chat history
+  const { data: chatHistory } = useQuery({
+    queryKey: ['chatHistory', id, conversationId],
+    queryFn: async () => {
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const url = conversationId 
+        ? `${API_BASE_URL}/api/v1/chat/${id}/history?conversation_id=${conversationId}`
+        : `${API_BASE_URL}/api/v1/chat/${id}/history`
+      
+      const response = await fetch(url, {
+        credentials: 'include'
+      })
+      
+      if (!response.ok) {
+        throw new Error('Failed to fetch chat history')
+      }
+      
+      return response.json()
+    },
+    enabled: !!id,
+    refetchOnWindowFocus: false
+  })
+
   useEffect(() => {
     if (chatbot) {
       setWebhookUrl(chatbot.webhook_url)
     }
   }, [chatbot])
 
+  // Load chat history into messages state (only on initial load)
+  useEffect(() => {
+    if (chatHistory?.messages && messages.length === 0) {
+      const historyMessages: ChatMessage[] = chatHistory.messages
+        .sort((a: any, b: any) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime())
+        .map((msg: any) => [
+          {
+            id: `${msg.id}-user`,
+            type: 'user' as const,
+            content: msg.user_message,
+            timestamp: new Date(msg.timestamp)
+          },
+          {
+            id: `${msg.id}-bot`,
+            type: 'bot' as const,
+            content: msg.bot_response,
+            timestamp: new Date(msg.timestamp)
+          }
+        ]).flat()
+      
+      setMessages(historyMessages)
+    }
+  }, [chatHistory, messages.length])
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }
 
   useEffect(() => {
-    scrollToBottom()
+    // Only auto-scroll if user is near the bottom or if it's a new message
+    const scrollContainer = messagesContainerRef.current
+    if (scrollContainer && messages.length > 0) {
+      const isNearBottom = scrollContainer.scrollTop + scrollContainer.clientHeight >= scrollContainer.scrollHeight - 100
+      if (isNearBottom || messages.length <= 2) {
+        setTimeout(scrollToBottom, 100) // Small delay to ensure DOM is updated
+      }
+    }
   }, [messages])
 
   const sendMessage = async () => {
-    if (!inputMessage.trim() || !webhookUrl) return
+    if (!inputMessage.trim()) return
 
     const userMessage: ChatMessage = {
-      id: Date.now().toString(),
+      id: `user-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       type: 'user',
       content: inputMessage.trim(),
       timestamp: new Date()
@@ -75,15 +134,18 @@ export function ChatbotPage() {
     setIsLoading(true)
 
     try {
-      const response = await fetch(webhookUrl, {
+      // Use our backend API instead of calling webhook directly
+      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          ...(apiKey && { 'Authorization': `Bearer ${apiKey}` })
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify({
           message: userMessage.content,
-          timestamp: userMessage.timestamp.toISOString()
+          chatbot_id: id,
+          conversation_id: conversationId
         })
       })
 
@@ -92,32 +154,31 @@ export function ChatbotPage() {
       }
 
       const data = await response.json()
-      
-      let botResponseText = 'No response received'
-      if (data.output) {
-        botResponseText = data.output
-      } else if (data.result) {
-        botResponseText = data.result
-      } else if (data.text) {
-        botResponseText = data.text
-      } else if (data.message) {
-        botResponseText = data.message
-      } else if (typeof data === 'string') {
-        botResponseText = data
+
+      // Use the response from our backend API
+      const botResponseText = data.response || 'No response received'
+
+      // Update conversation ID if we got one back
+      const newConversationId = data.conversation_id || conversationId
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id)
       }
 
       const botMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: data.message_id || `bot-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'bot',
         content: botResponseText,
         timestamp: new Date()
       }
 
       setMessages(prev => [...prev, botMessage])
+      
+      // Don't refetch history immediately to avoid overwriting current messages
+      // The messages are already persisted on the backend
     } catch (error: any) {
       console.error('Error sending message:', error)
       const errorMessage: ChatMessage = {
-        id: (Date.now() + 1).toString(),
+        id: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'bot',
         content: `Error: ${error.message}. Please check your webhook URL and try again.`,
         timestamp: new Date()
@@ -131,7 +192,10 @@ export function ChatbotPage() {
 
   const clearChat = () => {
     setMessages([])
-    toast.success('Chat cleared')
+    setConversationId(null) // Reset conversation ID for new chat
+    // Invalidate chat history to start fresh
+    queryClient.invalidateQueries({ queryKey: ['chatHistory', id] })
+    toast.success('Chat cleared - starting new conversation')
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -186,7 +250,7 @@ export function ChatbotPage() {
             </Button>
           </Link>
           <div className="flex items-center space-x-3">
-            <motion.div 
+            <motion.div
               className="p-3 rounded-xl bg-blue-500 text-white"
               whileHover={{ scale: 1.05 }}
             >
@@ -250,10 +314,32 @@ export function ChatbotPage() {
                 </Badge>
               </div>
             </CardHeader>
-            
+
             {/* Messages Area */}
             <CardContent className="flex-1 flex flex-col p-0">
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              <div 
+                ref={messagesContainerRef}
+                className="flex-1 overflow-y-auto p-4 space-y-4 scroll-smooth relative"
+                style={{ 
+                  maxHeight: '500px',
+                  scrollBehavior: 'smooth'
+                }}
+                onScroll={(e) => {
+                  const container = e.currentTarget
+                  const isNearBottom = container.scrollTop + container.clientHeight >= container.scrollHeight - 100
+                  setShowScrollButton(!isNearBottom && messages.length > 0)
+                }}
+              >
+                {messages.length === 0 && !isLoading && (
+                  <div className="flex items-center justify-center h-full text-center">
+                    <div className="space-y-2">
+                      <MessageCircle className="w-12 h-12 text-muted-foreground mx-auto" />
+                      <p className="text-muted-foreground">Start a conversation with your AI assistant</p>
+                      <p className="text-sm text-muted-foreground">Type a message below to get started</p>
+                    </div>
+                  </div>
+                )}
+                
                 <AnimatePresence>
                   {messages.map((message) => (
                     <motion.div
@@ -263,26 +349,23 @@ export function ChatbotPage() {
                       exit={{ opacity: 0, y: -20 }}
                       className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
                     >
-                      <div className={`flex items-start space-x-2 max-w-[80%] ${
-                        message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''
-                      }`}>
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                          message.type === 'user' 
-                            ? 'bg-primary text-primary-foreground' 
-                            : 'bg-muted text-muted-foreground'
+                      <div className={`flex items-start space-x-2 max-w-[80%] ${message.type === 'user' ? 'flex-row-reverse space-x-reverse' : ''
                         }`}>
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${message.type === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                          }`}>
                           {message.type === 'user' ? (
                             <User className="w-4 h-4" />
                           ) : (
                             <Bot className="w-4 h-4" />
                           )}
                         </div>
-                        <div className={`rounded-lg px-4 py-2 ${
-                          message.type === 'user'
-                            ? 'bg-primary text-primary-foreground'
-                            : 'bg-muted text-muted-foreground'
-                        }`}>
-                          <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+                        <div className={`rounded-lg px-4 py-2 shadow-sm ${message.type === 'user'
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted text-muted-foreground'
+                          }`}>
+                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>
                           <p className="text-xs opacity-70 mt-1">
                             {message.timestamp.toLocaleTimeString()}
                           </p>
@@ -291,7 +374,7 @@ export function ChatbotPage() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                
+
                 {isLoading && (
                   <motion.div
                     initial={{ opacity: 0, y: 20 }}
@@ -312,32 +395,51 @@ export function ChatbotPage() {
                     </div>
                   </motion.div>
                 )}
-                
+
                 <div ref={messagesEndRef} />
+                
+                {/* Scroll to bottom button */}
+                {showScrollButton && (
+                  <motion.button
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.8 }}
+                    onClick={scrollToBottom}
+                    className="absolute bottom-4 right-4 bg-primary text-primary-foreground rounded-full p-2 shadow-lg hover:bg-primary/90 transition-colors"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </motion.button>
+                )}
               </div>
-              
+
               {/* Input Area */}
               <div className="border-t p-4">
                 <div className="flex space-x-2">
                   <Input
-                    placeholder="Type your message..."
+                    placeholder="Type your message... (Press Enter to send)"
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     onKeyPress={handleKeyPress}
-                    disabled={isLoading || !webhookUrl}
+                    disabled={isLoading}
                     className="flex-1"
+                    autoFocus
                   />
                   <Button
                     onClick={sendMessage}
-                    disabled={isLoading || !inputMessage.trim() || !webhookUrl}
+                    disabled={isLoading || !inputMessage.trim()}
                     size="sm"
+                    className="px-3"
                   >
-                    <Send className="w-4 h-4" />
+                    {isLoading ? (
+                      <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
                   </Button>
                 </div>
-                {!webhookUrl && (
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Configure webhook URL to start chatting
+                {conversationId && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Conversation ID: {conversationId}
                   </p>
                 )}
               </div>
@@ -400,7 +502,7 @@ export function ChatbotPage() {
               Update webhook URL and optional API key for the chatbot integration.
             </CardDescription>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div>
               <Label htmlFor="webhook">Webhook URL</Label>

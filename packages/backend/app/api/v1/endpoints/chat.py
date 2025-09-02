@@ -1,11 +1,14 @@
-"""Chat endpoints"""
+"""Chat endpoints - Using service layer"""
 
-from fastapi import APIRouter, HTTPException, Request, status
+from datetime import datetime
+from fastapi import APIRouter, Request, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Dict, Any
 from slowapi import Limiter
 
+from app.database import get_db
 from app.schemas.chat import ChatMessage, ChatResponse
-from app.services.chat_service import chat_service
+from app.services.chat_service import ChatService
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.core.decorators import validate_input, sanitize_response
 
@@ -19,36 +22,51 @@ limiter = Limiter(key_func=get_user_identifier)
 @limiter.limit(RATE_LIMITS["chat"])
 @validate_input(max_string_length=5000, sanitize_strings=True)
 @sanitize_response()
-async def chat_endpoint(request: Request, chat_message: ChatMessage) -> ChatResponse:
-    """Main chat endpoint with integrated chatbot service"""
+async def chat_endpoint(
+    request: Request, 
+    chat_message: ChatMessage,
+    db: AsyncSession = Depends(get_db)
+) -> ChatResponse:
+    """Send message to chatbot webhook URL using service layer"""
     
-    # Get user identifier for service layer context
-    user_identifier = get_user_identifier(request)
+    chat_service = ChatService(db)
+    return await chat_service.process_chat_message(chat_message)
+
+
+@router.get("/{chatbot_id}/history")
+async def get_chat_history(
+    chatbot_id: str,
+    conversation_id: str = None,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get chat history for a chatbot using service layer"""
     
-    result = await chat_service.process_chat_message(
-        message=chat_message.message,
-        conversation_id=chat_message.conversation_id,
-        user_id=user_identifier
-    )
+    chat_service = ChatService(db)
+    return await chat_service.get_chat_history(chatbot_id, conversation_id, limit)
+
+
+@router.get("/{chatbot_id}/conversations")
+async def get_conversations(
+    chatbot_id: str,
+    db: AsyncSession = Depends(get_db)
+) -> Dict[str, Any]:
+    """Get list of conversations for a chatbot"""
     
-    if not result.success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error
-        )
+    chat_service = ChatService(db)
+    conversations = await chat_service.get_conversation_list(chatbot_id)
     
-    return result.data
+    return {
+        "conversations": conversations,
+        "total": len(conversations)
+    }
 
 
 @router.get("/test")
 async def test_chat() -> Dict[str, Any]:
     """Test chat functionality"""
-    result = await chat_service.get_chat_test_status()
-    
-    if not result.success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=result.error
-        )
-    
-    return result.data
+    return {
+        "status": "ok",
+        "message": "Chat service is running with service layer",
+        "timestamp": datetime.now().isoformat()
+    }

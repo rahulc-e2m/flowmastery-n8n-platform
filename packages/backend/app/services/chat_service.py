@@ -1,223 +1,286 @@
-"""
-Chat Service - Manages chat operations with service layer protection
-"""
+"""Chat service layer for handling chat operations"""
 
+import httpx
 import uuid
 import logging
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Dict, Any, List, Optional
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from fastapi import HTTPException, status
 
-from app.core.service_layer import BaseService, OperationContext, OperationType, OperationResult
+from app.models import Chatbot, ChatMessage as ChatMessageModel
 from app.schemas.chat import ChatMessage, ChatResponse
-from app.config import settings
 
 logger = logging.getLogger(__name__)
 
 
-class ChatService(BaseService[Dict[str, Any]]):
-    """Service for managing chat operations with full service layer protection"""
+class ChatService:
+    """Service class for handling chat operations"""
     
-    @property
-    def service_name(self) -> str:
-        return "chat_service"
+    def __init__(self, db: AsyncSession):
+        self.db = db
     
-    async def process_chat_message(
+    async def get_chatbot(self, chatbot_id: str) -> Chatbot:
+        """Get chatbot by ID with validation"""
+        stmt = select(Chatbot).where(Chatbot.id == chatbot_id)
+        result = await self.db.execute(stmt)
+        chatbot = result.scalars().first()
+        
+        if not chatbot:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Chatbot not found"
+            )
+        
+        if not chatbot.webhook_url:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Chatbot webhook URL not configured"
+            )
+        
+        if not chatbot.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Chatbot is not active"
+            )
+        
+        return chatbot
+    
+    async def send_webhook_message(
         self, 
+        webhook_url: str, 
         message: str, 
-        conversation_id: Optional[str] = None,
-        user_id: Optional[str] = None
-    ) -> OperationResult[ChatResponse]:
-        """Process a chat message with service layer protection"""
-        context = OperationContext(
-            operation_type=OperationType.CREATE,
-            user_id=user_id,
-            metadata={
-                "message_length": len(message),
-                "conversation_id": conversation_id
-            }
+        conversation_id: str, 
+        message_id: str
+    ) -> Dict[str, Any]:
+        """Send message to webhook and return response"""
+        webhook_payload = {
+            "message": message,
+            "sessionId": conversation_id,
+            "message_id": message_id,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info(f"Sending message to webhook: {webhook_url[:50]}...")
+        
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                response = await client.post(
+                    webhook_url,
+                    json=webhook_payload,
+                    headers={"Content-Type": "application/json"}
+                )
+                
+                if response.status_code != 200:
+                    logger.error(f"Webhook returned status {response.status_code}: {response.text}")
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail=f"Webhook returned status {response.status_code}"
+                    )
+                
+                webhook_response = response.json()
+                logger.info(f"Webhook response received: {webhook_response}")
+                return webhook_response
+        
+        except httpx.TimeoutException:
+            logger.error(f"Webhook request timed out for URL: {webhook_url}")
+            raise HTTPException(
+                status_code=status.HTTP_504_GATEWAY_TIMEOUT,
+                detail="Webhook request timed out"
+            )
+        except httpx.RequestError as e:
+            logger.error(f"Failed to connect to webhook {webhook_url}: {str(e)}")
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to connect to webhook: {str(e)}"
+            )
+    
+    def extract_bot_response(self, webhook_response: Dict[str, Any]) -> str:
+        """Extract bot response from webhook response"""
+        # Try multiple possible field names that n8n might use
+        return (
+            webhook_response.get("response") or 
+            webhook_response.get("message") or 
+            webhook_response.get("text") or 
+            webhook_response.get("output") or 
+            webhook_response.get("reply") or
+            "I received your message."
         )
-        
-        # Input validation
-        await self._validate_input(message, context)
-        
-        async def _process_message():
-            start_time = datetime.now()
+    
+    async def save_chat_message(
+        self,
+        message_id: str,
+        chatbot_id: str,
+        conversation_id: str,
+        user_message: str,
+        bot_response: str,
+        processing_time: float,
+        source: str = "webhook"
+    ) -> ChatMessageModel:
+        """Save chat message to database"""
+        try:
+            chat_message_record = ChatMessageModel(
+                id=message_id,
+                chatbot_id=chatbot_id,
+                conversation_id=conversation_id,
+                user_message=user_message,
+                bot_response=bot_response,
+                processing_time=processing_time,
+                source=source,
+                timestamp=datetime.now()
+            )
             
-            try:
-                # Import here to avoid circular imports
-                from app.services.n8n.chatbot import chatbot_service
-                
-                # Process message with integrated chatbot service
-                result = await chatbot_service.process_message(
-                    message=message,
-                    conversation_id=conversation_id
+            self.db.add(chat_message_record)
+            await self.db.commit()
+            await self.db.refresh(chat_message_record)
+            
+            logger.info(f"Chat message saved: {message_id}")
+            return chat_message_record
+        
+        except Exception as e:
+            logger.error(f"Failed to save chat message {message_id}: {str(e)}")
+            await self.db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to save chat message"
+            )
+    
+    async def process_chat_message(self, chat_message: ChatMessage) -> ChatResponse:
+        """Process a chat message through the complete flow"""
+        start_time = datetime.now()
+        message_id = str(uuid.uuid4())
+        
+        try:
+            # Validate chatbot_id
+            if not chat_message.chatbot_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="chatbot_id is required"
                 )
-                
-                processing_time = (datetime.now() - start_time).total_seconds()
-                
+            
+            # Get and validate chatbot
+            chatbot = await self.get_chatbot(chat_message.chatbot_id)
+            
+            # Generate conversation ID if not provided
+            conversation_id = chat_message.conversation_id or str(uuid.uuid4())
+            
+            # Send message to webhook
+            webhook_response = await self.send_webhook_message(
+                chatbot.webhook_url,
+                chat_message.message,
+                conversation_id,
+                message_id
+            )
+            
+            # Extract bot response
+            bot_response = self.extract_bot_response(webhook_response)
+            
+            # Calculate processing time
+            processing_time = (datetime.now() - start_time).total_seconds()
+            
+            # Save to database
+            await self.save_chat_message(
+                message_id=message_id,
+                chatbot_id=chat_message.chatbot_id,
+                conversation_id=conversation_id,
+                user_message=chat_message.message,
+                bot_response=bot_response,
+                processing_time=processing_time,
+                source="webhook"
+            )
+            
+            return ChatResponse(
+                response=bot_response,
+                message_id=message_id,
+                timestamp=datetime.now().isoformat(),
+                processing_time=processing_time,
+                source="webhook",
+                conversation_id=conversation_id
+            )
+        
+        except Exception as e:
+            # Handle errors gracefully
+            processing_time = (datetime.now() - start_time).total_seconds()
+            conversation_id = chat_message.conversation_id or str(uuid.uuid4())
+            
+            # If it's not an HTTPException, create a generic error response
+            if not isinstance(e, HTTPException):
                 return ChatResponse(
-                    response=result["response"],
-                    message_id=result["message_id"],
-                    timestamp=result["timestamp"],
-                    processing_time=processing_time,
-                    source=result["source"],
-                    conversation_id=result.get("conversation_id")
-                )
-                
-            except Exception as e:
-                logger.error(f"Chat processing error: {e}")
-                processing_time = (datetime.now() - start_time).total_seconds()
-                
-                # Fallback error response
-                message_id = str(uuid.uuid4())
-                
-                return ChatResponse(
-                    response=f"I encountered an error processing your message: {str(e)}",
+                    response="Sorry, I encountered an error processing your message. Please try again.",
                     message_id=message_id,
                     timestamp=datetime.now().isoformat(),
                     processing_time=processing_time,
                     source="error",
                     conversation_id=conversation_id
                 )
-        
-        return await self.execute_operation(_process_message, context)
+            else:
+                # Re-raise HTTPExceptions
+                raise e
     
-    async def get_chat_test_status(self, use_cache: bool = True) -> OperationResult[Dict[str, Any]]:
-        """Get chat service test status"""
-        context = OperationContext(operation_type=OperationType.READ)
+    async def get_chat_history(
+        self,
+        chatbot_id: str,
+        conversation_id: Optional[str] = None,
+        limit: int = 50
+    ) -> Dict[str, Any]:
+        """Get chat history for a chatbot"""
         
-        async def _get_test_status():
-            # Check cache first
-            if use_cache:
-                cache_key = "chat_test_status"
-                cached_result = await self._get_from_cache(cache_key)
-                if cached_result:
-                    return cached_result
-            
-            result = {
-                "status": "ok",
-                "message": "Chat service is running",
-                "timestamp": datetime.now().isoformat(),
-                "configuration": {
-                    "n8n_configured": bool(settings.N8N_API_URL and settings.N8N_API_KEY),
-                    "ai_configured": bool(settings.GEMINI_API_KEY),
-                    "n8n_url": settings.N8N_API_URL if settings.N8N_API_URL else "Not configured"
-                },
-                "service_health": await self._check_chat_service_health()
-            }
-            
-            # Cache for 60 seconds
-            if use_cache:
-                await self._set_cache("chat_test_status", result, ttl=60)
-            
-            return result
+        # Validate that chatbot exists
+        await self.get_chatbot(chatbot_id)
         
-        return await self.execute_operation(_get_test_status, context)
-    
-    async def _validate_input(self, message: str, context: OperationContext) -> None:
-        """Validate chat message input"""
-        if not message or not message.strip():
-            raise ValueError("Message cannot be empty")
+        query = select(ChatMessageModel).where(ChatMessageModel.chatbot_id == chatbot_id)
         
-        if len(message) > 5000:  # Max message length
-            raise ValueError("Message too long (max 5000 characters)")
+        if conversation_id:
+            query = query.where(ChatMessageModel.conversation_id == conversation_id)
         
-        # Check for potential abuse patterns
-        if message.count('\n') > 50:  # Too many line breaks
-            raise ValueError("Message format invalid")
+        query = query.order_by(ChatMessageModel.timestamp.desc()).limit(limit)
         
-        # Basic content filtering (could be expanded)
-        forbidden_patterns = ['<script', 'javascript:', 'data:']
-        message_lower = message.lower()
-        for pattern in forbidden_patterns:
-            if pattern in message_lower:
-                raise ValueError("Message contains forbidden content")
-    
-    async def _check_chat_service_health(self) -> Dict[str, Any]:
-        """Check chat service dependencies health"""
-        health_status = {
-            "n8n_service": "unknown",
-            "ai_service": "unknown",
-            "overall": "unknown"
+        result = await self.db.execute(query)
+        messages = result.scalars().all()
+        
+        return {
+            "messages": [
+                {
+                    "id": msg.id,
+                    "conversation_id": msg.conversation_id,
+                    "user_message": msg.user_message,
+                    "bot_response": msg.bot_response,
+                    "timestamp": msg.timestamp.isoformat(),
+                    "processing_time": msg.processing_time,
+                    "source": msg.source
+                }
+                for msg in messages
+            ],
+            "total": len(messages)
         }
-        
-        try:
-            # Check n8n service
-            if settings.N8N_API_URL and settings.N8N_API_KEY:
-                from app.services.n8n.client import n8n_client
-                n8n_healthy = await n8n_client.health_check()
-                health_status["n8n_service"] = "healthy" if n8n_healthy else "unhealthy"
-            else:
-                health_status["n8n_service"] = "not_configured"
-            
-            # Check AI service configuration
-            if settings.GEMINI_API_KEY or settings.OPENAI_API_KEY:
-                health_status["ai_service"] = "configured"
-            else:
-                health_status["ai_service"] = "not_configured"
-            
-            # Determine overall health
-            if (health_status["n8n_service"] in ["healthy", "not_configured"] and 
-                health_status["ai_service"] in ["configured", "not_configured"]):
-                health_status["overall"] = "healthy"
-            else:
-                health_status["overall"] = "degraded"
-                
-        except Exception as e:
-            logger.warning(f"Chat service health check error: {e}")
-            health_status["overall"] = "error"
-            health_status["error"] = str(e)
-        
-        return health_status
     
-    async def get_conversation_history(
-        self, 
-        conversation_id: str, 
-        limit: int = 50,
-        user_id: Optional[str] = None
-    ) -> OperationResult[Dict[str, Any]]:
-        """Get conversation history (placeholder for future implementation)"""
-        context = OperationContext(
-            operation_type=OperationType.READ,
-            user_id=user_id,
-            metadata={"conversation_id": conversation_id, "limit": limit}
-        )
+    async def get_conversation_list(self, chatbot_id: str) -> List[Dict[str, Any]]:
+        """Get list of conversations for a chatbot"""
         
-        async def _get_history():
-            # Placeholder implementation
-            # In a real implementation, this would fetch from a database
-            return {
-                "conversation_id": conversation_id,
-                "messages": [],
-                "total_messages": 0,
-                "message": "Conversation history not yet implemented"
+        # Validate that chatbot exists
+        await self.get_chatbot(chatbot_id)
+        
+        # Get unique conversations with latest message info
+        query = select(
+            ChatMessageModel.conversation_id,
+            ChatMessageModel.timestamp,
+            ChatMessageModel.user_message
+        ).where(
+            ChatMessageModel.chatbot_id == chatbot_id
+        ).order_by(
+            ChatMessageModel.conversation_id,
+            ChatMessageModel.timestamp.desc()
+        ).distinct(ChatMessageModel.conversation_id)
+        
+        result = await self.db.execute(query)
+        conversations = result.all()
+        
+        return [
+            {
+                "conversation_id": conv.conversation_id,
+                "last_message_time": conv.timestamp.isoformat(),
+                "last_user_message": conv.user_message[:100] + "..." if len(conv.user_message) > 100 else conv.user_message
             }
-        
-        return await self.execute_operation(_get_history, context)
-    
-    async def clear_conversation(
-        self, 
-        conversation_id: str,
-        user_id: Optional[str] = None
-    ) -> OperationResult[Dict[str, Any]]:
-        """Clear conversation history (placeholder for future implementation)"""
-        context = OperationContext(
-            operation_type=OperationType.DELETE,
-            user_id=user_id,
-            metadata={"conversation_id": conversation_id}
-        )
-        
-        async def _clear_conversation():
-            # Placeholder implementation
-            # In a real implementation, this would clear from database
-            return {
-                "conversation_id": conversation_id,
-                "cleared": True,
-                "message": "Conversation clearing not yet implemented"
-            }
-        
-        return await self.execute_operation(_clear_conversation, context)
-
-
-# Global service instance
-chat_service = ChatService()
+            for conv in conversations
+        ]

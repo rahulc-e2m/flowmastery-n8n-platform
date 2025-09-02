@@ -58,6 +58,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [isLoading, setIsLoading] = useState(false)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [conversationId, setConversationId] = useState<string | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -99,12 +100,32 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
     setIsLoading(true)
 
     try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000))
+      const response = await fetch('/api/v1/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: messageText,
+          chatbot_id: chatbot.id,
+          conversation_id: conversationId
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      const data = await response.json()
+      
+      // Update conversation ID if we got one back
+      if (data.conversation_id && !conversationId) {
+        setConversationId(data.conversation_id)
+      }
       
       const botResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: `Thank you for your message: "${messageText}". I'm processing your request and will provide a detailed response shortly. This is a demo response from ${chatbot.name}.`,
+        text: data.response || 'I received your message but couldn\'t generate a response.',
         sender: 'bot',
         timestamp: new Date()
       }
@@ -112,22 +133,10 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setMessages(prev => [...prev, botResponse])
       
       if (soundEnabled) {
-        // Simple notification sound
-        const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
-        const oscillator = audioContext.createOscillator()
-        const gainNode = audioContext.createGain()
-        
-        oscillator.connect(gainNode)
-        gainNode.connect(audioContext.destination)
-        
-        oscillator.frequency.value = 800
-        oscillator.type = 'sine'
-        gainNode.gain.value = 0.1
-        
-        oscillator.start()
-        oscillator.stop(audioContext.currentTime + 0.2)
+        playNotificationSound()
       }
     } catch (error) {
+      console.error('Chat error:', error)
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: 'Sorry, I encountered an error processing your message. Please try again.',
@@ -137,6 +146,26 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
       setMessages(prev => [...prev, errorMessage])
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const playNotificationSound = () => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+      const oscillator = audioContext.createOscillator()
+      const gainNode = audioContext.createGain()
+      
+      oscillator.connect(gainNode)
+      gainNode.connect(audioContext.destination)
+      
+      oscillator.frequency.value = 800
+      oscillator.type = 'sine'
+      gainNode.gain.value = 0.1
+      
+      oscillator.start()
+      oscillator.stop(audioContext.currentTime + 0.2)
+    } catch (error) {
+      console.warn('Could not play notification sound:', error)
     }
   }
 
@@ -158,6 +187,7 @@ const ChatInterface: React.FC<ChatInterfaceProps> = ({
         timestamp: new Date()
       }
     ])
+    setConversationId(null) // Reset conversation ID for new chat
   }
 
   const exportChat = () => {

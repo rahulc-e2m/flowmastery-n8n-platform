@@ -38,6 +38,7 @@ class Chatbot(Base, TimestampMixin):
     # Relationships
     client = relationship("Client", back_populates="chatbots")
     created_by_user = relationship("User", foreign_keys=[created_by_user_id])
+    messages = relationship("ChatMessage", back_populates="chatbot")
     
     def __repr__(self) -> str:
         return f"<Chatbot(id={self.id}, name='{self.name}', client_id='{self.client_id}')>"

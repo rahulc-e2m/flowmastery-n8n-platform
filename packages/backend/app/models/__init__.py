@@ -10,6 +10,7 @@ from .metrics_aggregation import MetricsAggregation, WorkflowTrendMetrics, Aggre
 from .sync_state import SyncState
 from .dependency import Dependency
 from .chatbot import Chatbot
+from .chat_message import ChatMessage
 
 __all__ = [
     "Base", 
@@ -25,5 +26,6 @@ __all__ = [
     "AggregationPeriod",
     "SyncState",
     "Dependency",
-    "Chatbot"
+    "Chatbot",
+    "ChatMessage"
 ]
