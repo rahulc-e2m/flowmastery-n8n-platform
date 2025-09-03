@@ -5,6 +5,8 @@ import type {
   ClientUpdate,
   ClientN8nConfig
 } from '@/types/client'
+import { extractApiData } from '@/utils/apiUtils'
+import type { StandardResponse, ErrorResponse, PaginatedResponse } from '@/types/api'
 
 export interface N8nConnectionTestResponse {
   status: 'success' | 'warning' | 'error'
@@ -29,13 +31,14 @@ export interface ManualSyncResponse {
 
 export class ClientApi {
   static async createClient(client: ClientCreate): Promise<Client> {
-    const response = await api.post<Client>('/clients/', client)
-    return response.data
+    const response = await api.post<StandardResponse<Client> | ErrorResponse>('/clients/', client)
+    return extractApiData<Client>(response)
   }
 
   static async getClients(): Promise<Client[]> {
-    const response = await api.get<Client[]>('/clients/')
-    return response.data
+    const response = await api.get<StandardResponse<PaginatedResponse<Client>> | ErrorResponse>('/clients/')
+    const paginatedData = extractApiData<PaginatedResponse<Client>>(response)
+    return paginatedData.items
   }
 
   // Alias for consistency with other APIs
@@ -44,32 +47,32 @@ export class ClientApi {
   }
 
   static async getClient(clientId: string): Promise<Client> {
-    const response = await api.get<Client>(`/clients/${clientId}`)
-    return response.data
+    const response = await api.get<StandardResponse<Client> | ErrorResponse>(`/clients/${clientId}`)
+    return extractApiData<Client>(response)
   }
 
   static async updateClient(clientId: string, client: ClientUpdate): Promise<Client> {
-    const response = await api.put<Client>(`/clients/${clientId}`, client)
-    return response.data
+    const response = await api.put<StandardResponse<Client> | ErrorResponse>(`/clients/${clientId}`, client)
+    return extractApiData<Client>(response)
   }
 
   static async configureN8nApi(clientId: string, config: ClientN8nConfig): Promise<ClientSyncResponse> {
-    const response = await api.post<ClientSyncResponse>(`/clients/${clientId}/n8n-config`, config)
-    return response.data
+    const response = await api.post<StandardResponse<ClientSyncResponse> | ErrorResponse>(`/clients/${clientId}/n8n-config`, config)
+    return extractApiData<ClientSyncResponse>(response)
   }
 
   static async testN8nConnection(config: ClientN8nConfig): Promise<N8nConnectionTestResponse> {
-    const response = await api.post<N8nConnectionTestResponse>('/clients/test-n8n-connection', config)
-    return response.data
+    const response = await api.post<StandardResponse<N8nConnectionTestResponse> | ErrorResponse>('/clients/test-n8n-connection', config)
+    return extractApiData<N8nConnectionTestResponse>(response)
   }
 
   static async triggerImmediateSync(clientId: string): Promise<ManualSyncResponse> {
-    const response = await api.post<ManualSyncResponse>(`/clients/${clientId}/sync-n8n`)
-    return response.data
+    const response = await api.post<StandardResponse<ManualSyncResponse> | ErrorResponse>(`/clients/${clientId}/sync-n8n`)
+    return extractApiData<ManualSyncResponse>(response)
   }
 
   static async deleteClient(clientId: string): Promise<{ message: string }> {
-    const response = await api.delete<{ message: string }>(`/clients/${clientId}`)
-    return response.data
+    const response = await api.delete<StandardResponse<{ message: string }> | ErrorResponse>(`/clients/${clientId}`)
+    return extractApiData<{ message: string }>(response)
   }
 }

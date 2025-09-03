@@ -1,4 +1,6 @@
 import api from './authApi';
+import { extractApiData } from '@/utils/apiUtils';
+import type { StandardResponse, ErrorResponse } from '@/types/api';
 
 export interface Dependency {
   id: string;
@@ -51,47 +53,48 @@ class DependencyApi {
     if (filters.per_page) params.append('per_page', filters.per_page.toString());
     if (filters.search) params.append('search', filters.search);
     
-    const response = await api.get(`/dependencies/?${params.toString()}`);
-    return response.data;
+    const response = await api.get<StandardResponse<DependencyListResponse> | ErrorResponse>(`/dependencies/?${params.toString()}`);
+    return extractApiData<DependencyListResponse>(response);
   }
 
   /**
    * Get a specific dependency by ID
    */
   async getDependency(id: string): Promise<Dependency> {
-    const response = await api.get(`/dependencies/${id}`);
-    return response.data;
+    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/${id}`);
+    return extractApiData<Dependency>(response);
   }
 
   /**
    * Get a dependency by platform name
    */
   async getDependencyByPlatform(platformName: string): Promise<Dependency> {
-    const response = await api.get(`/dependencies/platform/${encodeURIComponent(platformName)}`);
-    return response.data;
+    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/platform/${encodeURIComponent(platformName)}`);
+    return extractApiData<Dependency>(response);
   }
 
   /**
    * Create a new dependency (admin only)
    */
   async createDependency(data: DependencyCreate): Promise<Dependency> {
-    const response = await api.post('/dependencies/', data);
-    return response.data;
+    const response = await api.post<StandardResponse<Dependency> | ErrorResponse>('/dependencies/', data);
+    return extractApiData<Dependency>(response);
   }
 
   /**
    * Update an existing dependency (admin only)
    */
   async updateDependency(id: string, data: DependencyUpdate): Promise<Dependency> {
-    const response = await api.put(`/dependencies/${id}`, data);
-    return response.data;
+    const response = await api.put<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/${id}`, data);
+    return extractApiData<Dependency>(response);
   }
 
   /**
    * Delete a dependency (admin only)
    */
   async deleteDependency(id: string): Promise<void> {
-    await api.delete(`/dependencies/${id}`);
+    await api.delete<StandardResponse<void> | ErrorResponse>(`/dependencies/${id}`);
+    // Delete operations typically return 204 No Content, so no data to extract
   }
 
   /**

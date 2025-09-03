@@ -13,6 +13,7 @@ from app.schemas.dependency import (
     DependencyListResponse
 )
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 
 router = APIRouter(prefix="/dependencies", tags=["dependencies"])
 
@@ -32,7 +33,8 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
     return current_user
 
 
-@router.get("/", response_model=DependencyListResponse)
+@router.get("/")
+@format_response(message="Dependencies retrieved successfully")
 async def get_dependencies(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(50, ge=1, le=100, description="Items per page"),
@@ -51,7 +53,8 @@ async def get_dependencies(
     )
 
 
-@router.get("/{dependency_id}", response_model=DependencyResponse)
+@router.get("/{dependency_id}")
+@format_response(message="Dependency retrieved successfully")
 async def get_dependency(
     dependency_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -67,9 +70,10 @@ async def get_dependency(
     return dependency
 
 
-@router.post("/", response_model=DependencyResponse)
+@router.post("/")
 @validate_input(max_string_length=1000, validate_urls=True)
 @sanitize_response()
+@format_response(message="Dependency created successfully", status_code=201)
 async def create_dependency(
     dependency_data: DependencyCreate,
     current_user: User = Depends(require_admin),
@@ -82,9 +86,10 @@ async def create_dependency(
     return await dependency_service.create_dependency(dependency_data)
 
 
-@router.put("/{dependency_id}", response_model=DependencyResponse)
+@router.put("/{dependency_id}")
 @validate_input(max_string_length=1000, validate_urls=True)
 @sanitize_response()
+@format_response(message="Dependency updated successfully")
 async def update_dependency(
     dependency_id: UUID,
     dependency_data: DependencyUpdate,
@@ -104,6 +109,7 @@ async def update_dependency(
 
 
 @router.delete("/{dependency_id}")
+@format_response(message="Dependency deleted successfully")
 async def delete_dependency(
     dependency_id: UUID,
     current_user: User = Depends(require_admin),
@@ -116,10 +122,12 @@ async def delete_dependency(
     success = await dependency_service.delete_dependency(dependency_id)
     if not success:
         raise HTTPException(status_code=404, detail="Dependency not found")
+    
     return {"message": "Dependency deleted successfully"}
 
 
-@router.get("/platform/{platform_name}", response_model=DependencyResponse)
+@router.get("/platform/{platform_name}")
+@format_response(message="Dependency retrieved successfully")
 async def get_dependency_by_platform(
     platform_name: str,
     current_user: User = Depends(get_current_user),

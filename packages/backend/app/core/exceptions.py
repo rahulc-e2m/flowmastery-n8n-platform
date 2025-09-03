@@ -64,45 +64,56 @@ async def flowmastery_exception_handler(request: Request, exc: FlowMasteryExcept
 
 async def http_exception_handler(request: Request, exc: HTTPException):
     """Handle HTTP exceptions"""
+    from app.core.response_formatter import _http_exception_to_error_response
+    import uuid
+    
     # Don't log auth-related 401s as warnings to reduce noise
     if exc.status_code == 401 and "access token" in exc.detail.lower():
         logger.debug(f"Authentication required: {exc.detail}")
     else:
         logger.warning(f"HTTP exception: {exc.detail}")
     
+    request_id = str(uuid.uuid4())
+    error_response = _http_exception_to_error_response(exc, request, request_id)
+    
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "error": exc.detail,
-            "type": "HTTPException"
-        }
+        content=error_response.model_dump(mode='json')
     )
 
 
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Handle validation exceptions"""
+    from app.core.response_formatter import _validation_error_to_response
+    from pydantic import ValidationError
+    import uuid
+    
     logger.warning(f"Validation error: {exc.errors()}")
+    
+    # Convert RequestValidationError to ValidationError for consistency
+    validation_error = ValidationError.from_exception_data("ValidationError", exc.errors())
+    request_id = str(uuid.uuid4())
+    error_response = _validation_error_to_response(validation_error, request, request_id)
     
     return JSONResponse(
         status_code=422,
-        content={
-            "error": "Validation error",
-            "details": exc.errors(),
-            "type": "ValidationError"
-        }
+        content=error_response.model_dump(mode='json')
     )
 
 
 async def general_exception_handler(request: Request, exc: Exception):
     """Handle general exceptions"""
+    from app.core.response_formatter import _exception_to_error_response
+    import uuid
+    
     logger.error(f"Unhandled exception: {str(exc)}", exc_info=True)
+    
+    request_id = str(uuid.uuid4())
+    error_response = _exception_to_error_response(exc, request, request_id)
     
     return JSONResponse(
         status_code=500,
-        content={
-            "error": "Internal server error",
-            "type": "InternalServerError"
-        }
+        content=error_response.model_dump(mode='json')
     )
 
 

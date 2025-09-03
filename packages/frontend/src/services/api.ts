@@ -68,6 +68,7 @@ class ApiService {
     
     const headers: HeadersInit = {
       'Content-Type': 'application/json',
+      'ngrok-skip-browser-warning': 'true', // Skip ngrok browser warning
       ...options.headers,
     }
     
@@ -77,26 +78,46 @@ class ApiService {
       credentials: 'include', // Include cookies in requests
     })
 
+    const responseData = await response.json()
+
     if (!response.ok) {
       if (response.status === 401) {
         // Handle unauthorized - redirect to login
         window.location.href = '/login'
       }
+      
+      // Handle standardized error response
+      if (responseData.status === 'error') {
+        const error = new Error(responseData.message || `HTTP ${response.status}: ${response.statusText}`)
+        ;(error as any).code = responseData.code
+        ;(error as any).details = responseData.details
+        ;(error as any).requestId = responseData.request_id
+        throw error
+      }
+      
       throw new Error(`HTTP ${response.status}: ${response.statusText}`)
     }
 
-    return response.json()
+    // Handle standardized success response
+    if (responseData.status === 'success') {
+      return responseData.data
+    }
+
+    // Fallback for legacy responses
+    return responseData
   }
 
   // Health check
   static async checkHealth(): Promise<{
     status: string
     version: string
+    timestamp: string
   }> {
     return this.request<{
       status: string
       version: string
-    }>('/health')
+      timestamp: string
+    }>('/api/v1/health/')
   }
 
   // Legacy chat API (if still needed)

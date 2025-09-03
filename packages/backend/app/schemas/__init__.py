@@ -10,12 +10,34 @@ from .chatbot import (
     ChatResponse
 )
 
+from .cache import (
+    CacheClearResponse,
+    CacheStatsResponse,
+    ClientCacheClearResponse
+)
+
+from .config import (
+    N8nConfigStatus,
+    AiConfigStatus,
+    AppConfigStatus,
+    FullConfigStatus,
+    ConfigStatusResponse
+)
+
 __all__ = [
     "ChatbotBase",
-    "ChatbotCreate", 
+    "ChatbotCreate",
     "ChatbotUpdate",
     "ChatbotResponse",
     "ChatbotListResponse",
     "ChatMessage",
-    "ChatResponse"
+    "ChatResponse",
+    "CacheClearResponse",
+    "CacheStatsResponse",
+    "ClientCacheClearResponse",
+    "N8nConfigStatus",
+    "AiConfigStatus",
+    "AppConfigStatus",
+    "FullConfigStatus",
+    "ConfigStatusResponse"
 ]

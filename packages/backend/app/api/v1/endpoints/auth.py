@@ -31,6 +31,30 @@ from app.schemas.auth import (
 from app.config import settings
 from app.core.decorators import validate_input, sanitize_response
 from app.services.cache.redis import redis_client
+from app.core.response_formatter import format_response
+
+
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str):
+    """Helper function to set authentication cookies"""
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax",
+        path="/"
+    )
+    
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
+        httponly=True,
+        secure=settings.ENVIRONMENT.lower() == "production",
+        samesite="lax",
+        path="/"
+    )
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -128,7 +152,7 @@ class AuthServiceMixin:
             logger.warning(f"Failed to clear auth failures: {e}")
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login")
 @limiter.limit(RATE_LIMITS["auth_login"])
 @validate_input(validate_emails=True, max_string_length=255)
 @sanitize_response()
@@ -209,27 +233,50 @@ async def login(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         secure=settings.ENVIRONMENT.lower() == "production",
-        samesite="lax"
+        samesite="lax",
+        path="/"
     )
     
     response.set_cookie(
-        key="refresh_token", 
+        key="refresh_token",
         value=refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=settings.ENVIRONMENT.lower() == "production",
-        samesite="lax"
+        samesite="lax",
+        path="/"
     )
     
-    return Token(
-        access_token="",  # Don't return token in response body for security
-        refresh_token="", # Don't return token in response body for security
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
-        user=UserResponse.model_validate(user)
+    # Create standardized response data
+    response_data = {
+        "access_token": "",  # Don't return token in response body for security
+        "refresh_token": "", # Don't return token in response body for security
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
+        "user": UserResponse.model_validate(user)
+    }
+    
+    # Create standardized response format
+    from app.schemas.api_standard import StandardResponse, ResponseStatus
+    from datetime import datetime
+    import uuid
+    
+    standard_response = StandardResponse(
+        status=ResponseStatus.SUCCESS,
+        data=response_data,
+        message="User authenticated successfully",
+        request_id=str(uuid.uuid4()),
+        timestamp=datetime.utcnow()
     )
+    
+    # Set the response content and return the response object with cookies
+    response.media_type = "application/json"
+    response.body = standard_response.model_dump_json(by_alias=True).encode('utf-8')
+    response.status_code = 200
+    
+    return response
 
 
-@router.post("/refresh", response_model=TokenRefreshResponse)
+@router.post("/refresh")
 @limiter.limit(RATE_LIMITS["auth_refresh"])
 @sanitize_response()
 async def refresh_token(
@@ -291,23 +338,46 @@ async def refresh_token(
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
             httponly=True,
             secure=settings.ENVIRONMENT.lower() == "production",
-            samesite="lax"
+            samesite="lax",
+            path="/"
         )
         
         response.set_cookie(
-            key="refresh_token", 
+            key="refresh_token",
             value=new_refresh_token,
             max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
             httponly=True,
             secure=settings.ENVIRONMENT.lower() == "production",
-            samesite="lax"
+            samesite="lax",
+            path="/"
         )
         
-        return TokenRefreshResponse(
-            access_token="",  # Don't return token in response body
-            refresh_token="", # Don't return token in response body
-            expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
+        # Create standardized response data
+        response_data = {
+            "access_token": "",  # Don't return token in response body
+            "refresh_token": "", # Don't return token in response body
+            "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60  # Convert to seconds
+        }
+        
+        # Create standardized response format
+        from app.schemas.api_standard import StandardResponse, ResponseStatus
+        from datetime import datetime
+        import uuid
+        
+        standard_response = StandardResponse(
+            status=ResponseStatus.SUCCESS,
+            data=response_data,
+            message="Access token refreshed successfully",
+            request_id=str(uuid.uuid4()),
+            timestamp=datetime.utcnow()
         )
+        
+        # Set the response content and return the response object with cookies
+        response.media_type = "application/json"
+        response.body = standard_response.model_dump_json(by_alias=True).encode('utf-8')
+        response.status_code = 200
+        
+        return response
         
     except HTTPException:
         raise
@@ -319,6 +389,7 @@ async def refresh_token(
 
 
 @router.post("/logout")
+@format_response(message="User logged out successfully")
 async def logout(response: Response):
     """Logout user by clearing cookies"""
     response.delete_cookie(key="access_token")
@@ -327,6 +398,7 @@ async def logout(response: Response):
 
 
 @router.get("/me")
+@format_response(message="Current user information retrieved successfully")
 async def get_current_user_info(
     current_user: User = Depends(get_optional_user)
 ):
@@ -337,6 +409,7 @@ async def get_current_user_info(
 
 
 @router.get("/status")
+@format_response(message="Authentication status retrieved successfully")
 async def get_auth_status(
     current_user: User = Depends(get_optional_user)
 ):
@@ -350,6 +423,7 @@ async def get_auth_status(
 @router.put("/profile", response_model=UserResponse)
 @validate_input(max_string_length=255)
 @sanitize_response()
+@format_response(message="User profile updated successfully")
 async def update_user_profile(
     profile_data: UserProfileUpdate,
     current_user: User = Depends(get_current_user),
@@ -372,6 +446,7 @@ async def update_user_profile(
 @limiter.limit(RATE_LIMITS["invitation_create"])
 @validate_input(validate_emails=True, max_string_length=500)
 @sanitize_response()
+@format_response(message="Invitation created successfully")
 async def create_invitation(
     request: Request,
     invitation_data: InvitationCreate,
@@ -397,6 +472,7 @@ async def create_invitation(
 
 
 @router.get("/invitations", response_model=List[InvitationResponse])
+@format_response(message="Invitations retrieved successfully")
 async def list_invitations(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -408,6 +484,7 @@ async def list_invitations(
 
 
 @router.get("/invitations/{invitation_id}/link")
+@format_response(message="Invitation link generated successfully")
 async def get_invitation_link(
     invitation_id: str,
     db: AsyncSession = Depends(get_db),
@@ -447,6 +524,7 @@ async def get_invitation_link(
 
 
 @router.get("/invitations/{token}")
+@format_response(message="Invitation details retrieved successfully")
 async def get_invitation_details(
     token: str,
     db: AsyncSession = Depends(get_db)
@@ -486,7 +564,7 @@ async def get_invitation_details(
     }
 
 
-@router.post("/invitations/accept", response_model=Token)
+@router.post("/invitations/accept")
 @validate_input(validate_emails=True, max_string_length=500)
 @sanitize_response()
 async def accept_invitation(
@@ -520,27 +598,51 @@ async def accept_invitation(
         max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         httponly=True,
         secure=settings.ENVIRONMENT.lower() == "production",
-        samesite="lax"
+        samesite="lax",
+        path="/"
     )
     
     response.set_cookie(
-        key="refresh_token", 
+        key="refresh_token",
         value=refresh_token,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=settings.ENVIRONMENT.lower() == "production",
-        samesite="lax"
+        samesite="lax",
+        path="/"
     )
     
-    return Token(
-        access_token="",  # Don't return token in response body
-        refresh_token="", # Don't return token in response body
-        expires_in=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
-        user=UserResponse.model_validate(user)
+    # Create standardized response data
+    response_data = {
+        "access_token": "",  # Don't return token in response body
+        "refresh_token": "", # Don't return token in response body
+        "expires_in": settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
+        "user": UserResponse.model_validate(user)
+    }
+    
+    # Create standardized response format
+    from app.schemas.api_standard import StandardResponse, ResponseStatus
+    from datetime import datetime
+    import uuid
+    
+    standard_response = StandardResponse(
+        status=ResponseStatus.SUCCESS,
+        data=response_data,
+        message="Invitation accepted and user account created successfully",
+        request_id=str(uuid.uuid4()),
+        timestamp=datetime.utcnow()
     )
+    
+    # Set the response content and return the response object with cookies
+    response.media_type = "application/json"
+    response.body = standard_response.model_dump_json(by_alias=True).encode('utf-8')
+    response.status_code = 200
+    
+    return response
 
 
 @router.delete("/invitations/{invitation_id}")
+@format_response(message="Invitation revoked successfully")
 async def revoke_invitation(
     invitation_id: str,
     db: AsyncSession = Depends(get_db),

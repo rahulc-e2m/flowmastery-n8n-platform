@@ -9,6 +9,8 @@ import type {
   AcceptInvitationRequest,
   TokenRefreshResponse
 } from '@/types/auth'
+import { extractApiData, createApiError } from '@/utils/apiUtils'
+import type { StandardResponse, ErrorResponse } from '@/types/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -65,7 +67,7 @@ api.interceptors.response.use(
         }).then(() => {
           return api(originalRequest)
         }).catch(err => {
-          return Promise.reject(err)
+          return Promise.reject(createApiError(err))
         })
       }
 
@@ -74,20 +76,21 @@ api.interceptors.response.use(
 
       try {
         // Try to refresh the token using cookies
-        await axios.post(`${API_BASE_URL}/api/v1/auth/refresh`, {}, {
-          withCredentials: true
-        })
+        await api.post('/auth/refresh', {})
 
         // Token refreshed successfully (stored in httpOnly cookie)
         processQueue(null)
+        
+        // Add a small delay to ensure cookies are set before retry
+        await new Promise(resolve => setTimeout(resolve, 100))
         
         // Retry the original request
         return api(originalRequest)
       } catch (refreshError) {
         // Refresh failed, log out user
-        processQueue(refreshError, null)
+        processQueue(createApiError(refreshError), null)
         window.location.href = '/login'
-        return Promise.reject(refreshError)
+        return Promise.reject(createApiError(refreshError))
       } finally {
         isRefreshing = false
       }
@@ -108,64 +111,64 @@ api.interceptors.response.use(
       }
     }
     
-    return Promise.reject(error)
+    return Promise.reject(createApiError(error))
   }
 )
 
 export class AuthApi {
   static async login(credentials: LoginRequest): Promise<LoginResponse> {
-    const response = await api.post<LoginResponse>('/auth/login', credentials)
-    return response.data
+    const response = await api.post<StandardResponse<LoginResponse> | ErrorResponse>('/auth/login', credentials)
+    return extractApiData<LoginResponse>(response)
   }
 
   static async getCurrentUser(): Promise<User> {
-    const response = await api.get<User>('/auth/me')
-    return response.data
+    const response = await api.get<StandardResponse<User> | ErrorResponse>('/auth/me')
+    return extractApiData<User>(response)
   }
 
   static async updateProfile(profileData: { first_name?: string; last_name?: string }): Promise<User> {
-    const response = await api.put<User>('/auth/profile', profileData)
-    return response.data
+    const response = await api.put<StandardResponse<User> | ErrorResponse>('/auth/profile', profileData)
+    return extractApiData<User>(response)
   }
 
   static async createInvitation(invitation: InvitationCreate): Promise<Invitation> {
-    const response = await api.post<Invitation>('/auth/invitations', invitation)
-    return response.data
+    const response = await api.post<StandardResponse<Invitation> | ErrorResponse>('/auth/invitations', invitation)
+    return extractApiData<Invitation>(response)
   }
 
   static async getInvitations(): Promise<Invitation[]> {
-    const response = await api.get<Invitation[]>('/auth/invitations')
-    return response.data
+    const response = await api.get<StandardResponse<Invitation[]> | ErrorResponse>('/auth/invitations')
+    return extractApiData<Invitation[]>(response)
   }
 
   static async getInvitationLink(invitationId: string): Promise<{ invitation_link: string; token: string }> {
-    const response = await api.get<{ invitation_link: string; token: string }>(`/auth/invitations/${invitationId}/link`)
-    return response.data
+    const response = await api.get<StandardResponse<{ invitation_link: string; token: string }> | ErrorResponse>(`/auth/invitations/${invitationId}/link`)
+    return extractApiData<{ invitation_link: string; token: string }>(response)
   }
 
   static async getInvitationDetails(token: string): Promise<InvitationDetails> {
-    const response = await api.get<InvitationDetails>(`/auth/invitations/${token}`)
-    return response.data
+    const response = await api.get<StandardResponse<InvitationDetails> | ErrorResponse>(`/auth/invitations/${token}`)
+    return extractApiData<InvitationDetails>(response)
   }
 
   static async acceptInvitation(data: AcceptInvitationRequest): Promise<LoginResponse> {
-    const response = await api.post<LoginResponse>('/auth/invitations/accept', data)
-    return response.data
+    const response = await api.post<StandardResponse<LoginResponse> | ErrorResponse>('/auth/invitations/accept', data)
+    return extractApiData<LoginResponse>(response)
   }
 
   static async revokeInvitation(invitationId: string): Promise<{ message: string; invitation_id: string; email: string }> {
-    const response = await api.delete<{ message: string; invitation_id: string; email: string }>(`/auth/invitations/${invitationId}`)
-    return response.data
+    const response = await api.delete<StandardResponse<{ message: string; invitation_id: string; email: string }> | ErrorResponse>(`/auth/invitations/${invitationId}`)
+    return extractApiData<{ message: string; invitation_id: string; email: string }>(response)
   }
 
   static async refreshToken(): Promise<TokenRefreshResponse> {
-    const response = await api.post<TokenRefreshResponse>('/auth/refresh', {})
-    return response.data
+    const response = await api.post<StandardResponse<TokenRefreshResponse> | ErrorResponse>('/auth/refresh', {})
+    return extractApiData<TokenRefreshResponse>(response)
   }
 
   static async logout(): Promise<{ message: string }> {
-    const response = await api.post<{ message: string }>('/auth/logout', {})
-    return response.data
+    const response = await api.post<StandardResponse<{ message: string }> | ErrorResponse>('/auth/logout', {})
+    return extractApiData<{ message: string }>(response)
   }
 }
 

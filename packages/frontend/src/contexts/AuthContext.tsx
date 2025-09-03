@@ -46,7 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       toast.success('Login successful!')
     } catch (error: any) {
-      const message = error.response?.data?.detail || 'Login failed'
+      // Handle standardized error format
+      const message = error.message || error.response?.data?.message || error.response?.data?.detail || 'Login failed'
       toast.error(message)
       throw error
     } finally {

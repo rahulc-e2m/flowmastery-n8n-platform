@@ -136,7 +136,7 @@ export function ChatbotPage() {
     try {
       // Use our backend API instead of calling webhook directly
       const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${API_BASE_URL}/api/v1/chat`, {
+      const response = await fetch(`${API_BASE_URL}/api/v1/chat/`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

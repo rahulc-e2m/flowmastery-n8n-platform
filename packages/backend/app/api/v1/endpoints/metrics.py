@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import Optional
 import logging
 
@@ -25,11 +25,13 @@ from app.schemas.metrics import (
     HistoricalMetrics
 )
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 
 router = APIRouter()
 
 
 @router.get("/all", response_model=AdminMetricsResponse)
+@format_response(message="All clients metrics retrieved successfully")
 async def get_all_clients_metrics(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -39,6 +41,7 @@ async def get_all_clients_metrics(
 
 
 @router.get("/client/{client_id}", response_model=ClientMetrics)
+@format_response(message="Client metrics retrieved successfully")
 async def get_client_metrics(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -62,6 +65,7 @@ async def get_client_metrics(
 
 
 @router.get("/client/{client_id}/workflows", response_model=ClientWorkflowMetrics)
+@format_response(message="Client workflow metrics retrieved successfully")
 async def get_client_workflow_metrics(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -85,6 +89,7 @@ async def get_client_workflow_metrics(
 
 
 @router.get("/client/{client_id}/historical", response_model=HistoricalMetrics)
+@format_response(message="Client historical metrics retrieved successfully")
 async def get_client_historical_metrics(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -114,6 +119,7 @@ async def get_client_historical_metrics(
 
 
 @router.get("/my-metrics", response_model=ClientMetrics)
+@format_response(message="Your metrics retrieved successfully")
 async def get_my_metrics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user)
@@ -135,6 +141,7 @@ async def get_my_metrics(
 
 
 @router.get("/my-workflows", response_model=ClientWorkflowMetrics)
+@format_response(message="Your workflow metrics retrieved successfully")
 async def get_my_workflow_metrics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user)
@@ -156,6 +163,7 @@ async def get_my_workflow_metrics(
 
 
 @router.get("/my-historical", response_model=HistoricalMetrics)
+@format_response(message="Your historical metrics retrieved successfully")
 async def get_my_historical_metrics(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user),
@@ -184,6 +192,7 @@ async def get_my_historical_metrics(
 
 @router.post("/admin/quick-sync")
 @sanitize_response()
+@format_response(message="Quick sync for all clients completed successfully")
 async def quick_sync_all_metrics(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -267,6 +276,7 @@ async def quick_sync_all_metrics(
 @router.post("/admin/sync/{client_id}")
 @validate_input(max_string_length=100)
 @sanitize_response()
+@format_response(message="Client sync completed successfully")
 async def force_sync_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -293,6 +303,7 @@ async def force_sync_client(
 
 @router.post("/admin/sync-all")
 @sanitize_response()
+@format_response(message="Sync for all clients completed successfully")
 async def force_sync_all_clients(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -312,6 +323,7 @@ async def force_sync_all_clients(
 
 
 @router.get("/client/{client_id}/executions")
+@format_response(message="Client executions retrieved successfully")
 async def get_client_executions(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -400,6 +412,7 @@ async def get_client_executions(
 
 
 @router.get("/client/{client_id}/execution-stats")
+@format_response(message="Client execution statistics retrieved successfully")
 async def get_client_execution_stats(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -431,7 +444,7 @@ async def get_client_execution_stats(
         ).select_from(
             Workflow
         ).outerjoin(
-            WorkflowExecution, 
+            WorkflowExecution,
             and_(
                 Workflow.id == WorkflowExecution.workflow_id,
                 WorkflowExecution.is_production == True
@@ -489,6 +502,7 @@ async def get_client_execution_stats(
 
 
 @router.get("/my-executions")
+@format_response(message="Your executions retrieved successfully")
 async def get_my_executions(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user),
@@ -516,6 +530,7 @@ async def get_my_executions(
 
 
 @router.get("/my-execution-stats")
+@format_response(message="Your execution statistics retrieved successfully")
 async def get_my_execution_stats(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user)
@@ -536,6 +551,7 @@ async def get_my_execution_stats(
 
 @router.post("/admin/refresh-cache")
 @sanitize_response()
+@format_response(message="Metrics cache refreshed successfully")
 async def refresh_metrics_cache(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -583,6 +599,7 @@ async def refresh_metrics_cache(
 
 
 @router.get("/admin/data-freshness")
+@format_response(message="Data freshness information retrieved successfully")
 async def get_data_freshness(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -667,6 +684,7 @@ async def get_data_freshness(
 @router.post("/admin/trigger-aggregation")
 @validate_input(max_string_length=50)
 @sanitize_response()
+@format_response(message="Daily aggregation triggered successfully")
 async def trigger_daily_aggregation(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
@@ -702,6 +720,7 @@ async def trigger_daily_aggregation(
 
 @router.post("/admin/trigger-historical-aggregation")
 @sanitize_response()
+@format_response(message="Historical aggregation triggered successfully")
 async def trigger_historical_aggregation(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
@@ -738,6 +757,7 @@ async def trigger_historical_aggregation(
 
 
 @router.get("/admin/scheduler-status")
+@format_response(message="Scheduler status retrieved successfully")
 async def get_scheduler_status(
     admin_user: User = Depends(get_current_admin_user)
 ):

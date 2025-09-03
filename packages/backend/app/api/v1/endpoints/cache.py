@@ -6,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from app.core.dependencies import get_current_admin_user
 from app.models.user import User
 from app.services.cache.redis import redis_client
+from app.core.response_formatter import format_response
+from app.schemas.cache import CacheClearResponse, CacheStatsResponse, ClientCacheClearResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -49,6 +51,7 @@ class CacheServiceMixin:
 
 
 @router.delete("/client/{client_id}")
+@format_response(message="Client cache cleared successfully")
 async def clear_client_cache(
     client_id: str,
     admin_user: User = Depends(get_current_admin_user)
@@ -81,10 +84,11 @@ async def clear_client_cache(
         
         await CacheServiceMixin._log_cache_operation("clear_client", admin_user.id, f"client_id: {client_id}, keys_cleared: {total_cleared}")
         
-        return {
-            "message": f"Cleared cache for client {client_id}",
-            "keys_cleared": total_cleared
-        }
+        return ClientCacheClearResponse(
+            message=f"Cleared cache for client {client_id}",
+            client_id=client_id,
+            keys_cleared=total_cleared
+        )
     except Exception as e:
         await CacheServiceMixin._log_cache_operation("clear_client", admin_user.id, f"client_id: {client_id}, error: {str(e)}", success=False)
         raise HTTPException(
@@ -94,6 +98,7 @@ async def clear_client_cache(
 
 
 @router.delete("/all")
+@format_response(message="All cache cleared successfully")
 async def clear_all_cache(
     admin_user: User = Depends(get_current_admin_user)
 ):
@@ -109,13 +114,14 @@ async def clear_all_cache(
         cleared = await redis_client.clear_pattern(pattern)
         total_cleared += cleared
     
-    return {
-        "message": "Cleared all metrics cache",
-        "keys_cleared": total_cleared
-    }
+    return CacheClearResponse(
+        message="Cleared all metrics cache",
+        keys_cleared=total_cleared
+    )
 
 
 @router.get("/stats")
+@format_response(message="Cache statistics retrieved successfully")
 async def get_cache_stats(
     admin_user: User = Depends(get_current_admin_user)
 ):
@@ -126,17 +132,17 @@ async def get_cache_stats(
         execution_keys = await redis_client.client.keys("executions:*")
         metrics_keys = await redis_client.client.keys("client_metrics:*")
         
-        return {
-            "cached_workflows": len(workflow_keys),
-            "cached_executions": len(execution_keys),
-            "cached_metrics": len(metrics_keys),
-            "total_cached_items": len(workflow_keys) + len(execution_keys) + len(metrics_keys)
-        }
+        return CacheStatsResponse(
+            cached_workflows=len(workflow_keys),
+            cached_executions=len(execution_keys),
+            cached_metrics=len(metrics_keys),
+            total_cached_items=len(workflow_keys) + len(execution_keys) + len(metrics_keys)
+        )
     except Exception as e:
-        return {
-            "error": str(e),
-            "cached_workflows": 0,
-            "cached_executions": 0,
-            "cached_metrics": 0,
-            "total_cached_items": 0
-        }
+        return CacheStatsResponse(
+            cached_workflows=0,
+            cached_executions=0,
+            cached_metrics=0,
+            total_cached_items=0,
+            error=str(e)
+        )

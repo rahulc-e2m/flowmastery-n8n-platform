@@ -9,6 +9,7 @@ from typing import Dict, Any, List
 from app.models.user import User
 from app.core.dependencies import get_current_admin_user, get_current_user
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 from app.services.cache.redis import redis_client
 
 router = APIRouter()
@@ -67,6 +68,7 @@ class TaskServiceMixin:
 
 # Task Status Monitoring
 @router.get("/status/{task_id}")
+@format_response(message="Task status retrieved successfully")
 async def get_task_status(
     task_id: str,
     current_user: User = Depends(get_current_user)
@@ -90,6 +92,7 @@ async def get_task_status(
 
 
 @router.get("/worker-stats")
+@format_response(message="Worker statistics retrieved successfully")
 async def get_worker_stats(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
@@ -116,6 +119,7 @@ async def get_worker_stats(
 @router.post("/sync-client/{client_id}")
 @validate_input(max_string_length=100)
 @sanitize_response()
+@format_response(message="Client sync triggered successfully")
 async def trigger_client_sync(
     client_id: str,
     current_user: User = Depends(get_current_user)
@@ -169,6 +173,7 @@ async def trigger_client_sync(
 
 @router.post("/sync-all")
 @sanitize_response()
+@format_response(message="Sync for all clients triggered successfully")
 async def trigger_all_clients_sync(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
@@ -191,6 +196,7 @@ async def trigger_all_clients_sync(
 
 @router.post("/aggregation/daily")
 @sanitize_response()
+@format_response(message="Daily aggregation triggered successfully")
 async def trigger_daily_aggregation(
     admin_user: User = Depends(get_current_admin_user)
 ) -> Dict[str, Any]:
@@ -213,6 +219,7 @@ async def trigger_daily_aggregation(
 
 @router.post("/health-check")
 @sanitize_response()
+@format_response(message="Health check triggered successfully")
 async def trigger_health_check(
     current_user: User = Depends(get_current_user)
 ) -> Dict[str, Any]:

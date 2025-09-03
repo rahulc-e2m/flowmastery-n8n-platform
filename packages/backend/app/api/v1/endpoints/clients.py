@@ -16,14 +16,26 @@ from app.schemas.client import (
     N8nConnectionTestResponse,
     ClientSyncResponse
 )
+from app.schemas.responses import (
+    ClientCreatedResponse,
+    ClientUpdatedResponse,
+    ClientDeletedResponse,
+    ClientListResponse
+)
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 
 router = APIRouter()
 
 
-@router.post("/", response_model=ClientResponse)
+@router.post("/", response_model=ClientCreatedResponse, status_code=status.HTTP_201_CREATED)
 @validate_input(validate_emails=True, validate_urls=True, max_string_length=500)
 @sanitize_response()
+@format_response(
+    message="Client created successfully",
+    response_model=ClientCreatedResponse,
+    status_code=201
+)
 async def create_client(
     client_data: ClientCreate,
     db: AsyncSession = Depends(get_db),
@@ -39,7 +51,7 @@ async def create_client(
     return response
 
 
-@router.get("/", response_model=List[ClientResponse])
+@router.get("/", response_model=ClientListResponse)
 async def list_clients(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user)
@@ -54,10 +66,29 @@ async def list_clients(
         response.has_n8n_api_key = bool(client.n8n_api_key_encrypted)
         response_clients.append(response)
     
-    return response_clients
+    # Return the response in the format expected by ClientListResponse
+    from app.schemas.api_standard import PaginatedResponse
+    from datetime import datetime
+    
+    paginated_data: PaginatedResponse[ClientResponse] = PaginatedResponse[ClientResponse](
+        items=response_clients,
+        total=len(response_clients),
+        page=1,
+        size=len(response_clients),
+        total_pages=1
+    )
+    
+    return ClientListResponse(
+        status="success",
+        data=paginated_data,
+        message="Clients retrieved successfully",
+        timestamp=datetime.utcnow(),
+        request_id=None
+    )
 
 
 @router.get("/{client_id}", response_model=ClientResponse)
+@format_response(message="Client retrieved successfully")
 async def get_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -86,9 +117,13 @@ async def get_client(
     return response
 
 
-@router.put("/{client_id}", response_model=ClientResponse)
+@router.put("/{client_id}", response_model=ClientUpdatedResponse)
 @validate_input(validate_emails=True, validate_urls=True, max_string_length=500)
 @sanitize_response()
+@format_response(
+    message="Client updated successfully",
+    response_model=ClientUpdatedResponse
+)
 async def update_client(
     client_id: str,
     client_data: ClientUpdate,
@@ -139,7 +174,11 @@ async def configure_n8n_api(
     )
 
 
-@router.delete("/{client_id}")
+@router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)
+@format_response(
+    message="Client deleted successfully",
+    status_code=204
+)
 async def delete_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
@@ -155,7 +194,7 @@ async def delete_client(
             detail="Client not found"
         )
     
-    return {"message": "Client deleted successfully"}
+    return None
 
 
 @router.post("/test-n8n-connection", response_model=N8nConnectionTestResponse)
@@ -175,6 +214,7 @@ async def test_n8n_connection(
 
 
 @router.post("/{client_id}/sync-n8n")
+@format_response(message="Immediate sync triggered successfully")
 async def trigger_immediate_sync(
     client_id: str,
     db: AsyncSession = Depends(get_db),

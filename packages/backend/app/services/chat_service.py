@@ -193,9 +193,8 @@ class ChatService:
             return ChatResponse(
                 response=bot_response,
                 message_id=message_id,
-                timestamp=datetime.now().isoformat(),
-                processing_time=processing_time,
-                source="webhook",
+                timestamp=datetime.now(),
+                chatbot_id=chat_message.chatbot_id,
                 conversation_id=conversation_id
             )
         
@@ -209,9 +208,8 @@ class ChatService:
                 return ChatResponse(
                     response="Sorry, I encountered an error processing your message. Please try again.",
                     message_id=message_id,
-                    timestamp=datetime.now().isoformat(),
-                    processing_time=processing_time,
-                    source="error",
+                    timestamp=datetime.now(),
+                    chatbot_id=chat_message.chatbot_id,
                     conversation_id=conversation_id
                 )
             else:

@@ -15,9 +15,16 @@ from app.schemas.chatbot import (
     ChatbotResponse,
     ChatbotListResponse
 )
+from app.schemas.responses import (
+    ChatbotCreatedResponse,
+    ChatbotUpdatedResponse,
+    ChatbotDeletedResponse,
+    ChatbotListResponse as StandardChatbotListResponse
+)
 from app.services.chatbot_service import ChatbotService
 from app.core.dependencies import get_current_user, get_current_admin_user
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 from app.services.cache.redis import redis_client
 
 router = APIRouter()
@@ -87,7 +94,10 @@ class ChatbotServiceMixin:
             return False
 
 
-@router.get("/", response_model=ChatbotListResponse)
+@router.get("/")
+@format_response(
+    message="Chatbots retrieved successfully"
+)
 async def get_all_chatbots(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_admin_user)
@@ -114,6 +124,7 @@ async def get_all_chatbots(
         result_dict = result.model_dump() if hasattr(result, 'model_dump') else result.__dict__
         await ChatbotServiceMixin._set_chatbot_cache(cache_key, result_dict, ttl=180)
         
+        # Return the service result directly
         return result
     except Exception as e:
         logger.error(f"Error getting all chatbots: {e}")
@@ -123,16 +134,23 @@ async def get_all_chatbots(
         )
 
 
-@router.get("/my", response_model=ChatbotListResponse)
+@router.get("/my")
+@format_response(
+    message="Your chatbots retrieved successfully"
+)
 async def get_my_chatbots(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """Get chatbots for the current user's client"""
-    return await ChatbotService.get_user_chatbots(db, current_user)
+    result = await ChatbotService.get_user_chatbots(db, current_user)
+    
+    # Return the service result directly
+    return result
 
 
 @router.get("/{chatbot_id}", response_model=ChatbotResponse)
+@format_response(message="Chatbot retrieved successfully")
 async def get_chatbot(
     chatbot_id: str,
     db: AsyncSession = Depends(get_db),
@@ -148,9 +166,14 @@ async def get_chatbot(
     return chatbot
 
 
-@router.post("/", response_model=ChatbotResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=ChatbotCreatedResponse, status_code=status.HTTP_201_CREATED)
 @validate_input(max_string_length=2000, allow_html_fields=["description"])
 @sanitize_response()
+@format_response(
+    message="Chatbot created successfully",
+    response_model=ChatbotCreatedResponse,
+    status_code=201
+)
 async def create_chatbot(
     chatbot_data: ChatbotCreate,
     db: AsyncSession = Depends(get_db),
@@ -189,9 +212,13 @@ async def create_chatbot(
         )
 
 
-@router.patch("/{chatbot_id}", response_model=ChatbotResponse)
+@router.patch("/{chatbot_id}", response_model=ChatbotUpdatedResponse)
 @validate_input(max_string_length=2000, allow_html_fields=["description"])
 @sanitize_response()
+@format_response(
+    message="Chatbot updated successfully",
+    response_model=ChatbotUpdatedResponse
+)
 async def update_chatbot(
     chatbot_id: str,
     chatbot_data: ChatbotUpdate,
@@ -215,6 +242,10 @@ async def update_chatbot(
 
 
 @router.delete("/{chatbot_id}", status_code=status.HTTP_204_NO_CONTENT)
+@format_response(
+    message="Chatbot deleted successfully",
+    status_code=204
+)
 async def delete_chatbot(
     chatbot_id: str,
     db: AsyncSession = Depends(get_db),
@@ -227,3 +258,5 @@ async def delete_chatbot(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Chatbot not found"
         )
+    
+    return None

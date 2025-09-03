@@ -1,4 +1,6 @@
 import axios from 'axios'
+import { extractApiData, createApiError } from '@/utils/apiUtils'
+import type { StandardResponse, ErrorResponse } from '@/types/api'
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
@@ -44,7 +46,7 @@ api.interceptors.response.use(
     
     if (error.response?.status === 401) {
       window.location.href = '/login'
-      return Promise.reject(error)
+      return Promise.reject(createApiError(error))
     }
     
     // Handle 307 redirects caused by missing trailing slash
@@ -66,7 +68,7 @@ api.interceptors.response.use(
       }
     }
     
-    return Promise.reject(error)
+    return Promise.reject(createApiError(error))
   }
 )
 
@@ -104,31 +106,32 @@ export interface ChatbotListResponse {
 
 export class ChatbotApi {
   static async getAll(): Promise<ChatbotListResponse> {
-    const res = await api.get<ChatbotListResponse>('/chatbots/')
-    return res.data
+    const res = await api.get<StandardResponse<ChatbotListResponse> | ErrorResponse>('/chatbots/')
+    return extractApiData<ChatbotListResponse>(res)
   }
 
   static async getById(id: string): Promise<Chatbot> {
-    const res = await api.get<Chatbot>(`/chatbots/${id}`)
-    return res.data
+    const res = await api.get<StandardResponse<Chatbot> | ErrorResponse>(`/chatbots/${id}`)
+    return extractApiData<Chatbot>(res)
   }
 
   static async create(data: CreateChatbotData): Promise<Chatbot> {
-    const res = await api.post<Chatbot>('/chatbots/', data)
-    return res.data
+    const res = await api.post<StandardResponse<Chatbot> | ErrorResponse>('/chatbots/', data)
+    return extractApiData<Chatbot>(res)
   }
 
   static async update(id: string, data: UpdateChatbotData): Promise<Chatbot> {
-    const res = await api.patch<Chatbot>(`/chatbots/${id}`, data)
-    return res.data
+    const res = await api.patch<StandardResponse<Chatbot> | ErrorResponse>(`/chatbots/${id}`, data)
+    return extractApiData<Chatbot>(res)
   }
 
   static async delete(id: string): Promise<void> {
-    await api.delete(`/chatbots/${id}`)
+    await api.delete<StandardResponse<void> | ErrorResponse>(`/chatbots/${id}`)
+    // Delete operations typically return 204 No Content, so no data to extract
   }
 
   static async getMine(): Promise<ChatbotListResponse> {
-    const res = await api.get<ChatbotListResponse>('/chatbots/my')
-    return res.data
+    const res = await api.get<StandardResponse<ChatbotListResponse> | ErrorResponse>('/chatbots/my')
+    return extractApiData<ChatbotListResponse>(res)
   }
 }

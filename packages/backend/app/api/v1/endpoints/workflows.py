@@ -14,6 +14,8 @@ from app.core.dependencies import (
 )
 from app.services.workflow_service import workflow_service
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
+from app.schemas.responses import WorkflowListResponse, WorkflowUpdatedResponse
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -23,6 +25,9 @@ logger = logging.getLogger(__name__)
 
 
 @router.get("")
+@format_response(
+    message="Workflows retrieved successfully"
+)
 async def list_workflows(
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_admin_user),
@@ -42,6 +47,9 @@ async def list_workflows(
 
 
 @router.get("/my")
+@format_response(
+    message="Your workflows retrieved successfully"
+)
 async def list_my_workflows(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_client_user),
@@ -59,9 +67,13 @@ async def list_my_workflows(
     return result.data
 
 
-@router.patch("/{workflow_db_id}")
+@router.patch("/{workflow_db_id}", response_model=WorkflowUpdatedResponse)
 @validate_input(max_string_length=100)
 @sanitize_response()
+@format_response(
+    message="Workflow time saved updated successfully",
+    response_model=WorkflowUpdatedResponse
+)
 async def update_workflow_time_saved(
     workflow_db_id: int,
     payload: dict,
@@ -74,7 +86,10 @@ async def update_workflow_time_saved(
     # Input validation
     minutes = payload.get("time_saved_per_execution_minutes")
     if minutes is None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing time_saved_per_execution_minutes")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail="Missing time_saved_per_execution_minutes"
+        )
     
     result = await workflow_service.update_workflow_time_saved(db, workflow_db_id, minutes, current_user)
     

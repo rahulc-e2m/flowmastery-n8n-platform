@@ -7,10 +7,11 @@ from typing import Dict, Any
 from slowapi import Limiter
 
 from app.database import get_db
-from app.schemas.chat import ChatMessage, ChatResponse
+from app.schemas.chat import ChatMessage, ChatResponse, ChatHistoryResponse, ConversationListResponse, ChatTestResponse
 from app.services.chat_service import ChatService
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.core.decorators import validate_input, sanitize_response
+from app.core.response_formatter import format_response
 
 router = APIRouter()
 
@@ -34,6 +35,7 @@ async def chat_endpoint(
 
 
 @router.get("/{chatbot_id}/history")
+@format_response(message="Chat history retrieved successfully")
 async def get_chat_history(
     chatbot_id: str,
     conversation_id: str = None,
@@ -43,10 +45,18 @@ async def get_chat_history(
     """Get chat history for a chatbot using service layer"""
     
     chat_service = ChatService(db)
-    return await chat_service.get_chat_history(chatbot_id, conversation_id, limit)
+    history = await chat_service.get_chat_history(chatbot_id, conversation_id, limit)
+    
+    return ChatHistoryResponse(
+        messages=history.get("messages", []),
+        total=history.get("total", 0),
+        chatbot_id=chatbot_id,
+        conversation_id=conversation_id
+    )
 
 
 @router.get("/{chatbot_id}/conversations")
+@format_response(message="Conversation list retrieved successfully")
 async def get_conversations(
     chatbot_id: str,
     db: AsyncSession = Depends(get_db)
@@ -56,17 +66,19 @@ async def get_conversations(
     chat_service = ChatService(db)
     conversations = await chat_service.get_conversation_list(chatbot_id)
     
-    return {
-        "conversations": conversations,
-        "total": len(conversations)
-    }
+    return ConversationListResponse(
+        conversations=conversations,
+        total=len(conversations),
+        chatbot_id=chatbot_id
+    )
 
 
 @router.get("/test")
+@format_response(message="Chat service status retrieved successfully")
 async def test_chat() -> Dict[str, Any]:
     """Test chat functionality"""
-    return {
-        "status": "ok",
-        "message": "Chat service is running with service layer",
-        "timestamp": datetime.now().isoformat()
-    }
+    return ChatTestResponse(
+        status="ok",
+        message="Chat service is running with service layer",
+        timestamp=datetime.now().isoformat()
+    )

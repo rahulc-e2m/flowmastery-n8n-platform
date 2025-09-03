@@ -1,4 +1,6 @@
 import api from '@/services/authApi'
+import { extractApiData } from '@/utils/apiUtils'
+import type { StandardResponse, ErrorResponse } from '@/types/api'
 
 export type WorkflowListItem = {
   id: string
@@ -28,20 +30,20 @@ export class WorkflowsApi {
     const params: any = {}
     if (clientId) params.client_id = clientId
     if (activeFilter && activeFilter !== 'all') params.active = activeFilter === 'active'
-    const res = await api.get<WorkflowListResponse>('/workflows', { params })
-    return res.data
+    const res = await api.get<StandardResponse<WorkflowListResponse> | ErrorResponse>('/workflows', { params })
+    return extractApiData<WorkflowListResponse>(res)
   }
 
   static async listMine(activeFilter?: string): Promise<WorkflowListResponse> {
     const params: any = {}
     if (activeFilter && activeFilter !== 'all') params.active = activeFilter === 'active'
-    const res = await api.get<WorkflowListResponse>('/workflows/my', { params })
-    return res.data
+    const res = await api.get<StandardResponse<WorkflowListResponse> | ErrorResponse>('/workflows/my', { params })
+    return extractApiData<WorkflowListResponse>(res)
   }
 
   static async updateMinutes(workflowDbId: string, minutes: number): Promise<{ id: string; time_saved_per_execution_minutes: number }> {
-    const res = await api.patch(`/workflows/${workflowDbId}`, { time_saved_per_execution_minutes: minutes })
-    return res.data
+    const res = await api.patch<StandardResponse<{ id: string; time_saved_per_execution_minutes: number }> | ErrorResponse>(`/workflows/${workflowDbId}`, { time_saved_per_execution_minutes: minutes })
+    return extractApiData<{ id: string; time_saved_per_execution_minutes: number }>(res)
   }
 }
 
