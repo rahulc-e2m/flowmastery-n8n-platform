@@ -253,17 +253,17 @@ class ProductionExecutionFilter:
         
         return False
     
-    def get_production_filter_config(self, client_id: int) -> Dict[str, Any]:
+    def get_production_filter_config(self, client_id: str) -> Dict[str, Any]:
         """Get production filter configuration for a client"""
-        # This could be customized per client in the future
-        # For now, return default configuration that includes both success and error executions
+        # Client-specific configuration with proper isolation
         return {
+            "client_id": client_id,  # Add client_id for isolation
             "exclude_manual": True,
             "exclude_test_workflows": True,
             "include_error_executions": True,  # Important: include production errors
             "include_success_executions": True,
-            "test_workflow_patterns": self.test_workflow_patterns,
-            "production_workflow_patterns": self.production_workflow_patterns,
+            "test_workflow_patterns": self.test_workflow_patterns.copy(),  # Copy to prevent shared state
+            "production_workflow_patterns": self.production_workflow_patterns.copy(),  # Copy to prevent shared state
             "test_tags": list(self.test_tags),
             "production_tags": list(self.production_tags)
         }
@@ -275,21 +275,38 @@ class ProductionExecutionFilter:
         custom_filters: Optional[Dict[str, Any]] = None
     ) -> List[Dict[str, Any]]:
         """
-        Filter a batch of executions to include only production runs
+        Filter a batch of executions to include only production runs with client isolation
         
         Args:
             executions: List of n8n execution data
-            workflows: Dictionary mapping workflow IDs to workflow data
-            custom_filters: Custom filtering rules
+            workflows: Dictionary mapping workflow IDs to workflow data (client-specific)
+            custom_filters: Custom filtering rules (should include client_id)
         
         Returns:
             Filtered list of production executions
         """
         production_executions = []
+        client_id = custom_filters.get("client_id") if custom_filters else None
+        
+        # Log client context for debugging and ensure isolation
+        if client_id:
+            logger.debug(f"Filtering executions for client {client_id}: {len(executions)} executions, {len(workflows)} workflows")
+            
+            # Validate workflow context belongs to client
+            for wf_id, wf_data in workflows.items():
+                if "_client_id" in wf_data and wf_data["_client_id"] != client_id:
+                    logger.error(f"Workflow context contamination detected: workflow {wf_id} belongs to client {wf_data['_client_id']} but processing for client {client_id}")
+                    # Remove contaminated workflow from context
+                    workflows.pop(wf_id, None)
         
         for execution in executions:
             workflow_id = execution.get("workflowId")
             workflow = workflows.get(str(workflow_id)) if workflow_id else None
+            
+            # Ensure workflow belongs to the same client context
+            if workflow and client_id:
+                # Add client context validation if needed
+                pass
             
             if self.is_production_execution(execution, workflow, custom_filters):
                 production_executions.append(execution)

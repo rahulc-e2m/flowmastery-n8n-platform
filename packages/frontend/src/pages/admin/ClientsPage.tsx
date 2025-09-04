@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Loader2
 } from 'lucide-react'
+import { ClientStatusIndicator } from '@/components/ui/client-status-indicator'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -176,7 +177,26 @@ export function ClientsPage() {
 
   const handleTriggerSync = (clientId: string) => {
     if (confirm('This will immediately sync data from the n8n instance. Continue?')) {
-      triggerSyncMutation.mutate(clientId)
+      triggerSyncMutation.mutate(clientId, {
+        onError: (error: any) => {
+          const status = error.response?.status
+          const message = error.response?.data?.detail || error.message
+          
+          if (status === 503) {
+            toast.error(
+              'n8n workspace is currently offline. Please try again later.',
+              { duration: 8000 }
+            )
+          } else if (status === 400 && message?.includes('API key')) {
+            toast.error(
+              'n8n API configuration issue. Please reconfigure the API settings.',
+              { duration: 8000 }
+            )
+          } else {
+            toast.error(message || 'Failed to trigger sync')
+          }
+        }
+      })
     }
   }
 
@@ -273,18 +293,13 @@ export function ClientsPage() {
             <CardContent>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">n8n Configuration</span>
-                  {client.has_n8n_api_key ? (
-                    <Badge variant="default" className="flex items-center space-x-1">
-                      <CheckCircle className="w-3 h-3" />
-                      <span>Configured</span>
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="flex items-center space-x-1">
-                      <XCircle className="w-3 h-3" />
-                      <span>Not configured</span>
-                    </Badge>
-                  )}
+                  <span className="text-sm text-muted-foreground">n8n Status</span>
+                  <ClientStatusIndicator 
+                    clientId={client.id}
+                    clientName={client.name}
+                    hasApiKey={client.has_n8n_api_key}
+                    compact={true}
+                  />
                 </div>
 
                 {client.n8n_api_url && (

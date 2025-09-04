@@ -230,6 +230,7 @@ class ClientService(ServiceLayerMixin):
                     "id": client.id,
                     "name": client.name,
                     "n8n_api_url": client.n8n_api_url,
+                    "n8n_api_key_encrypted": client.n8n_api_key_encrypted,
                     "created_by_admin_id": client.created_by_admin_id,
                     "created_at": client.created_at.isoformat() if client.created_at else None,
                     "updated_at": client.updated_at.isoformat() if client.updated_at else None
@@ -261,6 +262,7 @@ class ClientService(ServiceLayerMixin):
                         "id": client.id,
                         "name": client.name,
                         "n8n_api_url": client.n8n_api_url,
+                        "n8n_api_key_encrypted": client.n8n_api_key_encrypted,
                         "created_by_admin_id": client.created_by_admin_id,
                         "created_at": client.created_at.isoformat() if client.created_at else None,
                         "updated_at": client.updated_at.isoformat() if client.updated_at else None

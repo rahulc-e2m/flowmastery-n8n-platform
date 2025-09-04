@@ -71,6 +71,11 @@ export class ClientApi {
     return extractApiData<ManualSyncResponse>(response)
   }
 
+  static async getClientConfigStatus(clientId: string): Promise<any> {
+    const response = await api.get<StandardResponse<any> | ErrorResponse>(`/clients/${clientId}/config-status`)
+    return extractApiData<any>(response)
+  }
+
   static async deleteClient(clientId: string): Promise<{ message: string }> {
     const response = await api.delete<StandardResponse<{ message: string }> | ErrorResponse>(`/clients/${clientId}`)
     return extractApiData<{ message: string }>(response)

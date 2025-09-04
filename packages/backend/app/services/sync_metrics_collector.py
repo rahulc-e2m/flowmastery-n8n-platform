@@ -136,6 +136,9 @@ class SyncMetricsCollector:
             
             # Store workflows in database
             workflow_ids = []
+            stored_workflows = 0
+            updated_workflows = 0
+            
             for wf_data in workflows:
                 workflow = db.query(Workflow).filter(
                     Workflow.client_id == client.id,
@@ -159,6 +162,7 @@ class SyncMetricsCollector:
                         updated_at=datetime.now(timezone.utc)
                     )
                     db.add(workflow)
+                    stored_workflows += 1
                 else:
                     workflow.name = wf_data.get('name', 'Unnamed')
                     workflow.active = wf_data.get('active', False)
@@ -167,10 +171,24 @@ class SyncMetricsCollector:
                     workflow.n8n_updated_at = datetime.fromisoformat(wf_data['updatedAt'].replace('Z', '+00:00')) if wf_data.get('updatedAt') else None
                     workflow.last_synced_at = datetime.now(timezone.utc)
                     workflow.updated_at = datetime.now(timezone.utc)
+                    updated_workflows += 1
                 
                 workflow_ids.append(wf_data.get('id'))
             
             db.flush()  # Ensure workflows are saved before continuing
+            
+            # Update workflow sync state
+            from app.models import SyncState
+            sync_state = db.query(SyncState).filter(SyncState.client_id == client.id).first()
+            if not sync_state:
+                sync_state = SyncState(client_id=client.id)
+                db.add(sync_state)
+                db.flush()
+            
+            sync_state.update_workflow_sync(len(workflows))
+            db.flush()
+            
+            logger.info(f"Workflow sync: {stored_workflows} new, {updated_workflows} updated, {len(workflows)} total")
             
             return {
                 'total': len(workflows),
@@ -434,12 +452,14 @@ class SyncMetricsCollector:
             db.flush()
             
             # Update sync state with the latest sync information
-            if stored_executions > 0:
-                sync_state.update_execution_sync(
-                    execution_count=stored_executions,
-                    newest_date=now
-                )
-                db.flush()
+            # Always update sync state, even if no new executions (to track sync attempts)
+            sync_state.update_execution_sync(
+                execution_count=stored_executions,  # Only count actually stored executions
+                newest_date=now
+            )
+            db.flush()
+            
+            logger.info(f"Updated sync state: {stored_executions} new executions, total synced now: {sync_state.total_executions_synced}")
             
             logger.info(f"Status distribution: {status_counts}")
             logger.info(f"Sync state updated: {stored_executions} executions synced")

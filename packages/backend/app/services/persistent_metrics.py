@@ -180,10 +180,21 @@ class PersistentMetricsCollector:
             # Fetch executions from n8n
             n8n_executions = await self._fetch_n8n_executions(client.n8n_api_url, api_key, limit)
             
-            # Apply production filtering with workflow context
+            # Apply production filtering with proper client isolation
             custom_filters = production_filter.get_production_filter_config(client.id)
+            # Ensure client context is preserved in filtering
+            custom_filters["client_id"] = client.id
+            
+            # Create client-isolated workflow context
+            client_workflows_n8n = {}
+            for wf_id, wf_data in workflows_n8n.items():
+                # Add client context to workflow data for isolation
+                wf_data_with_context = wf_data.copy()
+                wf_data_with_context["_client_id"] = client.id
+                client_workflows_n8n[wf_id] = wf_data_with_context
+            
             production_executions = production_filter.validate_execution_batch(
-                n8n_executions, workflows_n8n, custom_filters
+                n8n_executions, client_workflows_n8n, custom_filters
             )
             
             synced_count = 0

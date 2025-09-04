@@ -46,13 +46,15 @@ def sync_client_metrics(self, client_id: int) -> Dict[str, Any]:
             from app.services.cache.redis import redis_client
             import asyncio
             
-            # Clear client-specific cache more aggressively
+            # Clear client-specific cache more aggressively with proper isolation
             cache_keys = [
                 f"enhanced_client_metrics:{client_id}",
                 f"client_metrics:{client_id}",
                 f"client_workflows:{client_id}",
                 f"metrics_cache:enhanced_client_metrics:{client_id}",
-                f"metrics_cache:client_metrics:{client_id}"
+                f"metrics_cache:client_metrics:{client_id}",
+                f"production_filter_cache:{client_id}:*",  # Clear production filter cache
+                f"workflow_context:{client_id}:*"  # Clear workflow context cache
             ]
             
             # Run cache clearing in async context

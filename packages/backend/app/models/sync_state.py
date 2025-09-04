@@ -114,8 +114,9 @@ class SyncState(Base, TimestampMixin):
         oldest_date: Optional[datetime] = None,
         last_id: Optional[str] = None
     ):
-        """Update execution sync state"""
+        """Update execution sync state - execution_count should be NEW executions added this sync"""
         self.last_execution_sync = datetime.utcnow()
+        # Only add the count of NEW executions stored in this sync
         self.total_executions_synced += execution_count
         
         if newest_date and (not self.newest_execution_date or newest_date > self.newest_execution_date):
