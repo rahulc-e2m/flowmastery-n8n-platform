@@ -4,6 +4,7 @@ from typing import Optional
 from uuid import UUID
 
 from app.core.dependencies import get_db, get_current_user
+from app.core.user_roles import RolePermissions
 from app.models.user import User
 from app.services.dependency_service import DependencyService
 from app.schemas.dependency import (
@@ -25,7 +26,7 @@ def get_dependency_service(db: AsyncSession = Depends(get_db)) -> DependencyServ
 
 def require_admin(current_user: User = Depends(get_current_user)) -> User:
     """Require admin role for certain operations"""
-    if current_user.role != "admin":
+    if not RolePermissions.is_admin(current_user.role):
         raise HTTPException(
             status_code=403,
             detail="Admin access required"

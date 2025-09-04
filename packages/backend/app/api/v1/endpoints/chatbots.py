@@ -22,7 +22,8 @@ from app.schemas.responses import (
     ChatbotListResponse as StandardChatbotListResponse
 )
 from app.services.chatbot_service import ChatbotService
-from app.core.dependencies import get_current_user, get_current_admin_user
+from app.core.dependencies import get_current_user
+from app.core.user_roles import UserRole, RolePermissions
 from app.core.decorators import validate_input, sanitize_response
 from app.core.response_formatter import format_response
 from app.services.cache.redis import redis_client
@@ -100,7 +101,7 @@ class ChatbotServiceMixin:
 )
 async def get_all_chatbots(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_admin_user)
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get all chatbots (admin only) with service layer protection"""
     # Rate limiting
@@ -140,12 +141,10 @@ async def get_all_chatbots(
 )
 async def get_my_chatbots(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user())
 ):
     """Get chatbots for the current user's client"""
     result = await ChatbotService.get_user_chatbots(db, current_user)
-    
-    # Return the service result directly
     return result
 
 
@@ -154,7 +153,7 @@ async def get_my_chatbots(
 async def get_chatbot(
     chatbot_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user())
 ):
     """Get a specific chatbot by ID"""
     chatbot = await ChatbotService.get_chatbot_by_id(db, chatbot_id, current_user)
@@ -177,7 +176,7 @@ async def get_chatbot(
 async def create_chatbot(
     chatbot_data: ChatbotCreate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user())
 ):
     """Create a new chatbot with service layer protection"""
     # Rate limiting for creation (lower limit)
@@ -223,7 +222,7 @@ async def update_chatbot(
     chatbot_id: str,
     chatbot_data: ChatbotUpdate,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user())
 ):
     """Update an existing chatbot"""
     try:
@@ -249,7 +248,7 @@ async def update_chatbot(
 async def delete_chatbot(
     chatbot_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user())
 ):
     """Delete a chatbot"""
     success = await ChatbotService.delete_chatbot(db, chatbot_id, current_user)

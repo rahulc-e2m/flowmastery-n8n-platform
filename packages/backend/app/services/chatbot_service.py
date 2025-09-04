@@ -7,6 +7,7 @@ from sqlalchemy import select, and_
 
 from ..models import Chatbot, Client, User
 from ..schemas.chatbot import ChatbotCreate, ChatbotUpdate, ChatbotResponse, ChatbotListResponse
+from ..core.user_roles import RolePermissions
 
 
 class ChatbotService:
@@ -84,7 +85,7 @@ class ChatbotService:
         stmt = select(Chatbot).options(selectinload(Chatbot.client))
         
         # If user is not admin, filter by their client
-        if user.role != "admin":
+        if not RolePermissions.is_admin(user.role):
             if not user.client_id:
                 return None
             stmt = stmt.where(Chatbot.client_id == user.client_id)
@@ -120,7 +121,7 @@ class ChatbotService:
             raise ValueError("Client not found")
         
         # If user is not admin, they can only create chatbots for their own client
-        if user.role != "admin" and user.client_id != chatbot_data.client_id:
+        if not RolePermissions.is_admin(user.role) and user.client_id != chatbot_data.client_id:
             raise ValueError("You can only create chatbots for your own client")
         
         # Create the chatbot
@@ -159,7 +160,7 @@ class ChatbotService:
         stmt = select(Chatbot)
         
         # If user is not admin, filter by their client
-        if user.role != "admin":
+        if not RolePermissions.is_admin(user.role):
             if not user.client_id:
                 return None
             stmt = stmt.where(Chatbot.client_id == user.client_id)
@@ -180,7 +181,7 @@ class ChatbotService:
                 raise ValueError("Client not found")
             
             # If user is not admin, they can only move chatbots to their own client
-            if user.role != "admin" and user.client_id != chatbot_data.client_id:
+            if not RolePermissions.is_admin(user.role) and user.client_id != chatbot_data.client_id:
                 raise ValueError("You can only assign chatbots to your own client")
         
         # Update fields
@@ -213,7 +214,7 @@ class ChatbotService:
         stmt = select(Chatbot)
         
         # If user is not admin, filter by their client
-        if user.role != "admin":
+        if not RolePermissions.is_admin(user.role):
             if not user.client_id:
                 return False
             stmt = stmt.where(Chatbot.client_id == user.client_id)

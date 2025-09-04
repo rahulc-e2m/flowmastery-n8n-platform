@@ -7,7 +7,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from typing import Dict, Any, List
 
 from app.models.user import User
-from app.core.dependencies import get_current_admin_user, get_current_user
+from app.core.dependencies import get_current_user
+from app.core.user_roles import UserRole, RolePermissions
 from app.core.decorators import validate_input, sanitize_response
 from app.core.response_formatter import format_response
 from app.services.cache.redis import redis_client
@@ -94,7 +95,7 @@ async def get_task_status(
 @router.get("/worker-stats")
 @format_response(message="Worker statistics retrieved successfully")
 async def get_worker_stats(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> Dict[str, Any]:
     """Get Celery worker statistics (admin only)"""
     try:
@@ -133,7 +134,7 @@ async def trigger_client_sync(
         )
     
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to trigger sync for this client"
@@ -175,7 +176,7 @@ async def trigger_client_sync(
 @sanitize_response()
 @format_response(message="Sync for all clients triggered successfully")
 async def trigger_all_clients_sync(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> Dict[str, Any]:
     """Trigger metrics sync for all clients (admin only)"""
     try:
@@ -198,7 +199,7 @@ async def trigger_all_clients_sync(
 @sanitize_response()
 @format_response(message="Daily aggregation triggered successfully")
 async def trigger_daily_aggregation(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> Dict[str, Any]:
     """Trigger daily aggregation computation (admin only)"""
     try:

@@ -3,7 +3,8 @@
 import logging
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from app.core.dependencies import get_current_admin_user
+from app.core.dependencies import get_current_user
+from app.core.user_roles import UserRole
 from app.models.user import User
 from app.services.cache.redis import redis_client
 from app.core.response_formatter import format_response
@@ -54,7 +55,7 @@ class CacheServiceMixin:
 @format_response(message="Client cache cleared successfully")
 async def clear_client_cache(
     client_id: str,
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Clear cache for a specific client (admin only) with service layer protection"""
     # Rate limiting for cache operations
@@ -100,7 +101,7 @@ async def clear_client_cache(
 @router.delete("/all")
 @format_response(message="All cache cleared successfully")
 async def clear_all_cache(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Clear all metrics cache (admin only)"""
     patterns = [
@@ -123,7 +124,7 @@ async def clear_all_cache(
 @router.get("/stats")
 @format_response(message="Cache statistics retrieved successfully")
 async def get_cache_stats(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get cache statistics (admin only)"""
     try:

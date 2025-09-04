@@ -6,7 +6,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
-from app.core.dependencies import get_current_admin_user, get_current_user, verify_client_access
+from app.core.dependencies import get_current_user, verify_client_access
+from app.core.user_roles import UserRole, RolePermissions
 from app.services.client_service import ClientService
 from app.schemas.client import (
     ClientCreate,
@@ -39,7 +40,7 @@ router = APIRouter()
 async def create_client(
     client_data: ClientCreate,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Create a new client (admin only)"""
     client_service = ClientService()
@@ -54,7 +55,7 @@ async def create_client(
 @router.get("/", response_model=ClientListResponse)
 async def list_clients(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """List all clients (admin only)"""
     client_service = ClientService()
@@ -96,7 +97,7 @@ async def get_client(
 ):
     """Get client details"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client"
@@ -128,7 +129,7 @@ async def update_client(
     client_id: str,
     client_data: ClientUpdate,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Update client details (admin only)"""
     client_service = ClientService()
@@ -153,7 +154,7 @@ async def configure_n8n_api(
     client_id: str,
     n8n_config: ClientN8nConfig,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> ClientSyncResponse:
     """Configure n8n API settings for a client and immediately sync data (admin only)"""
     client_service = ClientService()
@@ -182,7 +183,7 @@ async def configure_n8n_api(
 async def delete_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Delete a client (admin only)"""
     client_service = ClientService()
@@ -202,7 +203,7 @@ async def delete_client(
 @sanitize_response()
 async def test_n8n_connection(
     n8n_config: ClientN8nConfig,
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> N8nConnectionTestResponse:
     """Test n8n API connection without saving configuration (admin only)"""
     result = await ClientService.test_n8n_connection(
@@ -218,7 +219,7 @@ async def test_n8n_connection(
 async def trigger_immediate_sync(
     client_id: str,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> Dict[str, Any]:
     """Manually trigger immediate n8n data sync for a client (admin only)"""
     client_service = ClientService()

@@ -7,11 +7,8 @@ from typing import Optional
 
 from app.database import get_db
 from app.models.user import User
-from app.core.dependencies import (
-    get_current_admin_user,
-    get_current_client_user,
-    get_current_user,
-)
+from app.core.dependencies import get_current_user
+from app.core.user_roles import UserRole
 from app.services.workflow_service import workflow_service
 from app.core.decorators import validate_input, sanitize_response
 from app.core.response_formatter import format_response
@@ -30,7 +27,7 @@ logger = logging.getLogger(__name__)
 )
 async def list_workflows(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user),
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN])),
     client_id: Optional[str] = Query(None, description="Filter by client id"),
     active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
@@ -52,7 +49,7 @@ async def list_workflows(
 )
 async def list_my_workflows(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user),
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
     active: Optional[bool] = Query(None, description="Filter by active status"),
 ):
     """List workflows for the current client user."""

@@ -11,11 +11,8 @@ logger = logging.getLogger(__name__)
 from app.database import get_db
 from app.models.user import User
 from app.models import AggregationPeriod
-from app.core.dependencies import (
-    get_current_admin_user, 
-    get_current_client_user,
-    get_current_user,
-)
+from app.core.dependencies import get_current_user
+from app.core.user_roles import UserRole, RolePermissions
 from app.services.metrics_service import metrics_service
 from app.services.persistent_metrics import persistent_metrics_collector
 from app.schemas.metrics import (
@@ -34,7 +31,7 @@ router = APIRouter()
 @format_response(message="All clients metrics retrieved successfully")
 async def get_all_clients_metrics(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get metrics for all clients (admin only)"""
     return await metrics_service.get_admin_metrics(db)
@@ -45,11 +42,11 @@ async def get_all_clients_metrics(
 async def get_client_metrics(
     client_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN, UserRole.CLIENT]))
 ):
     """Get aggregated metrics for a specific client"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client's metrics"
@@ -73,7 +70,7 @@ async def get_client_workflow_metrics(
 ):
     """Get workflow-level metrics for a specific client"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client's metrics"
@@ -101,7 +98,7 @@ async def get_client_historical_metrics(
 ):
     """Get historical metrics for a client"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client's metrics"
@@ -122,7 +119,7 @@ async def get_client_historical_metrics(
 @format_response(message="Your metrics retrieved successfully")
 async def get_my_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user)
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
 ):
     """Get metrics for the current client user"""
     if not current_user.client_id:
@@ -144,7 +141,7 @@ async def get_my_metrics(
 @format_response(message="Your workflow metrics retrieved successfully")
 async def get_my_workflow_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user)
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
 ):
     """Get workflow metrics for the current client user"""
     if not current_user.client_id:
@@ -166,7 +163,7 @@ async def get_my_workflow_metrics(
 @format_response(message="Your historical metrics retrieved successfully")
 async def get_my_historical_metrics(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user),
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
     period_type: AggregationPeriod = Query(AggregationPeriod.DAILY),
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
@@ -195,7 +192,7 @@ async def get_my_historical_metrics(
 @format_response(message="Quick sync for all clients completed successfully")
 async def quick_sync_all_metrics(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Force immediate sync of all client metrics (admin only)"""
     try:
@@ -280,7 +277,7 @@ async def quick_sync_all_metrics(
 async def force_sync_client(
     client_id: str,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Force sync metrics for a specific client (admin only)"""
     try:
@@ -306,7 +303,7 @@ async def force_sync_client(
 @format_response(message="Sync for all clients completed successfully")
 async def force_sync_all_clients(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Force sync metrics for all clients (admin only)"""
     try:
@@ -335,7 +332,7 @@ async def get_client_executions(
 ):
     """Get recent executions for a specific client"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client's executions"
@@ -420,7 +417,7 @@ async def get_client_execution_stats(
 ):
     """Get execution statistics grouped by workflow for a specific client"""
     # Verify client access
-    if current_user.role != "admin" and current_user.client_id != client_id:
+    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied to this client's execution stats"
@@ -505,7 +502,7 @@ async def get_client_execution_stats(
 @format_response(message="Your executions retrieved successfully")
 async def get_my_executions(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user),
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
     limit: int = Query(50, description="Number of executions to return"),
     offset: int = Query(0, description="Number of executions to skip"),
     workflow_id: Optional[int] = Query(None, description="Filter by workflow ID"),
@@ -533,7 +530,7 @@ async def get_my_executions(
 @format_response(message="Your execution statistics retrieved successfully")
 async def get_my_execution_stats(
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_client_user)
+    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
 ):
     """Get execution statistics for the current client user"""
     if not current_user.client_id:
@@ -554,7 +551,7 @@ async def get_my_execution_stats(
 @format_response(message="Metrics cache refreshed successfully")
 async def refresh_metrics_cache(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Refresh metrics cache without syncing from n8n (admin only)"""
     try:
@@ -602,7 +599,7 @@ async def refresh_metrics_cache(
 @format_response(message="Data freshness information retrieved successfully")
 async def get_data_freshness(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get data freshness information for all clients (admin only)"""
     try:
@@ -687,7 +684,7 @@ async def get_data_freshness(
 @format_response(message="Daily aggregation triggered successfully")
 async def trigger_daily_aggregation(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user),
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN])),
     target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD), defaults to yesterday")
 ):
     """Manually trigger daily aggregation for testing (admin only)"""
@@ -723,7 +720,7 @@ async def trigger_daily_aggregation(
 @format_response(message="Historical aggregation triggered successfully")
 async def trigger_historical_aggregation(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user),
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN])),
     days_back: int = Query(7, description="Number of days back to aggregate")
 ):
     """Trigger aggregation for multiple historical days (admin only)"""
@@ -759,7 +756,7 @@ async def trigger_historical_aggregation(
 @router.get("/admin/scheduler-status")
 @format_response(message="Scheduler status retrieved successfully")
 async def get_scheduler_status(
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get Celery scheduler status (admin only)"""
     try:

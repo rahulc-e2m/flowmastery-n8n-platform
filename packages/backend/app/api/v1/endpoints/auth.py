@@ -13,7 +13,8 @@ from slowapi.util import get_remote_address
 from app.database import get_db
 from app.models.user import User
 from app.models.invitation import Invitation
-from app.core.dependencies import get_current_user, get_current_admin_user, get_optional_user
+from app.core.dependencies import get_current_user, get_optional_user
+from app.core.user_roles import UserRole
 from app.core.auth import create_access_token, create_refresh_token, verify_token
 from app.core.rate_limiting import get_user_identifier, RATE_LIMITS
 from app.services.auth_service import AuthService
@@ -426,7 +427,7 @@ async def get_auth_status(
 @format_response(message="User profile updated successfully")
 async def update_user_profile(
     profile_data: UserProfileUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user()),
     db: AsyncSession = Depends(get_db)
 ):
     """Update current user's profile information"""
@@ -451,7 +452,7 @@ async def create_invitation(
     request: Request,
     invitation_data: InvitationCreate,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Create a new invitation (admin only) with service layer protection"""
     # Rate limiting for invitation creation
@@ -475,7 +476,7 @@ async def create_invitation(
 @format_response(message="Invitations retrieved successfully")
 async def list_invitations(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """List all invitations (admin only)"""
     result = await db.execute(select(Invitation).order_by(Invitation.created_at.desc()))
@@ -488,7 +489,7 @@ async def list_invitations(
 async def get_invitation_link(
     invitation_id: str,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get invitation link by invitation ID (admin only)"""
     result = await db.execute(select(Invitation).where(Invitation.id == invitation_id))
@@ -646,7 +647,7 @@ async def accept_invitation(
 async def revoke_invitation(
     invitation_id: str,
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_admin_user)
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Revoke a pending invitation (admin only)"""
     invitation = await AuthService.revoke_invitation(db, invitation_id)
