@@ -18,7 +18,7 @@ class Invitation(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(UUID(as_uuid=False), primary_key=True, default=lambda: str(uuid.uuid4()), index=True)
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(50), nullable=False)  # 'admin' or 'client'
-    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    token: Mapped[str] = mapped_column(String(500), unique=True, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)  # 'pending', 'accepted', 'expired'
     
     # Expiry date (default 7 days from creation)
