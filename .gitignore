@@ -120,3 +120,6 @@ site/
 # Celery
 celerybeat-schedule
 celerybeat.pid
+
+#kiro
+.kiro

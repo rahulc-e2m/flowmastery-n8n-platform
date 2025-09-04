@@ -259,26 +259,26 @@ class ChatService:
         # Validate that chatbot exists
         await self.get_chatbot(chatbot_id)
         
-        # Get unique conversations with latest message info
-        query = select(
-            ChatMessageModel.conversation_id,
-            ChatMessageModel.timestamp,
-            ChatMessageModel.user_message
-        ).where(
+        # Get all messages for this chatbot, ordered by timestamp desc
+        query = select(ChatMessageModel).where(
             ChatMessageModel.chatbot_id == chatbot_id
-        ).order_by(
-            ChatMessageModel.conversation_id,
-            ChatMessageModel.timestamp.desc()
-        ).distinct(ChatMessageModel.conversation_id)
+        ).order_by(ChatMessageModel.timestamp.desc())
         
         result = await self.db.execute(query)
-        conversations = result.all()
+        all_messages = result.scalars().all()
         
-        return [
-            {
-                "conversation_id": conv.conversation_id,
-                "last_message_time": conv.timestamp.isoformat(),
-                "last_user_message": conv.user_message[:100] + "..." if len(conv.user_message) > 100 else conv.user_message
-            }
-            for conv in conversations
-        ]
+        # Group by conversation_id and get the latest message for each
+        conversations_dict = {}
+        for msg in all_messages:
+            if msg.conversation_id not in conversations_dict:
+                conversations_dict[msg.conversation_id] = {
+                    "conversation_id": msg.conversation_id,
+                    "last_message_time": msg.timestamp.isoformat(),
+                    "last_user_message": msg.user_message[:100] + "..." if len(msg.user_message) > 100 else msg.user_message
+                }
+        
+        # Convert to list and sort by timestamp (most recent first)
+        conversations_list = list(conversations_dict.values())
+        conversations_list.sort(key=lambda x: x["last_message_time"], reverse=True)
+        
+        return conversations_list
