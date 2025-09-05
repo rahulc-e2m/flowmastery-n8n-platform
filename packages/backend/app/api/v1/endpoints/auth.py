@@ -462,7 +462,8 @@ async def create_invitation(
         )
     
     try:
-        invitation = await AuthService.create_invitation(db, invitation_data, admin_user)
+        auth_service = AuthService()
+        invitation = await auth_service.create_invitation(db, invitation_data, admin_user)
         await AuthServiceMixin._log_auth_event("invitation_created", user_id=admin_user.id, email=invitation_data.email, success=True)
         return InvitationResponse.model_validate(invitation)
     except Exception as e:

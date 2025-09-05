@@ -3,28 +3,88 @@
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from typing import Optional
+from typing import Optional, Dict, Any
+from abc import ABC, abstractmethod
 
 from app.config import settings
 from app.models.invitation import Invitation
 
 
-async def send_invitation_email(invitation: Invitation) -> bool:
-    """Send invitation email to user"""
-    # Create invitation link pointing to homepage with token
-    invitation_link = f"{settings.FRONTEND_URL}/?token={invitation.token}"
+class EmailService:
+    """Base email service for SMTP operations"""
     
-    if not settings.SMTP_HOST:
-        print(f"📧 Email not configured. Invitation link: {invitation_link}")
-        return True
+    def __init__(self, smtp_config: Optional[Dict[str, Any]] = None):
+        """Initialize EmailService with SMTP configuration"""
+        self.smtp_config = smtp_config or {
+            'host': settings.SMTP_HOST,
+            'port': settings.SMTP_PORT,
+            'use_tls': settings.SMTP_USE_TLS,
+            'username': settings.SMTP_USERNAME,
+            'password': settings.SMTP_PASSWORD,
+            'from_email': settings.FROM_EMAIL
+        }
     
-    try:
-        # Create message
-        msg = MIMEMultipart()
-        msg['From'] = settings.FROM_EMAIL
-        msg['To'] = invitation.email
-        msg['Subject'] = f"Welcome to FlowMastery - Your {invitation.role.title()} Account Invitation"
+    def is_configured(self) -> bool:
+        """Check if SMTP is properly configured"""
+        return bool(self.smtp_config.get('host'))
+    
+    async def send_email(self, to_email: str, subject: str, body: str, content_type: str = 'html') -> bool:
+        """Send email using SMTP"""
+        if not self.is_configured():
+            print(f"📧 Email not configured. Would send to: {to_email}")
+            print(f"📧 Subject: {subject}")
+            return True
         
+        try:
+            # Create message
+            msg = MIMEMultipart()
+            msg['From'] = self.smtp_config['from_email']
+            msg['To'] = to_email
+            msg['Subject'] = subject
+            
+            msg.attach(MIMEText(body, content_type))
+            
+            # Send email using context manager for proper cleanup
+            with smtplib.SMTP(self.smtp_config['host'], self.smtp_config['port']) as server:
+                if self.smtp_config['use_tls']:
+                    server.starttls()
+                
+                if self.smtp_config['username'] and self.smtp_config['password']:
+                    server.login(self.smtp_config['username'], self.smtp_config['password'])
+                
+                server.send_message(msg)
+            
+            print(f"✅ Email sent to {to_email}")
+            return True
+            
+        except Exception as e:
+            print(f"❌ Failed to send email to {to_email}: {str(e)}")
+            return False
+
+
+class EmailTemplate(ABC):
+    """Abstract base class for email templates"""
+    
+    @abstractmethod
+    def get_subject(self, **kwargs) -> str:
+        """Get email subject"""
+        pass
+    
+    @abstractmethod
+    def get_body(self, **kwargs) -> str:
+        """Get email body"""
+        pass
+
+
+class InvitationEmailTemplate(EmailTemplate):
+    """Template for invitation emails"""
+    
+    def get_subject(self, invitation: Invitation) -> str:
+        """Get invitation email subject"""
+        return f"Welcome to FlowMastery - Your {invitation.role.title()} Account Invitation"
+    
+    def get_body(self, invitation: Invitation, invitation_link: str) -> str:
+        """Get invitation email body"""
         # Get inviter name (admin who sent the invitation)
         inviter_name = "FlowMastery Team"  # Default fallback
         if hasattr(invitation, 'invited_by_admin') and invitation.invited_by_admin:
@@ -38,8 +98,7 @@ async def send_invitation_email(invitation: Invitation) -> bool:
         # Set workspace name
         workspace_name = "FlowMastery Platform"
         
-        # Simple FlowMastery email template with inline CSS
-        body = """
+        return """
 <!DOCTYPE html>
 <html>
 <head>
@@ -118,26 +177,48 @@ async def send_invitation_email(invitation: Invitation) -> bool:
             workspace_name=workspace_name,
             invitation_link=invitation_link,
             invitation_role=invitation.role.title(),
-            expiry_date=invitation.expiry_date.strftime('%B %d, %Y')
+            expiry_date=invitation.expiry_date.strftime('%B %d, %Y') if invitation.expiry_date else 'Not specified'
         )
+
+
+class InvitationEmailService:
+    """Service for handling invitation emails"""
+    
+    def __init__(self, email_service: Optional[EmailService] = None, template: Optional[InvitationEmailTemplate] = None):
+        """Initialize InvitationEmailService"""
+        self.email_service = email_service or EmailService()
+        self.template = template or InvitationEmailTemplate()
+    
+    async def send_invitation_email(self, invitation: Invitation) -> bool:
+        """Send invitation email to user"""
+        # Create invitation link pointing to homepage with token
+        invitation_link = f"{settings.FRONTEND_URL}/?token={invitation.token}"
         
-        msg.attach(MIMEText(body, 'html'))
+        if not self.email_service.is_configured():
+            print(f"📧 Email not configured. Invitation link: {invitation_link}")
+            return True
         
-        # Send email using context manager for proper cleanup
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT) as server:
-            if settings.SMTP_USE_TLS:
-                server.starttls()
+        try:
+            subject = self.template.get_subject(invitation)
+            body = self.template.get_body(invitation, invitation_link)
             
-            if settings.SMTP_USERNAME and settings.SMTP_PASSWORD:
-                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            success = await self.email_service.send_email(
+                to_email=invitation.email,
+                subject=subject,
+                body=body,
+                content_type='html'
+            )
             
-            server.send_message(msg)
-        
-        print(f"✅ Invitation email sent to {invitation.email}")
-        return True
-        
-    except Exception as e:
-        print(f"❌ Failed to send invitation email to {invitation.email}: {str(e)}")
-        # In development, still show the link
-        print(f"📧 Invitation link: {invitation_link}")
-        return False
+            if success:
+                print(f"✅ Invitation email sent to {invitation.email}")
+            else:
+                # In development, still show the link
+                print(f"📧 Invitation link: {invitation_link}")
+            
+            return success
+            
+        except Exception as e:
+            print(f"❌ Failed to send invitation email to {invitation.email}: {str(e)}")
+            # In development, still show the link
+            print(f"📧 Invitation link: {invitation_link}")
+            return False

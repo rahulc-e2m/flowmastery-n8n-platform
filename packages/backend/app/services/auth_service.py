@@ -12,7 +12,7 @@ from app.models.invitation import Invitation
 from app.core.auth import verify_password, get_password_hash, create_access_token
 from app.core.security import generate_invitation_token, validate_invitation_token, is_invitation_token_expired
 from app.schemas.auth import UserCreate, UserLogin, InvitationCreate, InvitationAccept, UserProfileUpdate
-from app.services.email_service import send_invitation_email
+from app.services.email_service import InvitationEmailService
 from app.config import settings
 from app.core.service_layer import OperationContext, OperationType, OperationResult, BaseService
 from app.core.auth import verify_token
@@ -24,6 +24,7 @@ class AuthService(BaseService):
     def __init__(self):
         super().__init__()
         self._service_name = "auth_service"
+        self.invitation_email_service = InvitationEmailService()
     
     @property
     def service_name(self) -> str:
@@ -76,8 +77,8 @@ class AuthService(BaseService):
         
         return user
     
-    @staticmethod
     async def create_invitation(
+        self,
         db: AsyncSession,
         invitation_data: InvitationCreate,
         admin_user: User
@@ -118,13 +119,15 @@ class AuthService(BaseService):
                     detail="Client not found"
                 )
         
-        # Create invitation
+        # Create invitation with explicit expiry date
+        expiry_date = datetime.now(timezone.utc) + timedelta(days=7)
         invitation = Invitation(
             email=invitation_data.email,
             role=invitation_data.role,
             token=generate_invitation_token(),
             client_id=invitation_data.client_id,
-            invited_by_admin_id=admin_user.id
+            invited_by_admin_id=admin_user.id,
+            expiry_date=expiry_date
         )
         
         db.add(invitation)
@@ -132,7 +135,7 @@ class AuthService(BaseService):
         await db.refresh(invitation)
         
         # Send invitation email
-        await send_invitation_email(invitation)
+        await self.invitation_email_service.send_invitation_email(invitation)
         
         return invitation
     
@@ -327,7 +330,7 @@ class AuthService(BaseService):
         self,
         db: AsyncSession,
         context: OperationContext,
-        use_cache: bool = True
+        use_cache: bool = False  # Disable caching to avoid validation issues
     ) -> OperationResult[List[Invitation]]:
         """List all invitations with service layer protection"""
         context.operation_type = OperationType.READ
@@ -357,6 +360,7 @@ class AuthService(BaseService):
                             'role': inv.role,
                             'status': inv.status,
                             'created_at': inv.created_at.isoformat() if inv.created_at else None,
+                            'expiry_date': inv.expiry_date.isoformat() if inv.expiry_date else None,
                             'client_id': inv.client_id
                         }
                         for inv in invitations
