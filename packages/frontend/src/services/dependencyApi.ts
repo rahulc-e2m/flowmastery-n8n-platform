@@ -44,7 +44,7 @@ export interface DependencyFilters {
 
 class DependencyApi {
   /**
-   * Get paginated list of dependencies
+   * Get paginated list of dependencies (guides)
    */
   async getDependencies(filters: DependencyFilters = {}): Promise<DependencyListResponse> {
     const params = new URLSearchParams();
@@ -53,7 +53,7 @@ class DependencyApi {
     if (filters.per_page) params.append('per_page', filters.per_page.toString());
     if (filters.search) params.append('search', filters.search);
     
-    const response = await api.get<StandardResponse<DependencyListResponse> | ErrorResponse>(`/dependencies/?${params.toString()}`);
+    const response = await api.get<StandardResponse<DependencyListResponse> | ErrorResponse>(`/guides/?${params.toString()}`);
     return extractApiData<DependencyListResponse>(response);
   }
 
@@ -61,7 +61,7 @@ class DependencyApi {
    * Get a specific dependency by ID
    */
   async getDependency(id: string): Promise<Dependency> {
-    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/${id}`);
+    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/guides/${id}`);
     return extractApiData<Dependency>(response);
   }
 
@@ -69,7 +69,7 @@ class DependencyApi {
    * Get a dependency by platform name
    */
   async getDependencyByPlatform(platformName: string): Promise<Dependency> {
-    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/platform/${encodeURIComponent(platformName)}`);
+    const response = await api.get<StandardResponse<Dependency> | ErrorResponse>(`/guides/platform/${encodeURIComponent(platformName)}`);
     return extractApiData<Dependency>(response);
   }
 
@@ -77,7 +77,7 @@ class DependencyApi {
    * Create a new dependency (admin only)
    */
   async createDependency(data: DependencyCreate): Promise<Dependency> {
-    const response = await api.post<StandardResponse<Dependency> | ErrorResponse>('/dependencies/', data);
+    const response = await api.post<StandardResponse<Dependency> | ErrorResponse>('/guides/', data);
     return extractApiData<Dependency>(response);
   }
 
@@ -85,7 +85,7 @@ class DependencyApi {
    * Update an existing dependency (admin only)
    */
   async updateDependency(id: string, data: DependencyUpdate): Promise<Dependency> {
-    const response = await api.put<StandardResponse<Dependency> | ErrorResponse>(`/dependencies/${id}`, data);
+    const response = await api.put<StandardResponse<Dependency> | ErrorResponse>(`/guides/${id}`, data);
     return extractApiData<Dependency>(response);
   }
 
@@ -93,7 +93,7 @@ class DependencyApi {
    * Delete a dependency (admin only)
    */
   async deleteDependency(id: string): Promise<void> {
-    await api.delete<StandardResponse<void> | ErrorResponse>(`/dependencies/${id}`);
+    await api.delete<StandardResponse<void> | ErrorResponse>(`/guides/${id}`);
     // Delete operations typically return 204 No Content, so no data to extract
   }
 
@@ -195,7 +195,7 @@ export class SystemApi {
   }
 
   static async getCacheStats(): Promise<CacheStats> {
-    const response = await api.get<StandardResponse<CacheStats> | ErrorResponse>('/system/cache/stats')
+    const response = await api.get<StandardResponse<CacheStats> | ErrorResponse>('/cache/status')
     return extractApiData<CacheStats>(response)
   }
 
@@ -205,7 +205,7 @@ export class SystemApi {
     if (pattern) params.append('pattern', pattern)
     
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const response = await api.delete<StandardResponse<CacheResult> | ErrorResponse>(`/system/cache${queryString}`)
+    const response = await api.delete<StandardResponse<CacheResult> | ErrorResponse>(`/cache/all${queryString}`)
     return extractApiData<CacheResult>(response)
   }
 

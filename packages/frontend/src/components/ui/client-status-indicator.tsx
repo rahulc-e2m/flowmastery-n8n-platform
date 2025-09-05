@@ -1,4 +1,3 @@
-import React from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ClientApi } from '@/services/clientApi'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +12,6 @@ interface ClientStatusIndicatorProps {
 
 export function ClientStatusIndicator({ 
   clientId, 
-  clientName, 
   hasApiKey, 
   compact = false 
 }: ClientStatusIndicatorProps) {
@@ -54,7 +52,7 @@ export function ClientStatusIndicator({
     )
   }
 
-  if (configStatus.is_configured) {
+  if (configStatus.configured) {
     return (
       <Badge variant="default" className="flex items-center space-x-1">
         <CheckCircle className="w-3 h-3" />
@@ -63,8 +61,9 @@ export function ClientStatusIndicator({
     )
   }
 
-  // Determine the type of issue
-  const errorMessage = configStatus.error_message || ''
+  // Determine the type of issue based on connection status
+  const connectionStatus = configStatus.n8n_connection_status
+  const errorMessage = connectionStatus === 'error' ? 'Connection error' : ''
   const isServiceIssue = errorMessage.includes('offline') || 
                         errorMessage.includes('503') || 
                         errorMessage.includes('unavailable')

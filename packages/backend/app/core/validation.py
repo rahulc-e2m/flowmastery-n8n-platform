@@ -40,18 +40,23 @@ class InputSanitizer:
         r'<style[^>]*>.*?</style>',
     ]
     
-    # SQL injection patterns
+    # SQL injection patterns - More specific patterns to avoid false positives
     SQL_PATTERNS = [
-        r'(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)',
+        # SQL statements with suspicious context (multiple keywords or operators)
+        r'(\b(SELECT|INSERT|UPDATE|DELETE)\b.*\b(FROM|INTO|SET|WHERE)\b)',
+        r'(\b(DROP|CREATE|ALTER)\b.*\b(TABLE|DATABASE|INDEX)\b)',
         r'(\b(UNION|OR|AND)\s+\d+\s*=\s*\d+)',
         r'(\b(OR|AND)\s+[\'"]?\w+[\'"]?\s*=\s*[\'"]?\w+[\'"]?)',
         r'(--|#|/\*|\*/)',
         r'(\bxp_cmdshell\b)',
         r'(\bsp_executesql\b)',
+        # More specific patterns for actual SQL injection attempts
+        r'(;\s*(SELECT|INSERT|UPDATE|DELETE|DROP))',
+        r'(\bunion\s+select\b)',
     ]
     
     @classmethod
-    def sanitize_string(cls, value: str, allow_html: bool = False) -> str:
+    def sanitize_string(cls, value: str, allow_html: bool = False, skip_sql_check: bool = False) -> str:
         """
         Sanitize a string input.
         
@@ -74,11 +79,12 @@ class InputSanitizer:
                 logger.warning(f"Potential XSS attempt detected: {pattern}")
                 break
         
-        # Detect and log potential SQL injection attempts
-        for pattern in cls.SQL_PATTERNS:
-            if re.search(pattern, value, re.IGNORECASE):
-                logger.warning(f"Potential SQL injection attempt detected: {pattern}")
-                break
+        # Detect and log potential SQL injection attempts (skip if requested)
+        if not skip_sql_check:
+            for pattern in cls.SQL_PATTERNS:
+                if re.search(pattern, value, re.IGNORECASE):
+                    logger.warning(f"Potential SQL injection attempt detected: {pattern}")
+                    break
         
         if allow_html:
             # Use bleach to sanitize HTML
@@ -185,19 +191,22 @@ class InputSanitizer:
         return filename.strip()
     
     @classmethod
-    def sanitize_dict(cls, data: Dict[str, Any], allow_html_fields: List[str] = None) -> Dict[str, Any]:
+    def sanitize_dict(cls, data: Dict[str, Any], allow_html_fields: List[str] = None, skip_sql_check_fields: List[str] = None) -> Dict[str, Any]:
         """
         Recursively sanitize dictionary data.
         
         Args:
             data: Dictionary to sanitize
             allow_html_fields: List of field names that can contain HTML
+            skip_sql_check_fields: List of field names to skip SQL injection checks
             
         Returns:
             Sanitized dictionary
         """
         if allow_html_fields is None:
             allow_html_fields = []
+        if skip_sql_check_fields is None:
+            skip_sql_check_fields = []
         
         sanitized = {}
         
@@ -207,9 +216,10 @@ class InputSanitizer:
             
             if isinstance(value, str):
                 allow_html = key in allow_html_fields
-                sanitized[clean_key] = cls.sanitize_string(value, allow_html=allow_html)
+                skip_sql_check = key in skip_sql_check_fields
+                sanitized[clean_key] = cls.sanitize_string(value, allow_html=allow_html, skip_sql_check=skip_sql_check)
             elif isinstance(value, dict):
-                sanitized[clean_key] = cls.sanitize_dict(value, allow_html_fields)
+                sanitized[clean_key] = cls.sanitize_dict(value, allow_html_fields, skip_sql_check_fields)
             elif isinstance(value, list):
                 sanitized[clean_key] = [
                     cls.sanitize_string(str(item)) if isinstance(item, str) else item

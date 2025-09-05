@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { formatNumber } from '@/lib/utils'
-import { useMetrics } from '@/hooks/useMetrics'
+import { useMetricsOverview } from '@/hooks/useMetrics'
 
 
 interface WorkflowShowcase {
@@ -57,7 +57,7 @@ const HomePage: React.FC = () => {
   
 
   // Only fetch metrics if user has invitation token (suggesting they might be authenticated soon)
-  const { data: metricsData, isLoading: metricsLoading } = useMetrics(true, hasInvitation)
+  const { data: metricsData, isLoading: metricsLoading } = useMetricsOverview(undefined, hasInvitation)
 
 
   const workflows: WorkflowShowcase[] = [

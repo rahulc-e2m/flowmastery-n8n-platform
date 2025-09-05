@@ -3,7 +3,7 @@ Workflow Service - Manages workflow operations with service layer protection
 """
 
 import logging
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, desc, case
@@ -152,7 +152,7 @@ class WorkflowService(BaseService[Workflow]):
     async def update_workflow_time_saved(
         self,
         db: AsyncSession,
-        workflow_id: int,
+        workflow_id: str,
         minutes: int,
         user: User
     ) -> OperationResult[Dict[str, Any]]:
@@ -169,6 +169,7 @@ class WorkflowService(BaseService[Workflow]):
             return OperationResult(success=False, error="Invalid minutes value")
         
         async def _update_workflow():
+            # Use the service layer's own database session management
             async with self._get_db_session() as session:
                 # Load workflow
                 stmt = select(Workflow).where(Workflow.id == workflow_id)
@@ -197,11 +198,15 @@ class WorkflowService(BaseService[Workflow]):
 
                 logger.info(f"Updated workflow {workflow_id} time saved from {old_minutes} to {minutes} by user {user.id}")
                 
+                # Return complete workflow data to match WorkflowResponse model
                 return {
                     "id": workflow.id,
+                    "name": workflow.name,
+                    "active": workflow.active,
+                    "client_id": workflow.client_id,
                     "time_saved_per_execution_minutes": workflow.time_saved_per_execution_minutes,
-                    "old_minutes": old_minutes,
-                    "new_minutes": minutes
+                    "created_at": workflow.created_at,
+                    "updated_at": workflow.updated_at
                 }
         
         return await self.execute_operation(_update_workflow, context)
@@ -209,11 +214,11 @@ class WorkflowService(BaseService[Workflow]):
     async def get_workflow_by_id(
         self,
         db: AsyncSession,
-        workflow_id: int,
+        workflow_id: str,
         user: User,
         use_cache: bool = True
     ) -> OperationResult[Optional[Workflow]]:
-        """Get a specific workflow by ID"""
+        """Get a specific workflow by ID (database UUID)"""
         context = OperationContext(
             operation_type=OperationType.READ,
             user_id=user.id,
@@ -230,6 +235,7 @@ class WorkflowService(BaseService[Workflow]):
                     return cached_result
             
             async with self._get_db_session() as session:
+                # The workflow_id is a UUID string (database primary key)
                 stmt = select(Workflow).where(Workflow.id == workflow_id)
                 result = await session.execute(stmt)
                 workflow = result.scalar_one_or_none()

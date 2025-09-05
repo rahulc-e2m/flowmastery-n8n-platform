@@ -62,6 +62,7 @@ class ClientConfigurationValidator:
         
         # Test n8n connection
         try:
+            logger.info(f"Testing n8n connection for client {client.id} at {client.n8n_api_url}")
             connection_test = await ClientService.test_n8n_connection(
                 client.n8n_api_url, api_key
             )
@@ -71,7 +72,10 @@ class ClientConfigurationValidator:
             validation_details["api_accessible"] = connection_test.get("api_accessible", False)
             validation_details["connection_message"] = connection_test.get("message", "")
             
+            logger.info(f"n8n connection test result for client {client.id}: {connection_test}")
+            
             if not connection_test.get("connection_healthy", False):
+                logger.warning(f"n8n connection failed for client {client.id}: {connection_test.get('message')}")
                 return False, f"n8n connection test failed: {connection_test.get('message', 'Unknown error')}", validation_details
             
         except Exception as e:
@@ -92,14 +96,20 @@ class ClientConfigurationValidator:
             db, client
         )
         
+        # Determine connection status based on details
+        connection_status = "success" if is_valid else "error"
+        if not is_valid and details.get("connection_test") == "not_tested":
+            connection_status = "not_tested"
+        
         return {
             "client_id": client.id,
             "client_name": client.name,
-            "is_configured": is_valid,
+            "configured": is_valid,  # Frontend expects 'configured', not 'is_configured'
             "error_message": error_message,
             "configuration_details": details,
             "has_n8n_api_key": is_valid,  # Only true if fully validated
-            "n8n_api_url": client.n8n_api_url
+            "n8n_api_url": client.n8n_api_url,
+            "n8n_connection_status": connection_status  # Frontend looks for this field
         }
     
     @staticmethod

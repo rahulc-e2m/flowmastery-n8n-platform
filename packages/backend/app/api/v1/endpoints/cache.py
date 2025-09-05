@@ -1,14 +1,17 @@
-"""Cache management endpoints with service layer protection"""
+"""Consolidated cache management endpoints with service layer protection"""
 
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
 from app.core.dependencies import get_current_user
 from app.core.user_roles import UserRole
 from app.models.user import User
 from app.services.cache.redis import redis_client
 from app.core.response_formatter import format_response
-from app.schemas.cache import CacheClearResponse, CacheStatsResponse, ClientCacheClearResponse
+from app.core.decorators import validate_input, sanitize_response
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -51,13 +54,200 @@ class CacheServiceMixin:
             logger.error(f"Failed to log cache operation: {e}")
 
 
+@router.get("/stats")
+@format_response(message="Cache statistics retrieved successfully")
+async def get_cache_stats(
+    db: AsyncSession = Depends(get_db),
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
+):
+    """Get comprehensive cache statistics (admin only) - consolidated from system.py"""
+    
+    # Rate limiting for cache operations
+    if not await CacheServiceMixin._check_cache_rate_limit(admin_user.id, "stats"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded for cache operations"
+        )
+    
+    try:
+        from sqlalchemy import select
+        from app.models import Client
+        
+        # Get Redis info
+        redis_info = await redis_client.get_info()
+        
+        # Get all clients
+        stmt = select(Client)
+        result = await db.execute(stmt)
+        clients = result.scalars().all()
+        
+        # Check cache status for each client
+        cache_status = []
+        total_cached = 0
+        
+        for client in clients:
+            cache_key = f"enhanced_client_metrics:{client.id}"
+            has_cache = await redis_client.exists(cache_key)
+            
+            if has_cache:
+                total_cached += 1
+                # Get cache TTL if available
+                ttl = await redis_client.get_ttl(cache_key)
+                cache_status.append({
+                    "client_id": client.id,
+                    "client_name": client.name,
+                    "cached": True,
+                    "ttl_seconds": ttl if ttl > 0 else None
+                })
+            else:
+                cache_status.append({
+                    "client_id": client.id,
+                    "client_name": client.name,
+                    "cached": False,
+                    "ttl_seconds": None
+                })
+        
+        # Check admin cache
+        admin_cache_exists = await redis_client.exists("admin_metrics:overview")
+        
+        await CacheServiceMixin._log_cache_operation("stats", admin_user.id, f"Retrieved stats for {len(clients)} clients")
+        
+        return {
+            "redis_info": {
+                "connected": redis_info.get("connected", False),
+                "used_memory": redis_info.get("used_memory_human", "Unknown"),
+                "total_keys": redis_info.get("db0", {}).get("keys", 0) if redis_info.get("db0") else 0
+            },
+            "cache_summary": {
+                "total_clients": len(clients),
+                "cached_clients": total_cached,
+                "cache_hit_rate": round((total_cached / len(clients)) * 100, 1) if clients else 0,
+                "admin_cache_exists": admin_cache_exists
+            },
+            "client_cache_status": cache_status,
+            "timestamp": datetime.utcnow().isoformat()
+        }
+        
+    except Exception as e:
+        await CacheServiceMixin._log_cache_operation("stats", admin_user.id, f"error: {str(e)}", success=False)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get cache stats: {str(e)}"
+        )
+
+
+@router.delete("/clear")
+@format_response(message="Cache cleared successfully")
+async def clear_cache(
+    client_id: Optional[str] = Query(None, description="Specific client ID to clear"),
+    pattern: Optional[str] = Query(None, description="Cache pattern to clear"),
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
+):
+    """Clear cache with optional filtering (admin only) - consolidated from system.py"""
+    
+    # Rate limiting for cache operations
+    if not await CacheServiceMixin._check_cache_rate_limit(admin_user.id, "clear"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded for cache operations"
+        )
+    
+    try:
+        cleared_keys = 0
+        
+        if client_id:
+            # Clear specific client cache
+            patterns = [
+                f"enhanced_client_metrics:{client_id}",
+                f"client_metrics:{client_id}",
+                f"service_cache:clients:*:{client_id}*",
+                f"metrics_cache:*{client_id}*",
+                f"workflow_cache:*{client_id}*",
+                f"chatbot_cache:*{client_id}*"
+            ]
+            
+            for pattern_key in patterns:
+                try:
+                    if "*" in pattern_key:
+                        # Pattern-based deletion
+                        keys = await redis_client.keys(pattern_key)
+                        if keys:
+                            await redis_client.delete(*keys)
+                            cleared_keys += len(keys)
+                    else:
+                        # Direct key deletion
+                        if await redis_client.exists(pattern_key):
+                            await redis_client.delete(pattern_key)
+                            cleared_keys += 1
+                except Exception as e:
+                    logger.warning(f"Failed to clear pattern {pattern_key}: {e}")
+            
+            await CacheServiceMixin._log_cache_operation("clear_client", admin_user.id, f"client_id: {client_id}, keys_cleared: {cleared_keys}")
+            
+            return {
+                "message": f"Cache cleared for client {client_id}",
+                "client_id": client_id,
+                "cleared_keys": cleared_keys,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        elif pattern:
+            # Clear by pattern
+            cleared_keys = await redis_client.clear_pattern(pattern)
+            
+            await CacheServiceMixin._log_cache_operation("clear_pattern", admin_user.id, f"pattern: {pattern}, keys_cleared: {cleared_keys}")
+            
+            return {
+                "message": f"Cache cleared for pattern: {pattern}",
+                "pattern": pattern,
+                "cleared_keys": cleared_keys,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        else:
+            # Clear all cache
+            patterns = [
+                "enhanced_client_metrics:*",
+                "client_metrics:*",
+                "admin_metrics:*",
+                "workflows:*",
+                "executions:*",
+                "service_cache:*",
+                "metrics_cache:*",
+                "workflow_cache:*",
+                "chatbot_cache:*"
+            ]
+            
+            for cache_pattern in patterns:
+                try:
+                    cleared = await redis_client.clear_pattern(cache_pattern)
+                    cleared_keys += cleared
+                except Exception as e:
+                    logger.warning(f"Failed to clear pattern {cache_pattern}: {e}")
+            
+            await CacheServiceMixin._log_cache_operation("clear_all", admin_user.id, f"keys_cleared: {cleared_keys}")
+            
+            return {
+                "message": "All cache cleared",
+                "cleared_keys": cleared_keys,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+    except Exception as e:
+        await CacheServiceMixin._log_cache_operation("clear", admin_user.id, f"error: {str(e)}", success=False)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to clear cache: {str(e)}"
+        )
+
+
 @router.delete("/client/{client_id}")
 @format_response(message="Client cache cleared successfully")
 async def clear_client_cache(
     client_id: str,
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Clear cache for a specific client (admin only) with service layer protection"""
+    """Clear cache for a specific client (admin only) - enhanced version"""
     # Rate limiting for cache operations
     if not await CacheServiceMixin._check_cache_rate_limit(admin_user.id, "clear_client"):
         raise HTTPException(
@@ -66,7 +256,10 @@ async def clear_client_cache(
         )
     
     try:
+        # Comprehensive client cache patterns
         patterns = [
+            f"enhanced_client_metrics:{client_id}",
+            f"client_metrics:{client_id}",
             f"service_cache:clients:*:{client_id}*",
             f"metrics_cache:*{client_id}*",
             f"workflow_cache:*{client_id}*",
@@ -76,20 +269,28 @@ async def clear_client_cache(
         total_cleared = 0
         for pattern in patterns:
             try:
-                keys = await redis_client.keys(pattern)
-                if keys:
-                    await redis_client.delete(*keys)
-                    total_cleared += len(keys)
+                if "*" in pattern:
+                    # Pattern-based deletion
+                    keys = await redis_client.keys(pattern)
+                    if keys:
+                        await redis_client.delete(*keys)
+                        total_cleared += len(keys)
+                else:
+                    # Direct key deletion
+                    if await redis_client.exists(pattern):
+                        await redis_client.delete(pattern)
+                        total_cleared += 1
             except Exception as e:
                 logger.warning(f"Failed to clear pattern {pattern}: {e}")
         
         await CacheServiceMixin._log_cache_operation("clear_client", admin_user.id, f"client_id: {client_id}, keys_cleared: {total_cleared}")
         
-        return ClientCacheClearResponse(
-            message=f"Cleared cache for client {client_id}",
-            client_id=client_id,
-            keys_cleared=total_cleared
-        )
+        return {
+            "message": f"Cleared cache for client {client_id}",
+            "client_id": client_id,
+            "keys_cleared": total_cleared,
+            "timestamp": datetime.utcnow().isoformat()
+        }
     except Exception as e:
         await CacheServiceMixin._log_cache_operation("clear_client", admin_user.id, f"client_id: {client_id}, error: {str(e)}", success=False)
         raise HTTPException(
@@ -98,52 +299,71 @@ async def clear_client_cache(
         )
 
 
-@router.delete("/all")
-@format_response(message="All cache cleared successfully")
-async def clear_all_cache(
+@router.post("/warm")
+@sanitize_response()
+@format_response(message="Cache warming completed successfully")
+async def warm_cache(
+    client_id: Optional[str] = Query(None, description="Specific client ID to warm"),
+    db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Clear all metrics cache (admin only)"""
-    patterns = [
-        "client_metrics:*",
-        "workflows:*",
-        "executions:*"
-    ]
+    """Warm cache for clients (admin only)"""
     
-    total_cleared = 0
-    for pattern in patterns:
-        cleared = await redis_client.clear_pattern(pattern)
-        total_cleared += cleared
-    
-    return CacheClearResponse(
-        message="Cleared all metrics cache",
-        keys_cleared=total_cleared
-    )
-
-
-@router.get("/stats")
-@format_response(message="Cache statistics retrieved successfully")
-async def get_cache_stats(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get cache statistics (admin only)"""
-    try:
-        # Count cached items
-        workflow_keys = await redis_client.client.keys("workflows:*")
-        execution_keys = await redis_client.client.keys("executions:*")
-        metrics_keys = await redis_client.client.keys("client_metrics:*")
-        
-        return CacheStatsResponse(
-            cached_workflows=len(workflow_keys),
-            cached_executions=len(execution_keys),
-            cached_metrics=len(metrics_keys),
-            total_cached_items=len(workflow_keys) + len(execution_keys) + len(metrics_keys)
+    # Rate limiting for cache operations
+    if not await CacheServiceMixin._check_cache_rate_limit(admin_user.id, "warm"):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Rate limit exceeded for cache operations"
         )
+    
+    try:
+        from app.services.metrics_service import metrics_service
+        from sqlalchemy import select
+        from app.models import Client
+        
+        if client_id:
+            # Warm cache for specific client
+            await metrics_service.get_client_metrics(db, client_id, use_cache=False)
+            
+            await CacheServiceMixin._log_cache_operation("warm_client", admin_user.id, f"client_id: {client_id}")
+            
+            return {
+                "message": f"Cache warmed for client {client_id}",
+                "client_id": client_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        else:
+            # Warm cache for all clients
+            stmt = select(Client)
+            result = await db.execute(stmt)
+            clients = result.scalars().all()
+            
+            warmed_clients = []
+            for client in clients:
+                try:
+                    await metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                    warmed_clients.append(client.id)
+                except Exception as e:
+                    logger.warning(f"Failed to warm cache for client {client.id}: {e}")
+            
+            # Warm admin metrics cache
+            try:
+                await metrics_service.get_admin_metrics(db)
+            except Exception as e:
+                logger.warning(f"Failed to warm admin metrics cache: {e}")
+            
+            await CacheServiceMixin._log_cache_operation("warm_all", admin_user.id, f"warmed: {len(warmed_clients)}/{len(clients)} clients")
+            
+            return {
+                "message": "Cache warmed for all clients",
+                "warmed_clients": len(warmed_clients),
+                "total_clients": len(clients),
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
     except Exception as e:
-        return CacheStatsResponse(
-            cached_workflows=0,
-            cached_executions=0,
-            cached_metrics=0,
-            total_cached_items=0,
-            error=str(e)
+        await CacheServiceMixin._log_cache_operation("warm", admin_user.id, f"error: {str(e)}", success=False)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cache warming failed: {str(e)}"
         )

@@ -130,7 +130,7 @@ export function WorkflowsPage({ workflowType }: WorkflowsPageProps) {
   const save = async () => {
     if (!editing) return
     try {
-      await WorkflowsApi.updateMinutes(editing.id, minutes)
+      await WorkflowsApi.updateWorkflow(editing.id, { time_saved_per_execution_minutes: minutes })
       toast.success('Updated time saved per execution')
       setEditing(null)
       // Refetch workflows and dashboards

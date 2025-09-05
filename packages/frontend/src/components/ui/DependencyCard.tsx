@@ -3,7 +3,7 @@ import { ExternalLink, FileText, Book, Key, Edit, Trash2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
-import { Dependency } from '../../services/dependencyApi';
+import { Dependency } from '../../services/guidesApi';
 
 interface DependencyCardProps {
   dependency: Dependency;
@@ -40,7 +40,7 @@ export const DependencyCard: React.FC<DependencyCardProps> = ({
         <div className="flex items-start justify-between">
           <div className="flex-1">
             <CardTitle className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              {dependency.platform_name}
+              {dependency.title}
             </CardTitle>
             {dependency.description && (
               <CardDescription className="text-sm text-gray-600 dark:text-gray-400">

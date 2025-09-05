@@ -3,7 +3,7 @@ import { AuthApi } from '@/services/authApi'
 import type { User, AuthContextType } from '@/types/auth'
 import { toast } from 'sonner'
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+export const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)

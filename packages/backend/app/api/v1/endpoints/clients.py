@@ -54,7 +54,8 @@ async def create_client(
     return response
 
 
-@router.get("/", response_model=ClientListResponse)
+@router.get("/")
+@format_response(message="Clients retrieved successfully")
 async def list_clients(
     client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     db: AsyncSession = Depends(get_db),
@@ -87,9 +88,8 @@ async def list_clients(
         total_pages=1
     )
     
-    # Return properly formatted ClientListResponse
-    from app.schemas.responses import ClientListResponse
-    return ClientListResponse(data=paginated_data)
+    # Return the paginated data directly - format_response will wrap it
+    return paginated_data
 
 
 @router.get("/{client_id}")
@@ -232,20 +232,6 @@ async def delete_client(
     return None
 
 
-@router.post("/test-n8n-connection", response_model=N8nConnectionTestResponse)
-@validate_input(validate_urls=True, max_string_length=1000)
-@sanitize_response()
-async def test_n8n_connection(
-    n8n_config: ClientN8nConfig,
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-) -> N8nConnectionTestResponse:
-    """Test n8n API connection without saving configuration (admin only)"""
-    result = await ClientService.test_n8n_connection(
-        n8n_config.n8n_api_url,
-        n8n_config.n8n_api_key
-    )
-    
-    return N8nConnectionTestResponse(**result)
 
 
 
@@ -299,11 +285,11 @@ async def test_client_connection(
         
     except Exception as e:
         return N8nConnectionTestResponse(
+            status="error",
             connection_healthy=False,
+            api_accessible=False,
             message=f"Connection test failed: {str(e)}",
-            response_time_ms=0,
-            n8n_version=None,
-            workflows_count=0
+            instance_info={}
         )
 
 

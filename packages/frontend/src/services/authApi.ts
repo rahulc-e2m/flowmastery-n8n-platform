@@ -113,6 +113,19 @@ api.interceptors.response.use(
 )
 
 export class AuthApi {
+  static async register(userData: { email: string; password: string; first_name?: string; last_name?: string }): Promise<LoginResponse> {
+    try {
+      const response = await api.post<StandardResponse<LoginResponse> | ErrorResponse>('/auth/register', userData)
+      return extractApiData<LoginResponse>(response)
+    } catch (error: any) {
+      // Handle 404 for register endpoint - might not be available
+      if (error.response?.status === 404) {
+        throw new Error('Registration is currently disabled. Please contact your administrator.')
+      }
+      throw error
+    }
+  }
+
   static async login(credentials: LoginRequest): Promise<LoginResponse> {
     const response = await api.post<StandardResponse<LoginResponse> | ErrorResponse>('/auth/login', credentials)
     return extractApiData<LoginResponse>(response)
@@ -129,8 +142,15 @@ export class AuthApi {
   }
 
   static async createInvitation(invitation: InvitationCreate): Promise<Invitation> {
-    const response = await api.post<StandardResponse<Invitation> | ErrorResponse>('/auth/invitations', invitation)
-    return extractApiData<Invitation>(response)
+    try {
+      const response = await api.post<StandardResponse<Invitation> | ErrorResponse>('/auth/invitations', invitation)
+      return extractApiData<Invitation>(response)
+    } catch (error: any) {
+      if (error.response?.status === 404) {
+        throw new Error('User invitation feature is not available. Please contact your administrator.')
+      }
+      throw error
+    }
   }
 
   static async getInvitations(): Promise<Invitation[]> {

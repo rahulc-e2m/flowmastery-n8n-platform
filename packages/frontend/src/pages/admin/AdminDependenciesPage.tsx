@@ -16,9 +16,30 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { DependencyCard } from '@/components/ui/DependencyCard';
-import { dependencyApi, Dependency, DependencyCreate, DependencyUpdate } from '@/services/dependencyApi';
+import { GuidesApi, Guide as Dependency, GuideCreate as DependencyCreate, GuideUpdate as DependencyUpdate } from '@/services/guidesApi';
+
+// Helper function to ensure all form fields are strings
+const createEmptyFormData = (): DependencyFormData => ({
+  title: '',
+  platform_name: '',
+  where_to_get: '',
+  guide_link: '',
+  documentation_link: '',
+  description: ''
+});
+
+// Helper function to safely convert dependency to form data
+const dependencyToFormData = (dependency: Dependency): DependencyFormData => ({
+  title: dependency.title || '',
+  platform_name: dependency.platform_name || '',
+  where_to_get: dependency.where_to_get || '',
+  guide_link: dependency.guide_link || '',
+  documentation_link: dependency.documentation_link || '',
+  description: dependency.description || ''
+});
 
 interface DependencyFormData {
+  title: string;
   platform_name: string;
   where_to_get: string;
   guide_link: string;
@@ -35,13 +56,7 @@ export const AdminDependenciesPage: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingDependency, setEditingDependency] = useState<Dependency | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [formData, setFormData] = useState<DependencyFormData>({
-    platform_name: '',
-    where_to_get: '',
-    guide_link: '',
-    documentation_link: '',
-    description: ''
-  });
+  const [formData, setFormData] = useState<DependencyFormData>(createEmptyFormData);
 
   useEffect(() => {
     fetchDependencies();
@@ -58,7 +73,7 @@ export const AdminDependenciesPage: React.FC = () => {
   const fetchDependencies = async () => {
     try {
       setLoading(true);
-      const data = await dependencyApi.getAllDependencies();
+      const data = await GuidesApi.getAllGuides();
       setDependencies(data);
       setFilteredDependencies(data);
     } catch (err) {
@@ -70,13 +85,7 @@ export const AdminDependenciesPage: React.FC = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      platform_name: '',
-      where_to_get: '',
-      guide_link: '',
-      documentation_link: '',
-      description: ''
-    });
+    setFormData(createEmptyFormData());
     setEditingDependency(null);
     setShowForm(false);
   };
@@ -87,13 +96,7 @@ export const AdminDependenciesPage: React.FC = () => {
   };
 
   const handleEdit = (dependency: Dependency) => {
-    setFormData({
-      platform_name: dependency.platform_name,
-      where_to_get: dependency.where_to_get || '',
-      guide_link: dependency.guide_link || '',
-      documentation_link: dependency.documentation_link || '',
-      description: dependency.description || ''
-    });
+    setFormData(dependencyToFormData(dependency));
     setEditingDependency(dependency);
     setShowForm(true);
   };
@@ -104,7 +107,7 @@ export const AdminDependenciesPage: React.FC = () => {
     }
 
     try {
-      await dependencyApi.deleteDependency(dependency.id);
+      await GuidesApi.deleteGuide(dependency.id);
       await fetchDependencies();
     } catch (err) {
       setError('Failed to delete dependency. Please try again.');
@@ -114,6 +117,11 @@ export const AdminDependenciesPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!formData.title.trim()) {
+      setError('Title is required');
+      return;
+    }
     
     if (!formData.platform_name.trim()) {
       setError('Platform name is required');
@@ -125,6 +133,7 @@ export const AdminDependenciesPage: React.FC = () => {
       setError(null);
 
       const submitData = {
+        title: formData.title.trim(),
         platform_name: formData.platform_name.trim(),
         where_to_get: formData.where_to_get.trim() || undefined,
         guide_link: formData.guide_link.trim() || undefined,
@@ -134,10 +143,10 @@ export const AdminDependenciesPage: React.FC = () => {
 
       if (editingDependency) {
         // Update existing dependency
-        await dependencyApi.updateDependency(editingDependency.id, submitData as DependencyUpdate);
+        await GuidesApi.updateGuide(editingDependency.id, submitData as DependencyUpdate);
       } else {
         // Create new dependency
-        await dependencyApi.createDependency(submitData as DependencyCreate);
+        await GuidesApi.createGuide(submitData as DependencyCreate);
       }
 
       await fetchDependencies();
@@ -155,7 +164,7 @@ export const AdminDependenciesPage: React.FC = () => {
   const handleInputChange = (field: keyof DependencyFormData, value: string) => {
     setFormData(prev => ({
       ...prev,
-      [field]: value
+      [field]: value || '' // Ensure we always have a string value
     }));
   };
 
@@ -307,6 +316,18 @@ export const AdminDependenciesPage: React.FC = () => {
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="title" className="text-blue-900 dark:text-blue-100">
+                    Title *
+                  </Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => handleInputChange('title', e.target.value)}
+                    placeholder="e.g., OpenAI API Setup Guide"
+                    required
+                  />
+                </div>
                 <div>
                   <Label htmlFor="platform_name" className="text-blue-900 dark:text-blue-100">
                     Platform Name *

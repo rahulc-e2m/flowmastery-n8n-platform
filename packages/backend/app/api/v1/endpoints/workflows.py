@@ -156,18 +156,13 @@ async def update_workflow(
         )
     
     try:
-        # Convert workflow_id to int (assuming it's a database ID for updates)
-        try:
-            workflow_db_id = int(workflow_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid workflow ID format for updates"
-            )
+        # The workflow_id is already a UUID string (the database primary key)
+        workflow_db_id = workflow_id
         
         # Input validation for time saved update
         if "time_saved_per_execution_minutes" in payload:
             minutes = payload.get("time_saved_per_execution_minutes")
+            
             if minutes is None:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, 
@@ -211,8 +206,8 @@ async def update_workflow(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Error updating workflow {workflow_id}: {e}")
+        logger.error(f"Error updating workflow {workflow_id}: {e}", exc_info=True)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to update workflow"
+            detail=f"Failed to update workflow: {str(e)}"
         )

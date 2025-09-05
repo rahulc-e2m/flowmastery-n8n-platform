@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 def validate_input(
     sanitize_strings: bool = True,
     allow_html_fields: Optional[List[str]] = None,
+    skip_sql_check_fields: Optional[List[str]] = None,
     max_string_length: int = 10000,
     validate_emails: bool = True,
     validate_urls: bool = True,
@@ -26,6 +27,7 @@ def validate_input(
     Args:
         sanitize_strings: Whether to sanitize string inputs
         allow_html_fields: List of field names that can contain HTML
+        skip_sql_check_fields: List of field names to skip SQL injection checks
         max_string_length: Maximum allowed string length
         validate_emails: Whether to validate email fields
         validate_urls: Whether to validate URL fields
@@ -67,8 +69,10 @@ def validate_input(
                 # Sanitize the data
                 if allow_html_fields is None:
                     allow_html_fields = []
+                if skip_sql_check_fields is None:
+                    skip_sql_check_fields = []
                 
-                sanitized_data = sanitizer.sanitize_dict(request_data, allow_html_fields)
+                sanitized_data = sanitizer.sanitize_dict(request_data, allow_html_fields, skip_sql_check_fields)
                 
                 # Validate emails
                 if validate_emails:
@@ -85,7 +89,8 @@ def validate_input(
                 
                 # Validate URLs
                 if validate_urls:
-                    url_fields = ['url', 'website', 'callback_url', 'redirect_url', 'n8n_api_url']
+                    url_fields = ['url', 'website', 'callback_url', 'redirect_url', 'n8n_api_url', 
+                                 'guide_link', 'documentation_link', 'where_to_get']
                     for field in url_fields:
                         if field in sanitized_data:
                             url = sanitizer.sanitize_url(sanitized_data[field])

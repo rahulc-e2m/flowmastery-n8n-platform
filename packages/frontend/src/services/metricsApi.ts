@@ -87,15 +87,20 @@ export class MetricsApi {
 
   static async getHistorical(clientId?: string, filters?: MetricsFilters): Promise<HistoricalMetrics> {
     const params = new URLSearchParams()
-    if (clientId) params.append('client_id', clientId)
     if (filters?.period_type) params.append('period_type', filters.period_type)
     if (filters?.start_date) params.append('start_date', filters.start_date)
     if (filters?.end_date) params.append('end_date', filters.end_date)
     if (filters?.workflow_id) params.append('workflow_id', filters.workflow_id.toString())
     
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const response = await api.get<StandardResponse<HistoricalMetrics> | ErrorResponse>(`/metrics/historical${queryString}`)
-    return extractApiData<HistoricalMetrics>(response)
+    
+    if (clientId) {
+      const response = await api.get<StandardResponse<HistoricalMetrics> | ErrorResponse>(`/metrics/historical/${clientId}${queryString}`)
+      return extractApiData<HistoricalMetrics>(response)
+    } else {
+      const response = await api.get<StandardResponse<HistoricalMetrics> | ErrorResponse>(`/metrics/historical${queryString}`)
+      return extractApiData<HistoricalMetrics>(response)
+    }
   }
 
   static async getDataFreshness(): Promise<DataFreshnessInfo> {
@@ -173,54 +178,4 @@ export class MetricsApi {
     return this.getExecutions(undefined, { limit })
   }
 
-  // Deprecated methods - use SystemApi instead
-  static async forceSync(clientId?: string): Promise<{ message: string; result: any }> {
-    console.warn('MetricsApi.forceSync is deprecated. Use SystemApi.sync instead.')
-    // For backward compatibility, map to new system API
-    const response = await api.post<StandardResponse<{ message: string; result: any }> | ErrorResponse>('/system/sync', {
-      type: clientId ? 'client' : 'all',
-      client_id: clientId
-    })
-    return extractApiData<{ message: string; result: any }>(response)
-  }
-
-  static async quickSync(): Promise<{ message: string; successful: number; failed: number }> {
-    console.warn('MetricsApi.quickSync is deprecated. Use SystemApi.sync instead.')
-    const response = await api.post<StandardResponse<{ message: string; successful: number; failed: number }> | ErrorResponse>('/system/sync', {
-      type: 'quick'
-    })
-    return extractApiData<{ message: string; successful: number; failed: number }>(response)
-  }
-
-  static async triggerClientSync(clientId: string): Promise<{ message: string; task_id: string }> {
-    console.warn('MetricsApi.triggerClientSync is deprecated. Use SystemApi.sync instead.')
-    const response = await api.post<StandardResponse<{ message: string; task_id: string }> | ErrorResponse>('/system/sync', {
-      type: 'client',
-      client_id: clientId
-    })
-    return extractApiData<{ message: string; task_id: string }>(response)
-  }
-
-  static async triggerDailyAggregation(): Promise<{ message: string; task_id: string }> {
-    console.warn('MetricsApi.triggerDailyAggregation is deprecated. Use MetricsApi.triggerAggregation instead.')
-    return this.triggerAggregation()
-  }
-
-  static async getWorkerStats(): Promise<any> {
-    console.warn('MetricsApi.getWorkerStats is deprecated. Use SystemApi.getWorkerStats instead.')
-    const response = await api.get<StandardResponse<any> | ErrorResponse>('/system/worker-stats')
-    return extractApiData<any>(response)
-  }
-
-  static async getTaskStatus(taskId: string): Promise<any> {
-    console.warn('MetricsApi.getTaskStatus is deprecated. Use SystemApi.getTaskStatus instead.')
-    const response = await api.get<StandardResponse<any> | ErrorResponse>(`/system/tasks/${taskId}`)
-    return extractApiData<any>(response)
-  }
-
-  static async getSchedulerStatus(): Promise<any> {
-    console.warn('MetricsApi.getSchedulerStatus is deprecated.')
-    const response = await api.get<StandardResponse<any> | ErrorResponse>('/system/worker-stats')
-    return extractApiData<any>(response)
-  }
 }

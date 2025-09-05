@@ -409,16 +409,6 @@ async def get_current_user_info(
     return None
 
 
-@router.get("/status")
-@format_response(message="Authentication status retrieved successfully")
-async def get_auth_status(
-    current_user: User = Depends(get_optional_user)
-):
-    """Check authentication status without throwing errors"""
-    return {
-        "authenticated": current_user is not None,
-        "user": UserResponse.model_validate(current_user) if current_user else None
-    }
 
 
 @router.put("/profile", response_model=UserResponse)

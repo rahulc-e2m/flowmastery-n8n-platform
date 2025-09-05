@@ -103,6 +103,8 @@ export interface ChatMessage {
 export interface ChatResponse {
   response: string
   timestamp: string
+  conversation_id?: string
+  message_id?: string
 }
 
 export interface ChatFilters {
@@ -123,38 +125,38 @@ export interface ChatHistoryResponse {
   total: number
 }
 
-// New Automation API class
+// New Chatbot API class (renamed from AutomationApi)
 export class AutomationApi {
   static async getChatbots(clientId?: string): Promise<ChatbotListResponse> {
     const params = new URLSearchParams()
     if (clientId) params.append('client_id', clientId)
 
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const res = await api.get<StandardResponse<ChatbotListResponse> | ErrorResponse>(`/automation/chatbots${queryString}`)
+    const res = await api.get<StandardResponse<ChatbotListResponse> | ErrorResponse>(`/chatbots${queryString}`)
     return extractApiData<ChatbotListResponse>(res)
   }
 
   static async createChatbot(data: CreateChatbotData): Promise<Chatbot> {
-    const res = await api.post<StandardResponse<Chatbot> | ErrorResponse>('/automation/chatbots', data)
+    const res = await api.post<StandardResponse<Chatbot> | ErrorResponse>('/chatbots', data)
     return extractApiData<Chatbot>(res)
   }
 
   static async getChatbot(chatbotId: string): Promise<Chatbot> {
-    const res = await api.get<StandardResponse<Chatbot> | ErrorResponse>(`/automation/chatbots/${chatbotId}`)
+    const res = await api.get<StandardResponse<Chatbot> | ErrorResponse>(`/chatbots/${chatbotId}`)
     return extractApiData<Chatbot>(res)
   }
 
   static async updateChatbot(chatbotId: string, data: UpdateChatbotData): Promise<Chatbot> {
-    const res = await api.patch<StandardResponse<Chatbot> | ErrorResponse>(`/automation/chatbots/${chatbotId}`, data)
+    const res = await api.patch<StandardResponse<Chatbot> | ErrorResponse>(`/chatbots/${chatbotId}`, data)
     return extractApiData<Chatbot>(res)
   }
 
   static async deleteChatbot(chatbotId: string): Promise<void> {
-    await api.delete<StandardResponse<void> | ErrorResponse>(`/automation/chatbots/${chatbotId}`)
+    await api.delete<StandardResponse<void> | ErrorResponse>(`/chatbots/${chatbotId}`)
   }
 
   static async sendMessage(message: ChatMessage): Promise<ChatResponse> {
-    const res = await api.post<StandardResponse<ChatResponse> | ErrorResponse>('/automation/chat', message)
+    const res = await api.post<StandardResponse<ChatResponse> | ErrorResponse>('/chatbots/chat', message)
     return extractApiData<ChatResponse>(res)
   }
 
@@ -167,45 +169,13 @@ export class AutomationApi {
     if (filters?.conversation_id) params.append('conversation_id', filters.conversation_id)
 
     const queryString = params.toString() ? `?${params.toString()}` : ''
-    const res = await api.get<StandardResponse<ChatHistoryResponse> | ErrorResponse>(`/automation/chat/${chatbotId}/history${queryString}`)
+    const res = await api.get<StandardResponse<ChatHistoryResponse> | ErrorResponse>(`/chatbots/chat/${chatbotId}/history${queryString}`)
     return extractApiData<ChatHistoryResponse>(res)
   }
 
   static async getChatConversations(chatbotId: string): Promise<any> {
-    const res = await api.get<StandardResponse<any> | ErrorResponse>(`/automation/chat/${chatbotId}/conversations`)
+    const res = await api.get<StandardResponse<any> | ErrorResponse>(`/chatbots/chat/${chatbotId}/conversations`)
     return extractApiData<any>(res)
   }
 }
 
-// Legacy ChatbotApi for backward compatibility
-export class ChatbotApi {
-  static async getAll(): Promise<ChatbotListResponse> {
-    console.warn('ChatbotApi.getAll is deprecated. Use AutomationApi.getChatbots instead.')
-    return AutomationApi.getChatbots()
-  }
-
-  static async getMine(): Promise<ChatbotListResponse> {
-    console.warn('ChatbotApi.getMine is deprecated. Use AutomationApi.getChatbots instead.')
-    return AutomationApi.getChatbots()
-  }
-
-  static async getById(id: string): Promise<Chatbot> {
-    console.warn('ChatbotApi.getById is deprecated. Use AutomationApi.getChatbot instead.')
-    return AutomationApi.getChatbot(id)
-  }
-
-  static async create(data: CreateChatbotData): Promise<Chatbot> {
-    console.warn('ChatbotApi.create is deprecated. Use AutomationApi.createChatbot instead.')
-    return AutomationApi.createChatbot(data)
-  }
-
-  static async update(id: string, data: UpdateChatbotData): Promise<Chatbot> {
-    console.warn('ChatbotApi.update is deprecated. Use AutomationApi.updateChatbot instead.')
-    return AutomationApi.updateChatbot(id, data)
-  }
-
-  static async delete(id: string): Promise<void> {
-    console.warn('ChatbotApi.delete is deprecated. Use AutomationApi.deleteChatbot instead.')
-    return AutomationApi.deleteChatbot(id)
-  }
-}

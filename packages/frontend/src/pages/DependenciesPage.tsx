@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { Search, BookOpen, ExternalLink, Loader2, AlertCircle } from 'lucide-react';
+import { Search, BookOpen, ExternalLink, Loader2, AlertCircle, Plus } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { DependencyCard } from '@/components/ui/DependencyCard';
-import { dependencyApi, Dependency } from '@/services/dependencyApi';
+import { dependencyApi, Dependency } from '@/services/guidesApi';
+import { useCanManageGuides } from '@/hooks/useAuth';
+import { AdminOnly } from '@/components/auth/AdminOnly';
 
 export const DependenciesPage: React.FC = () => {
   const [dependencies, setDependencies] = useState<Dependency[]>([]);
@@ -13,6 +15,29 @@ export const DependenciesPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredDependencies, setFilteredDependencies] = useState<Dependency[]>([]);
+  const canManageGuides = useCanManageGuides();
+
+  // Handler functions for admin actions
+  const handleEditGuide = (guide: Dependency) => {
+    console.log('Edit guide:', guide);
+    // TODO: Implement edit guide modal/form
+    alert('Edit guide functionality will be implemented soon!');
+  };
+
+  const handleDeleteGuide = async (guide: Dependency) => {
+    if (window.confirm(`Are you sure you want to delete the guide for ${guide.platform_name}?`)) {
+      try {
+        await dependencyApi.deleteDependency(guide.id);
+        // Refresh the list
+        const data = await dependencyApi.getAllDependencies();
+        setDependencies(data);
+        alert('Guide deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting guide:', error);
+        alert('Failed to delete guide. Please try again.');
+      }
+    }
+  };
 
   useEffect(() => {
     const fetchDependencies = async () => {
@@ -129,15 +154,23 @@ export const DependenciesPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Search */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search platforms (e.g., Google, OpenAI, Slack...)"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
+        {/* Search and Admin Actions */}
+        <div className="flex gap-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+            <Input
+              placeholder="Search platforms (e.g., Google, OpenAI, Slack...)"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+          <AdminOnly hideWhenNotAdmin>
+            <Button className="flex-shrink-0">
+              <Plus className="h-4 w-4 mr-2" />
+              Add Guide
+            </Button>
+          </AdminOnly>
         </div>
       </div>
 
@@ -168,7 +201,9 @@ export const DependenciesPage: React.FC = () => {
             <DependencyCard
               key={dependency.id}
               dependency={dependency}
-              showAdminActions={false}
+              showAdminActions={canManageGuides}
+              onEdit={canManageGuides ? handleEditGuide : undefined}
+              onDelete={canManageGuides ? handleDeleteGuide : undefined}
             />
           ))}
         </div>

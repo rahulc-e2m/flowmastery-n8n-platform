@@ -94,29 +94,6 @@ export class ClientApi {
     return extractApiData<Client>(response)
   }
 
-  // Legacy methods for backward compatibility
-  static async configureN8nApi(clientId: string, config: ClientN8nConfig): Promise<ClientSyncResponse> {
-    console.warn('ClientApi.configureN8nApi is deprecated. Use ClientApi.configureClient instead.')
-    return this.configureClient(clientId, config, false)
-  }
-
-  static async testN8nConnection(config: ClientN8nConfig): Promise<N8nConnectionTestResponse> {
-    console.warn('ClientApi.testN8nConnection is deprecated. Use ClientApi.testConnection instead.')
-    // This method signature doesn't match the new API, so we'll need to handle it differently
-    // For now, we'll throw an error suggesting the new approach
-    throw new Error('testN8nConnection with config parameter is deprecated. Use testConnection(clientId) after configuring the client.')
-  }
-
-  static async triggerImmediateSync(clientId: string): Promise<ManualSyncResponse> {
-    console.warn('ClientApi.triggerImmediateSync is deprecated. Use ClientApi.syncClient instead.')
-    return this.syncClient(clientId)
-  }
-
-  static async getClientConfigStatus(clientId: string): Promise<any> {
-    console.warn('ClientApi.getClientConfigStatus is deprecated. Use ClientApi.getClientWithConfig(id, true) instead.')
-    const client = await this.getClientWithConfig(clientId, true)
-    return (client as any).config_status
-  }
 
   static async deleteClient(clientId: string): Promise<{ message: string }> {
     const response = await api.delete<StandardResponse<{ message: string }> | ErrorResponse>(`/clients/${clientId}`)

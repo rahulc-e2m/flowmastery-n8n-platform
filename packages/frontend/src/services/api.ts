@@ -56,7 +56,7 @@ export interface ConfigStatus {
 }
 
 class ApiService {
-  private static async request<T>(
+  public static async request<T>(
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
@@ -113,7 +113,7 @@ class ApiService {
       status: string
       version: string
       timestamp: string
-    }>('/api/v1/health/')
+    }>('/api/v1/system/health')
   }
 
   // Legacy chat API (if still needed)

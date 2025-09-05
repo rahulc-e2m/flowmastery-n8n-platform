@@ -1,6 +1,6 @@
-"""System administration endpoints"""
+"""System administration endpoints with health and configuration monitoring"""
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, date, timedelta
 from typing import Optional, Dict, Any, Literal
@@ -14,10 +14,67 @@ from app.models.user import User
 from app.core.dependencies import get_current_user
 from app.core.user_roles import UserRole
 from app.services.persistent_metrics import persistent_metrics_collector
+from app.services.health_service import health_service
+from app.services.config_service import config_service
 from app.core.decorators import validate_input, sanitize_response
 from app.core.response_formatter import format_response
+from app.schemas.api_standard import HealthCheckResponse, HealthInfo
 
 router = APIRouter()
+
+
+# Health check endpoints
+@router.get("/health", response_model=HealthCheckResponse, tags=["health"])
+@format_response(message="Health check completed successfully")
+async def health_check(request: Request):
+    """Basic health check"""
+    result = await health_service.get_basic_health()
+    
+    if not result.success:
+        # The decorator will handle the error formatting
+        raise ValueError(result.error)
+    
+    # Convert to standardized health info
+    health_info = HealthInfo(
+        status=result.data.get("status", "unknown"),
+        version=result.data.get("version", "unknown"),
+        timestamp=result.data.get("timestamp")
+    )
+    
+    return health_info
+
+
+@router.get("/health/detailed", response_model=HealthCheckResponse, tags=["health"])
+@format_response(message="Detailed health check completed successfully")
+async def detailed_health_check(request: Request):
+    """Detailed health check with service status"""
+    result = await health_service.get_detailed_health()
+    
+    if not result.success:
+        # The decorator will handle the error formatting
+        raise ValueError(result.error)
+    
+    # Convert to standardized health info
+    health_info = HealthInfo(
+        status=result.data.get("status", "unknown"),
+        version=result.data.get("version", "unknown"),
+        timestamp=result.data.get("timestamp")
+    )
+    
+    return health_info
+
+
+@router.get("/health/services", tags=["health"])
+@format_response(message="Service metrics retrieved successfully")
+async def get_service_metrics(request: Request):
+    """Get service performance metrics"""
+    result = await health_service.get_service_metrics()
+    
+    if not result.success:
+        # The decorator will handle the error formatting
+        raise ValueError(result.error)
+    
+    return result.data
 
 
 class SyncRequest(BaseModel):
@@ -158,265 +215,106 @@ async def sync_operations(
         )
 
 
-@router.get("/cache/stats")
-@format_response(message="Cache statistics retrieved successfully")
-async def get_cache_stats(
-    db: AsyncSession = Depends(get_db),
+
+
+
+
+# Configuration endpoints
+@router.get("/config", tags=["config"])
+@format_response(message="System configuration retrieved successfully")
+async def get_system_config(
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Get cache statistics (admin only)"""
+    """Get comprehensive system configuration status (admin only)"""
     
     try:
-        from app.services.cache.redis import redis_client
-        from sqlalchemy import select
-        from app.models import Client
+        result = await config_service.get_full_config_status()
         
-        # Get Redis info
-        redis_info = await redis_client.get_info()
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get configuration status: {result.error}"
+            )
         
-        # Get all clients
-        stmt = select(Client)
-        result = await db.execute(stmt)
-        clients = result.scalars().all()
-        
-        # Check cache status for each client
-        cache_status = []
-        total_cached = 0
-        
-        for client in clients:
-            cache_key = f"enhanced_client_metrics:{client.id}"
-            has_cache = await redis_client.exists(cache_key)
-            
-            if has_cache:
-                total_cached += 1
-                # Get cache TTL if available
-                ttl = await redis_client.get_ttl(cache_key)
-                cache_status.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "cached": True,
-                    "ttl_seconds": ttl if ttl > 0 else None
-                })
-            else:
-                cache_status.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "cached": False,
-                    "ttl_seconds": None
-                })
-        
-        # Check admin cache
-        admin_cache_exists = await redis_client.exists("admin_metrics:overview")
-        
-        return {
-            "redis_info": {
-                "connected": redis_info.get("connected", False),
-                "used_memory": redis_info.get("used_memory_human", "Unknown"),
-                "total_keys": redis_info.get("db0", {}).get("keys", 0) if redis_info.get("db0") else 0
-            },
-            "cache_summary": {
-                "total_clients": len(clients),
-                "cached_clients": total_cached,
-                "cache_hit_rate": round((total_cached / len(clients)) * 100, 1) if clients else 0,
-                "admin_cache_exists": admin_cache_exists
-            },
-            "client_cache_status": cache_status,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return result.data
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get cache stats: {str(e)}"
+            detail=f"Failed to get system configuration: {str(e)}"
         )
 
 
-@router.delete("/cache")
-@format_response(message="Cache cleared successfully")
-async def clear_cache(
-    client_id: Optional[str] = Query(None, description="Specific client ID to clear"),
-    pattern: Optional[str] = Query(None, description="Cache pattern to clear"),
-    db: AsyncSession = Depends(get_db),
+@router.get("/config/n8n", tags=["config"])
+@format_response(message="n8n configuration status retrieved successfully")
+async def get_n8n_config(
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Clear cache with optional filtering (admin only)"""
+    """Get n8n configuration status (admin only)"""
     
     try:
-        from app.services.cache.redis import redis_client
+        result = await config_service.get_n8n_config_status()
         
-        cleared_keys = 0
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get n8n configuration: {result.error}"
+            )
         
-        if client_id:
-            # Clear specific client cache
-            patterns = [
-                f"enhanced_client_metrics:{client_id}",
-                f"client_metrics:{client_id}"
-            ]
-            
-            for pattern_key in patterns:
-                if await redis_client.exists(pattern_key):
-                    await redis_client.delete(pattern_key)
-                    cleared_keys += 1
-            
-            return {
-                "message": f"Cache cleared for client {client_id}",
-                "client_id": client_id,
-                "cleared_keys": cleared_keys,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        
-        elif pattern:
-            # Clear by pattern
-            cleared_keys = await redis_client.clear_pattern(pattern)
-            
-            return {
-                "message": f"Cache cleared for pattern: {pattern}",
-                "pattern": pattern,
-                "cleared_keys": cleared_keys,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        
-        else:
-            # Clear all cache
-            patterns = [
-                "enhanced_client_metrics:*",
-                "client_metrics:*",
-                "admin_metrics:*"
-            ]
-            
-            for cache_pattern in patterns:
-                cleared_keys += await redis_client.clear_pattern(cache_pattern)
-            
-            return {
-                "message": "All cache cleared",
-                "cleared_keys": cleared_keys,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+        return result.data
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to clear cache: {str(e)}"
+            detail=f"Failed to get n8n configuration: {str(e)}"
         )
 
 
-@router.get("/tasks/{task_id}")
-@format_response(message="Task status retrieved successfully")
-async def get_task_status(
-    task_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN, UserRole.CLIENT]))
+@router.get("/config/ai", tags=["config"])
+@format_response(message="AI services configuration status retrieved successfully")
+async def get_ai_config(
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Get task status - admin and client users can check task status"""
+    """Get AI services configuration status (admin only)"""
     
     try:
-        from celery.result import AsyncResult
-        from app.core.celery_app import celery_app
+        result = await config_service.get_ai_config_status()
         
-        # Get task result
-        task_result = AsyncResult(task_id, app=celery_app)
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get AI configuration: {result.error}"
+            )
         
-        # Basic task info
-        task_info = {
-            "task_id": task_id,
-            "status": task_result.status,
-            "ready": task_result.ready(),
-            "successful": task_result.successful() if task_result.ready() else None,
-            "failed": task_result.failed() if task_result.ready() else None,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-        # Add result or error info if available
-        if task_result.ready():
-            if task_result.successful():
-                task_info["result"] = task_result.result
-            elif task_result.failed():
-                task_info["error"] = str(task_result.info)
-        else:
-            # Task is still running, check for progress info
-            if hasattr(task_result, 'info') and task_result.info:
-                task_info["progress"] = task_result.info
-        
-        return task_info
+        return result.data
         
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get task status: {str(e)}"
+            detail=f"Failed to get AI configuration: {str(e)}"
         )
 
 
-@router.get("/worker-stats")
-@format_response(message="Worker statistics retrieved successfully")
-async def get_worker_stats(
+@router.get("/config/app", tags=["config"])
+@format_response(message="Application configuration status retrieved successfully")
+async def get_app_config(
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Get Celery worker statistics (admin only)"""
+    """Get application configuration status (admin only)"""
     
     try:
-        from app.core.celery_app import celery_app
+        result = await config_service.get_app_config_status()
         
-        # Get active workers
-        inspect = celery_app.control.inspect()
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get app configuration: {result.error}"
+            )
         
-        # Get worker stats
-        stats = inspect.stats()
-        active_tasks = inspect.active()
-        scheduled_tasks = inspect.scheduled()
-        reserved_tasks = inspect.reserved()
-        
-        # Format response
-        worker_info = []
-        total_active_tasks = 0
-        total_scheduled_tasks = 0
-        total_reserved_tasks = 0
-        
-        if stats:
-            for worker_name, worker_stats in stats.items():
-                active_count = len(active_tasks.get(worker_name, [])) if active_tasks else 0
-                scheduled_count = len(scheduled_tasks.get(worker_name, [])) if scheduled_tasks else 0
-                reserved_count = len(reserved_tasks.get(worker_name, [])) if reserved_tasks else 0
-                
-                total_active_tasks += active_count
-                total_scheduled_tasks += scheduled_count
-                total_reserved_tasks += reserved_count
-                
-                worker_info.append({
-                    "worker_name": worker_name,
-                    "status": "online",
-                    "active_tasks": active_count,
-                    "scheduled_tasks": scheduled_count,
-                    "reserved_tasks": reserved_count,
-                    "total_tasks": worker_stats.get("total", {}),
-                    "pool_info": {
-                        "max_concurrency": worker_stats.get("pool", {}).get("max-concurrency"),
-                        "processes": worker_stats.get("pool", {}).get("processes")
-                    }
-                })
-        
-        return {
-            "workers": worker_info,
-            "summary": {
-                "total_workers": len(worker_info),
-                "online_workers": len(worker_info),  # All returned workers are online
-                "total_active_tasks": total_active_tasks,
-                "total_scheduled_tasks": total_scheduled_tasks,
-                "total_reserved_tasks": total_reserved_tasks
-            },
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        return result.data
         
     except Exception as e:
-        # Return empty stats if Celery is not available
-        return {
-            "workers": [],
-            "summary": {
-                "total_workers": 0,
-                "online_workers": 0,
-                "total_active_tasks": 0,
-                "total_scheduled_tasks": 0,
-                "total_reserved_tasks": 0
-            },
-            "error": f"Failed to get worker stats: {str(e)}",
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to get app configuration: {str(e)}"
+        )

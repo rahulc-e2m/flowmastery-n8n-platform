@@ -158,14 +158,13 @@ export function ChatbotPage() {
       const data = await AutomationApi.sendMessage({
         message: userMessage.content,
         chatbot_id: id,
-        conversation_id: conversationId
+        conversation_id: conversationId || undefined
       })
 
       // Use the response from our backend API
       const botResponseText = data.response || 'No response received'
 
       // Update conversation ID if we got one back
-      const newConversationId = data.conversation_id || conversationId
       if (data.conversation_id && !conversationId) {
         setConversationId(data.conversation_id)
         setShouldLoadHistory(true) // Enable history loading for this new conversation

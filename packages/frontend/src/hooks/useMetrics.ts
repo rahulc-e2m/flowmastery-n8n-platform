@@ -82,7 +82,15 @@ export const useExecutionStats = (clientId?: string, enabled = true) => {
 export const useHistoricalMetrics = (clientId?: string, filters?: HistoricalFilters, enabled = true) => {
   return useQuery({
     queryKey: queryKeys.metricsHistorical(clientId, filters),
-    queryFn: () => MetricsApi.getHistorical(clientId, filters),
+    queryFn: () => {
+      // Convert HistoricalFilters to MetricsFilters if needed
+      const metricsFilters = filters ? {
+        ...filters,
+        period_type: filters.period as 'DAILY' | 'WEEKLY' | 'MONTHLY',
+        workflow_id: filters.workflow_id?.toString()
+      } : undefined
+      return MetricsApi.getHistorical(clientId, metricsFilters)
+    },
     enabled,
     retry: 1,
   })
@@ -142,7 +150,7 @@ export const useWorkflows = (active?: boolean, enabled = true) => {
   console.warn('useWorkflows is deprecated. Use useWorkflowsConsolidated instead.')
   return useQuery({
     queryKey: queryKeys.workflows(undefined, active),
-    queryFn: () => WorkflowsApi.listAll(undefined, active ? 'active' : undefined),
+    queryFn: () => WorkflowsApi.getWorkflows(undefined, active),
     retry: 1,
     enabled,
   })

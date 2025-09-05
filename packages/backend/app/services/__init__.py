@@ -9,7 +9,7 @@ from app.services.auth_service import AuthService
 from app.services.client_service import ClientService
 from app.services.chatbot_service import ChatbotService
 from app.services.chat_service import ChatService
-from app.services.dependency_service import DependencyService
+from app.services.guide_service import GuideService
 from app.services.metrics_service import metrics_service
 from app.services.workflow_service import workflow_service
 from app.services.health_service import health_service
@@ -21,7 +21,7 @@ def initialize_services():
     register_service("auth_service", AuthService())
     register_service("client_service", ClientService())
     register_service("chatbot_service", ChatbotService())
-    register_service("dependency_service", DependencyService(None))  # DB will be injected
+    register_service("guide_service", GuideService(None))  # DB will be injected
     register_service("metrics_service", metrics_service)
     register_service("workflow_service", workflow_service)
     register_service("health_service", health_service)
@@ -35,7 +35,7 @@ __all__ = [
     "ClientService", 
     "ChatbotService",
     "ChatService",
-    "DependencyService",
+    "GuideService",
     "metrics_service",
     "workflow_service",
     "health_service",

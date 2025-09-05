@@ -8,7 +8,7 @@ from .workflow import Workflow
 from .workflow_execution import WorkflowExecution, ExecutionStatus, ExecutionMode
 from .metrics_aggregation import MetricsAggregation, WorkflowTrendMetrics, AggregationPeriod
 from .sync_state import SyncState
-from .dependency import Dependency
+from .guide import Guide
 from .chatbot import Chatbot
 from .chat_message import ChatMessage
 
@@ -25,7 +25,7 @@ __all__ = [
     "WorkflowTrendMetrics",
     "AggregationPeriod",
     "SyncState",
-    "Dependency",
+    "Guide",
     "Chatbot",
     "ChatMessage"
 ]

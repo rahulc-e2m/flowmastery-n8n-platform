@@ -56,24 +56,6 @@ export class WorkflowsApi {
     return extractApiData<WorkflowDetails>(res)
   }
 
-  // Legacy methods for backward compatibility
-  static async listAll(clientId?: string, activeFilter?: string): Promise<WorkflowListResponse> {
-    console.warn('WorkflowsApi.listAll is deprecated. Use WorkflowsApi.getWorkflows instead.')
-    const active = activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined
-    return this.getWorkflows(clientId, active)
-  }
-
-  static async listMine(activeFilter?: string): Promise<WorkflowListResponse> {
-    console.warn('WorkflowsApi.listMine is deprecated. Use WorkflowsApi.getWorkflows instead.')
-    const active = activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined
-    return this.getWorkflows(undefined, active)
-  }
-
-  static async updateMinutes(workflowDbId: string, minutes: number): Promise<{ id: string; time_saved_per_execution_minutes: number }> {
-    console.warn('WorkflowsApi.updateMinutes is deprecated. Use WorkflowsApi.updateWorkflow instead.')
-    const result = await this.updateWorkflow(workflowDbId, { time_saved_per_execution_minutes: minutes })
-    return { id: result.id, time_saved_per_execution_minutes: result.time_saved_per_execution_minutes }
-  }
 }
 
 
