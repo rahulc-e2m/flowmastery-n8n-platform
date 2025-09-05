@@ -6,7 +6,7 @@ from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import logging
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, desc, func
+from sqlalchemy import select, and_, desc, func, Integer
 
 from app.models.client import Client
 from app.models.workflow import Workflow
@@ -21,6 +21,7 @@ from app.schemas.metrics import (
     AdminMetricsResponse,
     MetricsError
 )
+from app.core.service_layer import OperationContext, OperationType, OperationResult, BaseService
 
 logger = logging.getLogger(__name__)
 
@@ -101,11 +102,16 @@ class MetricsServiceLayerMixin:
                 raise
 
 
-class MetricsService(MetricsServiceLayerMixin):
+class MetricsService(BaseService, MetricsServiceLayerMixin):
     """Service for fetching and processing metrics from database with service layer protection"""
     
+    @property
+    def service_name(self) -> str:
+        return "metrics_service"
+    
     def __init__(self):
-        super().__init__()
+        BaseService.__init__(self)
+        MetricsServiceLayerMixin.__init__(self)
     
     async def get_client_metrics(self, db: AsyncSession, client_id: str, use_cache: bool = True, user_id: str = None) -> ClientMetrics:
         """Get aggregated metrics for a specific client from database with service layer protection"""
@@ -123,29 +129,31 @@ class MetricsService(MetricsServiceLayerMixin):
                 raise ValueError(f"Client {client_id} not found")
             
             try:
-                # Get workflows from database, excluding archived ones
-                workflows_stmt = select(Workflow).where(
-                    and_(
-                        Workflow.client_id == client_id,
-                        Workflow.archived == False
+                # Use protected database session for all queries
+                async with self._get_db_session() as db_session:
+                    # Get workflows from database, excluding archived ones
+                    workflows_stmt = select(Workflow).where(
+                        and_(
+                            Workflow.client_id == client_id,
+                            Workflow.archived == False
+                        )
                     )
-                )
-                workflows_result = await db.execute(workflows_stmt)
-                workflows = workflows_result.scalars().all()
-                
-                total_workflows = len(workflows)
-                active_workflows = len([w for w in workflows if w.active])
-                
-                # Get production executions from database
-                executions_stmt = select(WorkflowExecution).where(
-                    and_(
-                        WorkflowExecution.client_id == client_id,
-                        WorkflowExecution.is_production == True  # Only production executions
-                    )
-                ).order_by(desc(WorkflowExecution.started_at))
-                
-                executions_result = await db.execute(executions_stmt)
-                executions = executions_result.scalars().all()
+                    workflows_result = await db_session.execute(workflows_stmt)
+                    workflows = workflows_result.scalars().all()
+                    
+                    total_workflows = len(workflows)
+                    active_workflows = len([w for w in workflows if w.active])
+                    
+                    # Get production executions from database
+                    executions_stmt = select(WorkflowExecution).where(
+                        and_(
+                            WorkflowExecution.client_id == client_id,
+                            WorkflowExecution.is_production == True  # Only production executions
+                        )
+                    ).order_by(desc(WorkflowExecution.started_at))
+                    
+                    executions_result = await db_session.execute(executions_stmt)
+                    executions = executions_result.scalars().all()
                 
                 total_executions = len(executions)
                 successful_executions = len([e for e in executions if e.status == ExecutionStatus.SUCCESS])
@@ -231,26 +239,28 @@ class MetricsService(MetricsServiceLayerMixin):
             client_metrics = await self.get_client_metrics(db, client_id, user_id=user_id)
             
             try:
-                # Get workflows from database, excluding archived ones
-                workflows_stmt = select(Workflow).where(
-                    and_(
-                        Workflow.client_id == client_id,
-                        Workflow.archived == False
+                # Use protected database session for all queries
+                async with self._get_db_session() as db_session:
+                    # Get workflows from database, excluding archived ones
+                    workflows_stmt = select(Workflow).where(
+                        and_(
+                            Workflow.client_id == client_id,
+                            Workflow.archived == False
+                        )
                     )
-                )
-                workflows_result = await db.execute(workflows_stmt)
-                workflows = workflows_result.scalars().all()
-                
-                # Get all production executions for this client
-                executions_stmt = select(WorkflowExecution).where(
-                    and_(
-                        WorkflowExecution.client_id == client_id,
-                        WorkflowExecution.is_production == True
-                    )
-                ).order_by(desc(WorkflowExecution.started_at))
-                
-                executions_result = await db.execute(executions_stmt)
-                executions = executions_result.scalars().all()
+                    workflows_result = await db_session.execute(workflows_stmt)
+                    workflows = workflows_result.scalars().all()
+                    
+                    # Get all production executions for this client
+                    executions_stmt = select(WorkflowExecution).where(
+                        and_(
+                            WorkflowExecution.client_id == client_id,
+                            WorkflowExecution.is_production == True
+                        )
+                    ).order_by(desc(WorkflowExecution.started_at))
+                    
+                    executions_result = await db_session.execute(executions_stmt)
+                    executions = executions_result.scalars().all()
                 
                 # Group executions by workflow
                 workflow_executions = {}
@@ -377,21 +387,23 @@ class MetricsService(MetricsServiceLayerMixin):
                     'overall_success_rate': overall_success_rate
                 }
                 
-                # Get all-time totals as of 30 days ago by excluding data from the last 30 days
-                # Query all aggregated data up to 30 days ago
-                historical_stmt = select(
-                    func.sum(MetricsAggregation.total_executions).label('total_executions'),
-                    func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
-                    func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
-                ).where(
-                    and_(
-                        MetricsAggregation.period_type == AggregationPeriod.DAILY,
-                        func.date(MetricsAggregation.period_start) < thirty_days_ago
+                # Use protected database session for historical queries
+                async with self._get_db_session() as db_session:
+                    # Get all-time totals as of 30 days ago by excluding data from the last 30 days
+                    # Query all aggregated data up to 30 days ago
+                    historical_stmt = select(
+                        func.sum(MetricsAggregation.total_executions).label('total_executions'),
+                        func.sum(MetricsAggregation.successful_executions).label('successful_executions'),
+                        func.avg(MetricsAggregation.avg_execution_time_seconds).label('avg_execution_time')
+                    ).where(
+                        and_(
+                            MetricsAggregation.period_type == AggregationPeriod.DAILY,
+                            func.date(MetricsAggregation.period_start) < thirty_days_ago
+                        )
                     )
-                )
-                
-                historical_result = await db.execute(historical_stmt)
-                historical_data = historical_result.fetchone()
+                    
+                    historical_result = await db_session.execute(historical_stmt)
+                    historical_data = historical_result.fetchone()
                 
                 # Also get client and workflow counts as of 30 days ago
                 # For simplicity, we'll calculate trends based on execution data
@@ -418,7 +430,7 @@ class MetricsService(MetricsServiceLayerMixin):
                         )
                     )
                     
-                    recent_perf_result = await db.execute(recent_perf_stmt)
+                    recent_perf_result = await db_session.execute(recent_perf_stmt)
                     recent_perf_data = recent_perf_result.fetchone()
                     
                     performance_trend = 0
@@ -475,25 +487,27 @@ class MetricsService(MetricsServiceLayerMixin):
             from app.schemas.metrics import HistoricalMetrics, MetricsTrend
             from app.models import MetricsAggregation, AggregationPeriod
             
-            # Get aggregated metrics from database
-            aggregation_stmt = select(MetricsAggregation).where(
-                and_(
-                    MetricsAggregation.client_id == client_id,
-                    MetricsAggregation.period_type == period_type
+            # Use protected database session for historical queries
+            async with self._get_db_session() as db_session:
+                # Get aggregated metrics from database
+                aggregation_stmt = select(MetricsAggregation).where(
+                    and_(
+                        MetricsAggregation.client_id == client_id,
+                        MetricsAggregation.period_type == period_type
+                    )
                 )
-            )
-            
-            if start_date:
-                aggregation_stmt = aggregation_stmt.where(MetricsAggregation.period_start >= start_date)
-            if end_date:
-                aggregation_stmt = aggregation_stmt.where(MetricsAggregation.period_end <= end_date)
-            if workflow_id:
-                aggregation_stmt = aggregation_stmt.where(MetricsAggregation.workflow_id == workflow_id)
-            
-            aggregation_stmt = aggregation_stmt.order_by(MetricsAggregation.period_start)
-            
-            result = await db.execute(aggregation_stmt)
-            aggregations = result.scalars().all()
+                
+                if start_date:
+                    aggregation_stmt = aggregation_stmt.where(MetricsAggregation.period_start >= start_date)
+                if end_date:
+                    aggregation_stmt = aggregation_stmt.where(MetricsAggregation.period_end <= end_date)
+                if workflow_id:
+                    aggregation_stmt = aggregation_stmt.where(MetricsAggregation.workflow_id == workflow_id)
+                
+                aggregation_stmt = aggregation_stmt.order_by(MetricsAggregation.period_start)
+                
+                result = await db_session.execute(aggregation_stmt)
+                aggregations = result.scalars().all()
             
             # Convert to metrics data
             metrics_data = []
@@ -536,7 +550,274 @@ class MetricsService(MetricsServiceLayerMixin):
                 trends=trends or MetricsTrend(execution_trend=0, success_rate_trend=0, performance_trend=0)
             )
     
-
+    async def get_client_executions(
+        self,
+        db: AsyncSession,
+        client_id: str,
+        limit: int = 50,
+        offset: int = 0,
+        workflow_id: Optional[int] = None,
+        status: Optional[str] = None,
+        context: OperationContext = None
+    ) -> OperationResult[Dict[str, Any]]:
+        """Get client executions with service layer protection and caching"""
+        if context is None:
+            context = OperationContext(operation_type=OperationType.READ)
+        
+        async def _get_executions_operation():
+            # Generate cache key based on parameters
+            cache_key = f"client_executions:{client_id}:{limit}:{offset}:{workflow_id or 'all'}:{status or 'all'}"
+            
+            # Try cache first
+            cached_result = await self._get_metrics_cache(cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            # Build query using service layer database session
+            async with self._get_db_session() as db_session:
+                query = select(
+                    WorkflowExecution.n8n_execution_id,
+                    WorkflowExecution.status,
+                    WorkflowExecution.mode,
+                    WorkflowExecution.started_at,
+                    WorkflowExecution.finished_at,
+                    WorkflowExecution.execution_time_ms,
+                    WorkflowExecution.is_production,
+                    Workflow.name.label('workflow_name'),
+                    Workflow.n8n_workflow_id
+                ).join(Workflow).where(WorkflowExecution.client_id == client_id)
+                
+                # Apply filters
+                if workflow_id:
+                    query = query.where(WorkflowExecution.workflow_id == workflow_id)
+                
+                if status:
+                    try:
+                        status_enum = ExecutionStatus(status.upper())
+                        query = query.where(WorkflowExecution.status == status_enum)
+                    except ValueError:
+                        raise ValueError(f"Invalid status: {status}")
+                
+                # Order by most recent first
+                query = query.order_by(desc(WorkflowExecution.started_at))
+                
+                # Apply pagination
+                query = query.offset(offset).limit(limit)
+                
+                result = await db_session.execute(query)
+                executions = result.all()
+            
+            # Format response
+            execution_list = []
+            for exec_row in executions:
+                execution_list.append({
+                    "n8n_execution_id": exec_row.n8n_execution_id,
+                    "status": exec_row.status.value,
+                    "mode": exec_row.mode.value if exec_row.mode else None,
+                    "workflow_name": exec_row.workflow_name,
+                    "workflow_id": exec_row.n8n_workflow_id,
+                    "started_at": exec_row.started_at.isoformat() if exec_row.started_at else None,
+                    "finished_at": exec_row.finished_at.isoformat() if exec_row.finished_at else None,
+                    "execution_time_ms": exec_row.execution_time_ms,
+                    "execution_time_seconds": round(exec_row.execution_time_ms / 1000, 2) if exec_row.execution_time_ms else None,
+                    "is_production": exec_row.is_production
+                })
+            
+            result_data = {
+                "executions": execution_list,
+                "total_count": len(execution_list),
+                "limit": limit,
+                "offset": offset,
+                "client_id": client_id
+            }
+            
+            # Cache the result for 2 minutes
+            await self._set_metrics_cache(cache_key, result_data, ttl=120)
+            
+            return result_data
+        
+        async with self._protected_metrics_operation("get_client_executions", context.user_id):
+            return OperationResult(success=True, data=await _get_executions_operation())
+    
+    async def get_client_execution_stats(
+        self,
+        db: AsyncSession,
+        client_id: str,
+        context: OperationContext = None
+    ) -> OperationResult[Dict[str, Any]]:
+        """Get client execution statistics with service layer protection and caching"""
+        if context is None:
+            context = OperationContext(operation_type=OperationType.READ)
+        
+        async def _get_stats_operation():
+            cache_key = f"client_execution_stats:{client_id}"
+            
+            # Try cache first
+            cached_result = await self._get_metrics_cache(cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            # Query execution stats by workflow using service layer database session
+            async with self._get_db_session() as db_session:
+                query = select(
+                    Workflow.name.label('workflow_name'),
+                    Workflow.n8n_workflow_id,
+                    Workflow.active,
+                    Workflow.time_saved_per_execution_minutes,
+                    func.count(WorkflowExecution.id).label('total_executions'),
+                    func.sum((WorkflowExecution.status == ExecutionStatus.SUCCESS).cast(Integer)).label('successful_executions'),
+                    func.sum((WorkflowExecution.status == ExecutionStatus.ERROR).cast(Integer)).label('failed_executions'),
+                    func.avg(WorkflowExecution.execution_time_ms).label('avg_execution_time_ms'),
+                    func.max(WorkflowExecution.started_at).label('last_execution')
+                ).select_from(
+                    Workflow
+                ).outerjoin(
+                    WorkflowExecution,
+                    and_(
+                        Workflow.id == WorkflowExecution.workflow_id,
+                        WorkflowExecution.is_production == True
+                    )
+                ).where(
+                    Workflow.client_id == client_id
+                ).group_by(
+                    Workflow.id, Workflow.name, Workflow.n8n_workflow_id, Workflow.active, Workflow.time_saved_per_execution_minutes
+                ).order_by(
+                    func.count(WorkflowExecution.id).desc()
+                )
+                
+                result = await db_session.execute(query)
+                stats = result.all()
+            
+            # Format response
+            workflow_stats = []
+            for stat_row in stats:
+                total = stat_row.total_executions or 0
+                successful = stat_row.successful_executions or 0
+                failed = stat_row.failed_executions or 0
+                success_rate = (successful / total * 100) if total > 0 else 0
+                avg_time_ms = float(stat_row.avg_execution_time_ms or 0)
+                
+                # Calculate time saved
+                time_saved_per_execution_minutes = stat_row.time_saved_per_execution_minutes or 0
+                total_time_saved_minutes = successful * time_saved_per_execution_minutes
+                total_time_saved_hours = round(total_time_saved_minutes / 60, 1) if total_time_saved_minutes > 0 else 0
+                
+                workflow_stats.append({
+                    "workflow_name": stat_row.workflow_name,
+                    "workflow_id": stat_row.n8n_workflow_id,
+                    "active": stat_row.active,
+                    "total_executions": total,
+                    "successful_executions": successful,
+                    "failed_executions": failed,
+                    "success_rate": round(success_rate, 1),
+                    "avg_execution_time_ms": round(avg_time_ms, 0) if avg_time_ms else 0,
+                    "avg_execution_time_seconds": round(avg_time_ms / 1000, 2) if avg_time_ms else 0,
+                    "last_execution": stat_row.last_execution.isoformat() if stat_row.last_execution else None,
+                    "time_saved_per_execution_minutes": time_saved_per_execution_minutes,
+                    "time_saved_hours": total_time_saved_hours
+                })
+            
+            result_data = {
+                "workflow_stats": workflow_stats,
+                "total_workflows": len(workflow_stats),
+                "client_id": client_id
+            }
+            
+            # Cache the result for 5 minutes
+            await self._set_metrics_cache(cache_key, result_data, ttl=300)
+            
+            return result_data
+        
+        async with self._protected_metrics_operation("get_client_execution_stats", context.user_id):
+            return OperationResult(success=True, data=await _get_stats_operation())
+    
+    async def get_data_freshness(
+        self,
+        db: AsyncSession,
+        accessible_clients: List[Client],
+        context: OperationContext = None
+    ) -> OperationResult[Dict[str, Any]]:
+        """Get data freshness information with service layer protection and caching"""
+        if context is None:
+            context = OperationContext(operation_type=OperationType.READ)
+        
+        async def _get_freshness_operation():
+            cache_key = f"data_freshness:{'_'.join([c.id for c in accessible_clients[:10]])}"
+            
+            # Try cache first (shorter cache for freshness data)
+            cached_result = await self._get_metrics_cache(cache_key)
+            if cached_result is not None:
+                return cached_result
+            
+            freshness_data = []
+            
+            # Use protected database session for all queries
+            async with self._get_db_session() as db_session:
+                for client in accessible_clients:
+                    # Get last sync time from executions
+                    last_sync_stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
+                        WorkflowExecution.client_id == client.id
+                    )
+                    last_sync_result = await db_session.execute(last_sync_stmt)
+                    last_sync = last_sync_result.scalar_one_or_none()
+                    
+                    # Get last aggregation time
+                    from app.models import MetricsAggregation
+                    last_agg_stmt = select(func.max(MetricsAggregation.computed_at)).where(
+                        MetricsAggregation.client_id == client.id
+                    )
+                    last_agg_result = await db_session.execute(last_agg_stmt)
+                    last_aggregation = last_agg_result.scalar_one_or_none()
+                
+                # Check cache status
+                cache_key_client = f"enhanced_client_metrics:{client.id}"
+                has_cache = await redis_client.exists(cache_key_client)
+                
+                # Calculate freshness scores
+                now = datetime.utcnow()
+                sync_age_minutes = None
+                agg_age_minutes = None
+                
+                if last_sync:
+                    if last_sync.tzinfo is None:
+                        last_sync = last_sync.replace(tzinfo=timezone.utc)
+                    sync_age_minutes = (now.replace(tzinfo=timezone.utc) - last_sync).total_seconds() / 60
+                
+                if last_aggregation:
+                    if last_aggregation.tzinfo is None:
+                        last_aggregation = last_aggregation.replace(tzinfo=timezone.utc)
+                    agg_age_minutes = (now.replace(tzinfo=timezone.utc) - last_aggregation).total_seconds() / 60
+                
+                freshness_data.append({
+                    "client_id": client.id,
+                    "client_name": client.name,
+                    "last_sync": last_sync.isoformat() if last_sync else None,
+                    "last_aggregation": last_aggregation.isoformat() if last_aggregation else None,
+                    "sync_age_minutes": round(sync_age_minutes, 1) if sync_age_minutes else None,
+                    "aggregation_age_minutes": round(agg_age_minutes, 1) if agg_age_minutes else None,
+                    "has_cache": has_cache,
+                    "sync_status": "fresh" if sync_age_minutes and sync_age_minutes < 15 else "stale" if sync_age_minutes else "never",
+                    "overall_health": "healthy" if (sync_age_minutes and sync_age_minutes < 15 and has_cache) else "degraded"
+                })
+            
+            result_data = {
+                "clients": freshness_data,
+                "summary": {
+                    "total_clients": len(accessible_clients),
+                    "healthy_clients": len([c for c in freshness_data if c["overall_health"] == "healthy"]),
+                    "degraded_clients": len([c for c in freshness_data if c["overall_health"] == "degraded"]),
+                    "cached_clients": len([c for c in freshness_data if c["has_cache"]]),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            }
+            
+            # Cache the result for 1 minute (freshness data should be very current)
+            await self._set_metrics_cache(cache_key, result_data, ttl=60)
+            
+            return result_data
+        
+        async with self._protected_metrics_operation("get_data_freshness", context.user_id):
+            return OperationResult(success=True, data=await _get_freshness_operation())
 
 
 # Create the service instance

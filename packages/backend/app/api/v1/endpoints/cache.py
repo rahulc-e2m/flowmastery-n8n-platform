@@ -70,64 +70,30 @@ async def get_cache_stats(
         )
     
     try:
-        from sqlalchemy import select
-        from app.models import Client
+        from app.services.cache_service import cache_service
+        from app.core.service_layer import OperationContext, OperationType
         
-        # Get Redis info
-        redis_info = await redis_client.get_info()
+        # Create operation context
+        context = OperationContext(
+            operation_type=OperationType.READ,
+            user_id=admin_user.id
+        )
         
-        # Get all clients
-        stmt = select(Client)
-        result = await db.execute(stmt)
-        clients = result.scalars().all()
+        # Use CacheService to get statistics
+        result = await cache_service.get_cache_statistics(db, context)
         
-        # Check cache status for each client
-        cache_status = []
-        total_cached = 0
+        if not result.success:
+            await CacheServiceMixin._log_cache_operation("stats", admin_user.id, f"error: {result.error}", success=False)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.error or "Failed to get cache stats"
+            )
         
-        for client in clients:
-            cache_key = f"enhanced_client_metrics:{client.id}"
-            has_cache = await redis_client.exists(cache_key)
-            
-            if has_cache:
-                total_cached += 1
-                # Get cache TTL if available
-                ttl = await redis_client.get_ttl(cache_key)
-                cache_status.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "cached": True,
-                    "ttl_seconds": ttl if ttl > 0 else None
-                })
-            else:
-                cache_status.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "cached": False,
-                    "ttl_seconds": None
-                })
+        await CacheServiceMixin._log_cache_operation("stats", admin_user.id, "Retrieved cache statistics successfully")
+        return result.data
         
-        # Check admin cache
-        admin_cache_exists = await redis_client.exists("admin_metrics:overview")
-        
-        await CacheServiceMixin._log_cache_operation("stats", admin_user.id, f"Retrieved stats for {len(clients)} clients")
-        
-        return {
-            "redis_info": {
-                "connected": redis_info.get("connected", False),
-                "used_memory": redis_info.get("used_memory_human", "Unknown"),
-                "total_keys": redis_info.get("db0", {}).get("keys", 0) if redis_info.get("db0") else 0
-            },
-            "cache_summary": {
-                "total_clients": len(clients),
-                "cached_clients": total_cached,
-                "cache_hit_rate": round((total_cached / len(clients)) * 100, 1) if clients else 0,
-                "admin_cache_exists": admin_cache_exists
-            },
-            "client_cache_status": cache_status,
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
+    except HTTPException:
+        raise
     except Exception as e:
         await CacheServiceMixin._log_cache_operation("stats", admin_user.id, f"error: {str(e)}", success=False)
         raise HTTPException(
@@ -317,50 +283,33 @@ async def warm_cache(
         )
     
     try:
-        from app.services.metrics_service import metrics_service
-        from sqlalchemy import select
-        from app.models import Client
+        from app.services.cache_service import cache_service
+        from app.core.service_layer import OperationContext, OperationType
         
-        if client_id:
-            # Warm cache for specific client
-            await metrics_service.get_client_metrics(db, client_id, use_cache=False)
-            
-            await CacheServiceMixin._log_cache_operation("warm_client", admin_user.id, f"client_id: {client_id}")
-            
-            return {
-                "message": f"Cache warmed for client {client_id}",
-                "client_id": client_id,
-                "timestamp": datetime.utcnow().isoformat()
-            }
-        else:
-            # Warm cache for all clients
-            stmt = select(Client)
-            result = await db.execute(stmt)
-            clients = result.scalars().all()
-            
-            warmed_clients = []
-            for client in clients:
-                try:
-                    await metrics_service.get_client_metrics(db, client.id, use_cache=False)
-                    warmed_clients.append(client.id)
-                except Exception as e:
-                    logger.warning(f"Failed to warm cache for client {client.id}: {e}")
-            
-            # Warm admin metrics cache
-            try:
-                await metrics_service.get_admin_metrics(db)
-            except Exception as e:
-                logger.warning(f"Failed to warm admin metrics cache: {e}")
-            
-            await CacheServiceMixin._log_cache_operation("warm_all", admin_user.id, f"warmed: {len(warmed_clients)}/{len(clients)} clients")
-            
-            return {
-                "message": "Cache warmed for all clients",
-                "warmed_clients": len(warmed_clients),
-                "total_clients": len(clients),
-                "timestamp": datetime.utcnow().isoformat()
-            }
+        # Create operation context
+        context = OperationContext(
+            operation_type=OperationType.CREATE,
+            user_id=admin_user.id
+        )
         
+        # Use CacheService to warm cache
+        result = await cache_service.warm_cache(db, client_id, context)
+        
+        if not result.success:
+            await CacheServiceMixin._log_cache_operation("warm", admin_user.id, f"error: {result.error}", success=False)
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.error or "Cache warming failed"
+            )
+        
+        operation_type = "warm_client" if client_id else "warm_all"
+        details = f"client_id: {client_id}" if client_id else f"warmed: {result.data.get('warmed_clients', 0)}/{result.data.get('total_clients', 0)} clients"
+        await CacheServiceMixin._log_cache_operation(operation_type, admin_user.id, details)
+        
+        return result.data
+        
+    except HTTPException:
+        raise
     except Exception as e:
         await CacheServiceMixin._log_cache_operation("warm", admin_user.id, f"error: {str(e)}", success=False)
         raise HTTPException(

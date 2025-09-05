@@ -19,7 +19,7 @@ api_router.include_router(workflows.router, prefix="/workflows", tags=["workflow
 api_router.include_router(chatbots_router, prefix="/chatbots", tags=["chatbots"])
 
 # System administration endpoints
-api_router.include_router(system_router, prefix="/system", tags=["system", "health", "config"])
+api_router.include_router(system_router, prefix="/system", tags=["system"])
 api_router.include_router(cache.router, prefix="/cache", tags=["cache"])
 api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 

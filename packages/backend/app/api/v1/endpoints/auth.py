@@ -296,25 +296,24 @@ async def refresh_token(
         )
     
     try:
-        # Verify refresh token
-        payload = verify_token(refresh_token_value, token_type="refresh")
-        user_id = payload.get("sub")
+        from app.core.service_layer import OperationContext, OperationType
         
-        if not user_id:
+        # Create service and operation context
+        auth_service = AuthService()
+        context = OperationContext(
+            operation_type=OperationType.READ
+        )
+        
+        # Use service layer to refresh token
+        result = await auth_service.refresh_user_token(db, refresh_token_value, context)
+        
+        if not result.success:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid refresh token",
+                detail=result.error or "Invalid refresh token",
             )
         
-        # Get user from database to ensure they still exist and are active
-        result = await db.execute(select(User).where(User.id == user_id))
-        user = result.scalar_one_or_none()
-        
-        if not user or not user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User not found or inactive",
-            )
+        user = result.data
         
         # Create new tokens
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -421,16 +420,26 @@ async def update_user_profile(
     db: AsyncSession = Depends(get_db)
 ):
     """Update current user's profile information"""
-    # Update user fields
-    if profile_data.first_name is not None:
-        current_user.first_name = profile_data.first_name
-    if profile_data.last_name is not None:
-        current_user.last_name = profile_data.last_name
+    from app.core.service_layer import OperationContext, OperationType
     
-    await db.commit()
-    await db.refresh(current_user)
+    # Create service and operation context
+    auth_service = AuthService()
+    context = OperationContext(
+        operation_type=OperationType.UPDATE,
+        user_id=current_user.id,
+        client_id=current_user.client_id
+    )
     
-    return UserResponse.model_validate(current_user)
+    # Use service layer
+    result = await auth_service.update_user_profile(db, current_user, profile_data, context)
+    
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=result.error
+        )
+    
+    return UserResponse.model_validate(result.data)
 
 
 @router.post("/invitations", response_model=InvitationResponse)
@@ -469,9 +478,25 @@ async def list_invitations(
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """List all invitations (admin only)"""
-    result = await db.execute(select(Invitation).order_by(Invitation.created_at.desc()))
-    invitations = result.scalars().all()
-    return [InvitationResponse.model_validate(inv) for inv in invitations]
+    from app.core.service_layer import OperationContext, OperationType
+    
+    # Create service and operation context
+    auth_service = AuthService()
+    context = OperationContext(
+        operation_type=OperationType.READ,
+        user_id=admin_user.id
+    )
+    
+    # Use service layer
+    result = await auth_service.list_invitations(db, context)
+    
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error
+        )
+    
+    return [InvitationResponse.model_validate(inv) for inv in result.data]
 
 
 @router.get("/invitations/{invitation_id}/link")
@@ -482,8 +507,25 @@ async def get_invitation_link(
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
     """Get invitation link by invitation ID (admin only)"""
-    result = await db.execute(select(Invitation).where(Invitation.id == invitation_id))
-    invitation = result.scalar_one_or_none()
+    from app.core.service_layer import OperationContext, OperationType
+    
+    # Create service and operation context
+    auth_service = AuthService()
+    context = OperationContext(
+        operation_type=OperationType.READ,
+        user_id=admin_user.id
+    )
+    
+    # Use service layer
+    result = await auth_service.get_invitation_by_id(db, invitation_id, context)
+    
+    if not result.success:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=result.error
+        )
+    
+    invitation = result.data
     
     if not invitation:
         raise HTTPException(
@@ -498,8 +540,8 @@ async def get_invitation_link(
         )
     
     if invitation.is_expired:
-        invitation.status = "expired"
-        await db.commit()
+        # Update through service layer
+        await auth_service.update_invitation_status(db, invitation_id, "expired", context)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invitation has expired"
@@ -521,6 +563,14 @@ async def get_invitation_details(
     db: AsyncSession = Depends(get_db)
 ):
     """Get invitation details by token (for invitation acceptance page)"""
+    from app.core.service_layer import OperationContext, OperationType
+    
+    # Create service and operation context
+    auth_service = AuthService()
+    context = OperationContext(
+        operation_type=OperationType.READ
+    )
+    
     invitation = await AuthService.get_invitation_by_token(db, token)
     
     if not invitation:
@@ -541,8 +591,8 @@ async def get_invitation_details(
         )
     
     if invitation.is_expired:
-        invitation.status = "expired"
-        await db.commit()
+        # Update through service layer
+        await auth_service.update_invitation_status(db, invitation.id, "expired", context)
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Invitation has expired"

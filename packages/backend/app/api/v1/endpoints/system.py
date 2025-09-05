@@ -24,7 +24,7 @@ router = APIRouter()
 
 
 # Health check endpoints
-@router.get("/health", response_model=HealthCheckResponse, tags=["health"])
+@router.get("/health", response_model=HealthCheckResponse)
 @format_response(message="Health check completed successfully")
 async def health_check(request: Request):
     """Basic health check"""
@@ -44,7 +44,7 @@ async def health_check(request: Request):
     return health_info
 
 
-@router.get("/health/detailed", response_model=HealthCheckResponse, tags=["health"])
+@router.get("/health/detailed", response_model=HealthCheckResponse)
 @format_response(message="Detailed health check completed successfully")
 async def detailed_health_check(request: Request):
     """Detailed health check with service status"""
@@ -64,7 +64,7 @@ async def detailed_health_check(request: Request):
     return health_info
 
 
-@router.get("/health/services", tags=["health"])
+@router.get("/health/services")
 @format_response(message="Service metrics retrieved successfully")
 async def get_service_metrics(request: Request):
     """Get service performance metrics"""
@@ -96,6 +96,15 @@ async def sync_operations(
     """Consolidated sync operations - replaces multiple sync endpoints"""
     
     try:
+        from app.services.system_service import system_service
+        from app.core.service_layer import OperationContext, OperationType
+        
+        # Create operation context
+        context = OperationContext(
+            operation_type=OperationType.UPDATE,
+            user_id=admin_user.id
+        )
+        
         if sync_request.type == "client":
             # Sync specific client
             if not sync_request.client_id:
@@ -104,98 +113,41 @@ async def sync_operations(
                     detail="client_id is required for client sync"
                 )
             
-            result = await persistent_metrics_collector.sync_client_data(
-                db, sync_request.client_id
+            result = await system_service.sync_client_data(
+                db, sync_request.client_id, context
             )
             
-            return {
-                "message": f"Successfully synced client {sync_request.client_id}",
-                "type": "client",
-                "client_id": sync_request.client_id,
-                "result": result,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+            if not result.success:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result.error or "Failed to sync client"
+                )
+            
+            return result.data
         
         elif sync_request.type == "all":
             # Sync all clients
-            result = await persistent_metrics_collector.sync_all_clients(db)
+            result = await system_service.sync_all_clients(db, context)
             
-            return {
-                "message": "Successfully synced all clients",
-                "type": "all",
-                "result": result,
-                "timestamp": datetime.utcnow().isoformat()
-            }
+            if not result.success:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result.error or "Failed to sync all clients"
+                )
+            
+            return result.data
         
         elif sync_request.type == "quick":
             # Quick sync all clients with cache warming
-            from app.services.cache.redis import redis_client
-            from app.services.metrics_service import metrics_service
-            from sqlalchemy import select
-            from app.models import Client
+            result = await system_service.quick_sync_with_cache_warm(db, context)
             
-            # Clear all cache first
-            await redis_client.clear_pattern("enhanced_client_metrics:*")
-            await redis_client.clear_pattern("client_metrics:*")
-            await redis_client.clear_pattern("admin_metrics:*")
+            if not result.success:
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=result.error or "Failed to perform quick sync"
+                )
             
-            # Sync all clients immediately
-            results = []
-            
-            # Get all clients with n8n configuration
-            stmt = select(Client).where(
-                Client.n8n_api_url.isnot(None)
-            )
-            result = await db.execute(stmt)
-            clients = result.scalars().all()
-            
-            for client in clients:
-                try:
-                    sync_result = await persistent_metrics_collector.sync_client_data(
-                        db, client.id
-                    )
-                    results.append({
-                        "client_id": client.id,
-                        "client_name": client.name,
-                        "status": "success",
-                        "result": sync_result
-                    })
-                    
-                    # Warm cache for this client immediately after sync
-                    try:
-                        await metrics_service.get_client_metrics(db, client.id, use_cache=False)
-                    except Exception as cache_error:
-                        logger.warning(f"Failed to warm cache for client {client.id}: {cache_error}")
-                        
-                except Exception as e:
-                    results.append({
-                        "client_id": client.id,
-                        "client_name": client.name,
-                        "status": "error",
-                        "error": str(e)
-                    })
-            
-            # Commit all changes
-            await db.commit()
-            
-            # Warm admin metrics cache
-            try:
-                await metrics_service.get_admin_metrics(db)
-            except Exception as cache_error:
-                logger.warning(f"Failed to warm admin metrics cache: {cache_error}")
-            
-            successful = [r for r in results if r["status"] == "success"]
-            failed = [r for r in results if r["status"] == "error"]
-            
-            return {
-                "message": f"Quick sync completed: {len(successful)} successful, {len(failed)} failed",
-                "type": "quick",
-                "successful": len(successful),
-                "failed": len(failed),
-                "results": results,
-                "timestamp": datetime.utcnow().isoformat(),
-                "cache_warmed": True
-            }
+            return result.data
         
         else:
             raise HTTPException(
@@ -203,6 +155,8 @@ async def sync_operations(
                 detail=f"Invalid sync type: {sync_request.type}"
             )
     
+    except HTTPException:
+        raise
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -212,109 +166,4 @@ async def sync_operations(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Sync failed: {str(e)}"
-        )
-
-
-
-
-
-
-# Configuration endpoints
-@router.get("/config", tags=["config"])
-@format_response(message="System configuration retrieved successfully")
-async def get_system_config(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get comprehensive system configuration status (admin only)"""
-    
-    try:
-        result = await config_service.get_full_config_status()
-        
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get configuration status: {result.error}"
-            )
-        
-        return result.data
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get system configuration: {str(e)}"
-        )
-
-
-@router.get("/config/n8n", tags=["config"])
-@format_response(message="n8n configuration status retrieved successfully")
-async def get_n8n_config(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get n8n configuration status (admin only)"""
-    
-    try:
-        result = await config_service.get_n8n_config_status()
-        
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get n8n configuration: {result.error}"
-            )
-        
-        return result.data
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get n8n configuration: {str(e)}"
-        )
-
-
-@router.get("/config/ai", tags=["config"])
-@format_response(message="AI services configuration status retrieved successfully")
-async def get_ai_config(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get AI services configuration status (admin only)"""
-    
-    try:
-        result = await config_service.get_ai_config_status()
-        
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get AI configuration: {result.error}"
-            )
-        
-        return result.data
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get AI configuration: {str(e)}"
-        )
-
-
-@router.get("/config/app", tags=["config"])
-@format_response(message="Application configuration status retrieved successfully")
-async def get_app_config(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get application configuration status (admin only)"""
-    
-    try:
-        result = await config_service.get_app_config_status()
-        
-        if not result.success:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to get app configuration: {result.error}"
-            )
-        
-        return result.data
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get app configuration: {str(e)}"
         )

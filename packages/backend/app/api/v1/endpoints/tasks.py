@@ -249,15 +249,25 @@ async def trigger_all_sync(
 ) -> Dict[str, Any]:
     """Trigger sync for all clients (admin only) - moved from system.py"""
     try:
-        from app.services.persistent_metrics import persistent_metrics_collector
-        result = await persistent_metrics_collector.sync_all_clients(db)
+        from app.services.system_service import system_service
+        from app.core.service_layer import OperationContext, OperationType
         
-        return {
-            "message": "Successfully synced all clients",
-            "type": "all",
-            "result": result,
-            "timestamp": datetime.utcnow().isoformat()
-        }
+        # Create operation context
+        context = OperationContext(
+            operation_type=OperationType.BULK_UPDATE,
+            user_id=admin_user.id
+        )
+        
+        # Use SystemService for sync all
+        result = await system_service.sync_all_clients(db, context)
+        
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.error or "Sync all failed"
+            )
+        
+        return result.data
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -274,74 +284,25 @@ async def trigger_quick_sync(
 ) -> Dict[str, Any]:
     """Quick sync all clients with cache warming (admin only) - moved from system.py"""
     try:
-        from app.services.cache.redis import redis_client
-        from app.services.metrics_service import metrics_service
-        from app.services.persistent_metrics import persistent_metrics_collector
-        from sqlalchemy import select
-        from app.models import Client
+        from app.services.system_service import system_service
+        from app.core.service_layer import OperationContext, OperationType
         
-        # Clear all cache first
-        await redis_client.clear_pattern("enhanced_client_metrics:*")
-        await redis_client.clear_pattern("client_metrics:*")
-        await redis_client.clear_pattern("admin_metrics:*")
-        
-        # Sync all clients immediately
-        results = []
-        
-        # Get all clients with n8n configuration
-        stmt = select(Client).where(
-            Client.n8n_api_url.isnot(None)
+        # Create operation context
+        context = OperationContext(
+            operation_type=OperationType.BULK_UPDATE,
+            user_id=admin_user.id
         )
-        result = await db.execute(stmt)
-        clients = result.scalars().all()
         
-        for client in clients:
-            try:
-                sync_result = await persistent_metrics_collector.sync_client_data(
-                    db, client.id
-                )
-                results.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "status": "success",
-                    "result": sync_result
-                })
-                
-                # Warm cache for this client immediately after sync
-                try:
-                    await metrics_service.get_client_metrics(db, client.id, use_cache=False)
-                except Exception as cache_error:
-                    logger.warning(f"Failed to warm cache for client {client.id}: {cache_error}")
-                    
-            except Exception as e:
-                results.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "status": "error",
-                    "error": str(e)
-                })
+        # Use SystemService for quick sync
+        result = await system_service.quick_sync_with_cache_warm(db, context)
         
-        # Commit all changes
-        await db.commit()
+        if not result.success:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=result.error or "Quick sync failed"
+            )
         
-        # Warm admin metrics cache
-        try:
-            await metrics_service.get_admin_metrics(db)
-        except Exception as cache_error:
-            logger.warning(f"Failed to warm admin metrics cache: {cache_error}")
-        
-        successful = [r for r in results if r["status"] == "success"]
-        failed = [r for r in results if r["status"] == "error"]
-        
-        return {
-            "message": f"Quick sync completed: {len(successful)} successful, {len(failed)} failed",
-            "type": "quick",
-            "successful": len(successful),
-            "failed": len(failed),
-            "results": results,
-            "timestamp": datetime.utcnow().isoformat(),
-            "cache_warmed": True
-        }
+        return result.data
         
     except Exception as e:
         raise HTTPException(
@@ -351,29 +312,6 @@ async def trigger_quick_sync(
 
 
 @router.get("/health-check")
-@sanitize_response()
-@format_response(message="Health check triggered successfully")
-async def trigger_health_check(
-    current_user: User = Depends(get_current_user())
-) -> Dict[str, Any]:
-    """Trigger health check task"""
-    try:
-        from app.tasks.metrics_tasks import health_check
-        task = health_check.apply_async(queue='default')
-        
-        return {
-            "message": "Health check started",
-            "task_id": task.id,
-            "status": "pending"
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to start health check: {str(e)}"
-        )
-
-
-@router.post("/health-check")
 @sanitize_response()
 @format_response(message="Health check triggered successfully")
 async def trigger_health_check(
