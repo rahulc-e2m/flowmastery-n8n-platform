@@ -290,8 +290,6 @@ class ProductionExecutionFilter:
         
         # Log client context for debugging and ensure isolation
         if client_id:
-            logger.debug(f"Filtering executions for client {client_id}: {len(executions)} executions, {len(workflows)} workflows")
-            
             # Validate workflow context belongs to client
             for wf_id, wf_data in workflows.items():
                 if "_client_id" in wf_data and wf_data["_client_id"] != client_id:

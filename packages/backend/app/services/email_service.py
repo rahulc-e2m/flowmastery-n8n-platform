@@ -138,7 +138,6 @@ async def send_invitation_email(invitation: Invitation) -> bool:
         
     except Exception as e:
         print(f"❌ Failed to send invitation email to {invitation.email}: {str(e)}")
-        print(f"🔍 SMTP Config - Host: {settings.SMTP_HOST}, Port: {settings.SMTP_PORT}, Username: {settings.SMTP_USERNAME}")
         # In development, still show the link
         print(f"📧 Invitation link: {invitation_link}")
         return False

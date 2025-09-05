@@ -17,13 +17,15 @@ export function ClientStatusIndicator({
   hasApiKey, 
   compact = false 
 }: ClientStatusIndicatorProps) {
-  const { data: configStatus, isLoading } = useQuery({
-    queryKey: ['client-config-status', clientId],
-    queryFn: () => ClientApi.getClientConfigStatus(clientId),
-    enabled: hasApiKey, // Only check status if client has basic config
-    refetchInterval: 30000, // Check every 30 seconds
-    retry: 1,
-  })
+  const { data: client, isLoading } = useQuery({
+      queryKey: ['client', clientId],
+      queryFn: () => ClientApi.getClientWithConfig(clientId, true),
+      enabled: hasApiKey, // Only check status if client has basic config
+      refetchInterval: 30000, // Check every 30 seconds
+      retry: 1,
+    })
+
+  const configStatus = client?.config_status
 
   if (!hasApiKey) {
     return (

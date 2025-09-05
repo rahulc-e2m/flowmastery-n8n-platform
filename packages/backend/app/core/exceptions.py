@@ -69,7 +69,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     
     # Don't log auth-related 401s as warnings to reduce noise
     if exc.status_code == 401 and "access token" in exc.detail.lower():
-        logger.debug(f"Authentication required: {exc.detail}")
+        pass  # Skip debug logging for auth-related 401s
     else:
         logger.warning(f"HTTP exception: {exc.detail}")
     

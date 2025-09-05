@@ -217,7 +217,6 @@ class ClientService(ServiceLayerMixin):
         if use_cache:
             cached_client = await self._get_from_cache(cache_key)
             if cached_client:
-                logger.debug(f"Cache hit for client {client_id}")
                 return Client(**cached_client) if isinstance(cached_client, dict) else cached_client
         
         async with self._protected_operation("get_client_by_id"):
@@ -247,7 +246,6 @@ class ClientService(ServiceLayerMixin):
         if use_cache:
             cached_clients = await self._get_from_cache(cache_key)
             if cached_clients:
-                logger.debug("Cache hit for all clients")
                 return [Client(**client_data) for client_data in cached_clients]
         
         async with self._protected_operation("get_all_clients"):

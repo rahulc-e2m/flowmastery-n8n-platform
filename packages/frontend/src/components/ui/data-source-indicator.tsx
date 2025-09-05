@@ -82,15 +82,6 @@ export function DataSourceIndicator({
       const now = new Date()
       const minutesAgo = (now.getTime() - date.getTime()) / (1000 * 60)
 
-      if (debug) {
-        console.log('DataSourceIndicator debug:', {
-          lastUpdated,
-          parsedDate: date.toISOString(),
-          currentTime: now.toISOString(),
-          minutesAgo: Math.round(minutesAgo)
-        })
-      }
-
       if (minutesAgo <= 15) {
         return {
           status: 'fresh',

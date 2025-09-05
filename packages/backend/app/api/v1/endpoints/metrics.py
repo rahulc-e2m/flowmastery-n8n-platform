@@ -1,4 +1,4 @@
-"""Enhanced metrics endpoints for persistent multi-tenant dashboard"""
+"""Consolidated metrics endpoints with role-based access control"""
 
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +13,7 @@ from app.models.user import User
 from app.models import AggregationPeriod
 from app.core.dependencies import get_current_user
 from app.core.user_roles import UserRole, RolePermissions
+from app.core.role_based_filter import RoleBasedDataFilter
 from app.services.metrics_service import metrics_service
 from app.services.persistent_metrics import persistent_metrics_collector
 from app.schemas.metrics import (
@@ -27,315 +28,182 @@ from app.core.response_formatter import format_response
 router = APIRouter()
 
 
-@router.get("/all", response_model=AdminMetricsResponse)
-@format_response(message="All clients metrics retrieved successfully")
-async def get_all_clients_metrics(
+@router.get("/overview")
+@format_response(message="Metrics overview retrieved successfully")
+async def get_metrics_overview(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get metrics for all clients (admin only)"""
-    return await metrics_service.get_admin_metrics(db)
-
-
-@router.get("/client/{client_id}", response_model=ClientMetrics)
-@format_response(message="Client metrics retrieved successfully")
-async def get_client_metrics(
-    client_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN, UserRole.CLIENT]))
-):
-    """Get aggregated metrics for a specific client"""
-    # Verify client access
-    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this client's metrics"
-        )
+    """Get metrics overview - replaces /all + /my-metrics + /client/{id}"""
     
-    try:
-        return await metrics_service.get_client_metrics(db, client_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.get("/client/{client_id}/workflows", response_model=ClientWorkflowMetrics)
-@format_response(message="Client workflow metrics retrieved successfully")
-async def get_client_workflow_metrics(
-    client_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """Get workflow-level metrics for a specific client"""
-    # Verify client access
-    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this client's metrics"
-        )
+    # Get accessible client IDs based on role
+    accessible_client_ids = await RoleBasedDataFilter.get_accessible_client_ids(
+        current_user, db, client_id
+    )
     
-    try:
-        return await metrics_service.get_client_workflow_metrics(db, client_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.get("/client/{client_id}/historical", response_model=HistoricalMetrics)
-@format_response(message="Client historical metrics retrieved successfully")
-async def get_client_historical_metrics(
-    client_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-    period_type: AggregationPeriod = Query(AggregationPeriod.DAILY, description="Aggregation period"),
-    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
-    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
-    workflow_id: Optional[int] = Query(None, description="Specific workflow ID")
-):
-    """Get historical metrics for a client"""
-    # Verify client access
-    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this client's metrics"
-        )
+    if RolePermissions.is_admin(current_user.role):
+        if client_id:
+            # Admin requesting specific client
+            return await metrics_service.get_client_metrics(db, client_id)
+        else:
+            # Admin requesting overview of all clients
+            return await metrics_service.get_admin_metrics(db)
     
-    try:
-        return await metrics_service.get_historical_metrics(
-            db, client_id, period_type, start_date, end_date, workflow_id
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.get("/my-metrics", response_model=ClientMetrics)
-@format_response(message="Your metrics retrieved successfully")
-async def get_my_metrics(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
-):
-    """Get metrics for the current client user"""
-    if not current_user.client_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No client associated with user"
-        )
-    
-    try:
+    elif RolePermissions.is_client(current_user.role):
+        # Client requesting their own metrics
+        if not current_user.client_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No client associated with user"
+            )
         return await metrics_service.get_client_metrics(db, current_user.client_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.get("/my-workflows", response_model=ClientWorkflowMetrics)
-@format_response(message="Your workflow metrics retrieved successfully")
-async def get_my_workflow_metrics(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
-):
-    """Get workflow metrics for the current client user"""
-    if not current_user.client_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No client associated with user"
-        )
     
-    try:
-        return await metrics_service.get_client_workflow_metrics(db, current_user.client_id)
-    except ValueError as e:
+    else:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid role"
         )
 
 
-@router.get("/my-historical", response_model=HistoricalMetrics)
-@format_response(message="Your historical metrics retrieved successfully")
-async def get_my_historical_metrics(
+@router.get("/workflows")
+@format_response(message="Workflow metrics retrieved successfully")
+async def get_workflow_metrics(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
-    period_type: AggregationPeriod = Query(AggregationPeriod.DAILY),
-    start_date: Optional[date] = Query(None),
-    end_date: Optional[date] = Query(None),
-    workflow_id: Optional[int] = Query(None)
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get historical metrics for current client user"""
-    if not current_user.client_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No client associated with user"
-        )
+    """Get workflow metrics - replaces /client/{id}/workflows + /my-workflows"""
     
-    try:
-        return await metrics_service.get_historical_metrics(
-            db, current_user.client_id, period_type, start_date, end_date, workflow_id
-        )
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-
-
-@router.post("/admin/quick-sync")
-@sanitize_response()
-@format_response(message="Quick sync for all clients completed successfully")
-async def quick_sync_all_metrics(
-    db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Force immediate sync of all client metrics (admin only)"""
-    try:
-        # Import here to avoid circular imports
-        from app.services.persistent_metrics import persistent_metrics_collector
-        from app.services.cache.redis import redis_client
-        
-        # Clear all cache first
-        await redis_client.clear_pattern("enhanced_client_metrics:*")
-        await redis_client.clear_pattern("client_metrics:*")
-        await redis_client.clear_pattern("admin_metrics:*")
-        
-        # Sync all clients immediately
-        results = []
-        from sqlalchemy import select
-        from app.models import Client
-        
-        # Get all clients with n8n configuration
-        stmt = select(Client).where(
-            Client.n8n_api_url.isnot(None)
-        )
-        result = await db.execute(stmt)
-        clients = result.scalars().all()
-        
-        for client in clients:
+    if RolePermissions.is_admin(current_user.role):
+        if client_id:
+            # Admin requesting specific client workflows
             try:
-                sync_result = await persistent_metrics_collector.sync_client_data(db, client.id)
-                results.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "status": "success",
-                    "result": sync_result
-                })
+                return await metrics_service.get_client_workflow_metrics(db, client_id)
+            except ValueError as e:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=str(e)
+                )
+        else:
+            # Admin requesting all workflows across all clients
+            try:
+                from sqlalchemy import select
+                from app.models import Client
                 
-                # Warm cache for this client immediately after sync
-                try:
-                    await metrics_service.get_client_metrics(db, client.id, use_cache=False)
-                except Exception as cache_error:
-                    logger.warning(f"Failed to warm cache for client {client.id}: {cache_error}")
-                    
+                # Get all clients
+                stmt = select(Client)
+                result = await db.execute(stmt)
+                clients = result.scalars().all()
+                
+                all_workflows = []
+                for client in clients:
+                    try:
+                        client_workflows = await metrics_service.get_client_workflow_metrics(db, client.id)
+                        
+                        # Handle different response formats
+                        workflows_list = []
+                        if hasattr(client_workflows, 'workflows'):
+                            workflows_list = client_workflows.workflows
+                        elif isinstance(client_workflows, dict) and 'workflows' in client_workflows:
+                            workflows_list = client_workflows['workflows']
+                        elif isinstance(client_workflows, dict):
+                            # If the entire response is the workflows data
+                            workflows_list = [client_workflows]
+                        
+                        # Add client info to each workflow
+                        for workflow in workflows_list:
+                            if isinstance(workflow, dict):
+                                workflow_dict = workflow.copy()
+                            else:
+                                # Convert Pydantic model to dict
+                                workflow_dict = workflow.dict() if hasattr(workflow, 'dict') else workflow.__dict__.copy()
+                            
+                            workflow_dict['client_id'] = client.id
+                            workflow_dict['client_name'] = client.name
+                            all_workflows.append(workflow_dict)
+                            
+                    except Exception as e:
+                        logger.warning(f"Failed to get workflows for client {client.id}: {e}")
+                        continue
+                
+                return {
+                    "workflows": all_workflows,
+                    "total_workflows": len(all_workflows),
+                    "total_clients": len(clients),
+                    "aggregated": True
+                }
             except Exception as e:
-                results.append({
-                    "client_id": client.id,
-                    "client_name": client.name,
-                    "status": "error",
-                    "error": str(e)
-                })
+                raise HTTPException(
+                    status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail=f"Failed to get aggregated workflow metrics: {str(e)}"
+                )
+    
+    elif RolePermissions.is_client(current_user.role):
+        if client_id and client_id != current_user.client_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this client's workflow metrics"
+            )
         
-        # Commit all changes
-        await db.commit()
+        target_client_id = current_user.client_id
+        if not target_client_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No client associated with user"
+            )
         
-        # Warm admin metrics cache
         try:
-            await metrics_service.get_admin_metrics(db)
-        except Exception as cache_error:
-            logger.warning(f"Failed to warm admin metrics cache: {cache_error}")
-        
-        successful = [r for r in results if r["status"] == "success"]
-        failed = [r for r in results if r["status"] == "error"]
-        
-        return {
-            "message": f"Quick sync completed: {len(successful)} successful, {len(failed)} failed",
-            "successful": len(successful),
-            "failed": len(failed),
-            "results": results,
-            "timestamp": datetime.utcnow().isoformat(),
-            "cache_warmed": True
-        }
-        
-    except Exception as e:
+            return await metrics_service.get_client_workflow_metrics(db, target_client_id)
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
+    
+    else:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Quick sync failed: {str(e)}"
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid role"
         )
 
 
-# Admin endpoints for metrics management
-@router.post("/admin/sync/{client_id}")
-@validate_input(max_string_length=100)
-@sanitize_response()
-@format_response(message="Client sync completed successfully")
-async def force_sync_client(
-    client_id: str,
-    db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Force sync metrics for a specific client (admin only)"""
-    try:
-        result = await persistent_metrics_collector.sync_client_data(db, client_id)
-        return {
-            "message": f"Successfully synced client {client_id}",
-            "result": result
-        }
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sync failed: {str(e)}"
-        )
-
-
-@router.post("/admin/sync-all")
-@sanitize_response()
-@format_response(message="Sync for all clients completed successfully")
-async def force_sync_all_clients(
-    db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Force sync metrics for all clients (admin only)"""
-    try:
-        result = await persistent_metrics_collector.sync_all_clients(db)
-        return {
-            "message": "Successfully synced all clients",
-            "result": result
-        }
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Sync failed: {str(e)}"
-        )
-
-
-@router.get("/client/{client_id}/executions")
-@format_response(message="Client executions retrieved successfully")
-async def get_client_executions(
-    client_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+@router.get("/executions")
+@format_response(message="Executions retrieved successfully")
+async def get_executions(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     limit: int = Query(50, description="Number of executions to return"),
     offset: int = Query(0, description="Number of executions to skip"),
     workflow_id: Optional[int] = Query(None, description="Filter by workflow ID"),
-    status: Optional[str] = Query(None, description="Filter by status (SUCCESS, ERROR, etc.)")
+    status: Optional[str] = Query(None, description="Filter by status (SUCCESS, ERROR, etc.)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get recent executions for a specific client"""
-    # Verify client access
-    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
+    """Get executions - replaces /client/{id}/executions + /my-executions"""
+    
+    # Determine target client ID
+    target_client_id = client_id
+    
+    if RolePermissions.is_admin(current_user.role):
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin must specify client_id for executions"
+            )
+        target_client_id = client_id
+    
+    elif RolePermissions.is_client(current_user.role):
+        if client_id and client_id != current_user.client_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this client's executions"
+            )
+        target_client_id = current_user.client_id
+    
+    if not target_client_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this client's executions"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No client associated with user"
         )
     
     try:
@@ -353,7 +221,7 @@ async def get_client_executions(
             WorkflowExecution.is_production,
             Workflow.name.label('workflow_name'),
             Workflow.n8n_workflow_id
-        ).join(Workflow).where(WorkflowExecution.client_id == client_id)
+        ).join(Workflow).where(WorkflowExecution.client_id == target_client_id)
         
         # Apply filters
         if workflow_id:
@@ -398,7 +266,8 @@ async def get_client_executions(
             "executions": execution_list,
             "total_count": len(execution_list),
             "limit": limit,
-            "offset": offset
+            "offset": offset,
+            "client_id": target_client_id
         }
         
     except Exception as e:
@@ -408,19 +277,38 @@ async def get_client_executions(
         )
 
 
-@router.get("/client/{client_id}/execution-stats")
-@format_response(message="Client execution statistics retrieved successfully")
-async def get_client_execution_stats(
-    client_id: str,
+@router.get("/execution-stats")
+@format_response(message="Execution statistics retrieved successfully")
+async def get_execution_stats(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get execution statistics grouped by workflow for a specific client"""
-    # Verify client access
-    if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
+    """Get execution statistics - replaces /client/{id}/execution-stats + /my-execution-stats"""
+    
+    # Determine target client ID
+    target_client_id = client_id
+    
+    if RolePermissions.is_admin(current_user.role):
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin must specify client_id for execution stats"
+            )
+        target_client_id = client_id
+    
+    elif RolePermissions.is_client(current_user.role):
+        if client_id and client_id != current_user.client_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this client's execution stats"
+            )
+        target_client_id = current_user.client_id
+    
+    if not target_client_id:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Access denied to this client's execution stats"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No client associated with user"
         )
     
     try:
@@ -447,7 +335,7 @@ async def get_client_execution_stats(
                 WorkflowExecution.is_production == True
             )
         ).where(
-            Workflow.client_id == client_id
+            Workflow.client_id == target_client_id
         ).group_by(
             Workflow.id, Workflow.name, Workflow.n8n_workflow_id, Workflow.active, Workflow.time_saved_per_execution_minutes
         ).order_by(
@@ -488,7 +376,8 @@ async def get_client_execution_stats(
         
         return {
             "workflow_stats": workflow_stats,
-            "total_workflows": len(workflow_stats)
+            "total_workflows": len(workflow_stats),
+            "client_id": target_client_id
         }
         
     except Exception as e:
@@ -498,123 +387,76 @@ async def get_client_execution_stats(
         )
 
 
-@router.get("/my-executions")
-@format_response(message="Your executions retrieved successfully")
-async def get_my_executions(
+@router.get("/historical")
+@format_response(message="Historical metrics retrieved successfully")
+async def get_historical_metrics(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
+    period: AggregationPeriod = Query(AggregationPeriod.DAILY, description="Aggregation period"),
+    start_date: Optional[date] = Query(None, description="Start date (YYYY-MM-DD)"),
+    end_date: Optional[date] = Query(None, description="End date (YYYY-MM-DD)"),
+    workflow_id: Optional[int] = Query(None, description="Specific workflow ID"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
-    limit: int = Query(50, description="Number of executions to return"),
-    offset: int = Query(0, description="Number of executions to skip"),
-    workflow_id: Optional[int] = Query(None, description="Filter by workflow ID"),
-    status: Optional[str] = Query(None, description="Filter by status")
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get recent executions for the current client user"""
-    if not current_user.client_id:
+    """Get historical metrics - replaces /client/{id}/historical + /my-historical"""
+    
+    # Determine target client ID
+    target_client_id = client_id
+    
+    if RolePermissions.is_admin(current_user.role):
+        if not client_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Admin must specify client_id for historical metrics"
+            )
+        target_client_id = client_id
+    
+    elif RolePermissions.is_client(current_user.role):
+        if client_id and client_id != current_user.client_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied to this client's historical metrics"
+            )
+        target_client_id = current_user.client_id
+    
+    if not target_client_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No client associated with user"
         )
     
-    return await get_client_executions(
-        client_id=current_user.client_id,
-        db=db,
-        current_user=current_user,
-        limit=limit,
-        offset=offset,
-        workflow_id=workflow_id,
-        status=status
-    )
-
-
-@router.get("/my-execution-stats")
-@format_response(message="Your execution statistics retrieved successfully")
-async def get_my_execution_stats(
-    db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT]))
-):
-    """Get execution statistics for the current client user"""
-    if not current_user.client_id:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="No client associated with user"
-        )
-    
-    return await get_client_execution_stats(
-        client_id=current_user.client_id,
-        db=db,
-        current_user=current_user
-    )
-
-
-@router.post("/admin/refresh-cache")
-@sanitize_response()
-@format_response(message="Metrics cache refreshed successfully")
-async def refresh_metrics_cache(
-    db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Refresh metrics cache without syncing from n8n (admin only)"""
     try:
-        from app.services.cache.redis import redis_client
-        from sqlalchemy import select
-        from app.models import Client
-        
-        # Clear all metrics cache
-        await redis_client.clear_pattern("enhanced_client_metrics:*")
-        await redis_client.clear_pattern("client_metrics:*")
-        await redis_client.clear_pattern("admin_metrics:*")
-        
-        # Get all clients
-        stmt = select(Client)
-        result = await db.execute(stmt)
-        clients = result.scalars().all()
-        
-        # Warm cache for all clients
-        warmed_clients = []
-        for client in clients:
-            try:
-                await metrics_service.get_client_metrics(db, client.id, use_cache=False)
-                warmed_clients.append(client.id)
-            except Exception as e:
-                logger.warning(f"Failed to warm cache for client {client.id}: {e}")
-        
-        # Warm admin metrics cache
-        await metrics_service.get_admin_metrics(db)
-        
-        return {
-            "message": "Cache refreshed successfully",
-            "warmed_clients": len(warmed_clients),
-            "total_clients": len(clients),
-            "timestamp": datetime.utcnow().isoformat()
-        }
-        
-    except Exception as e:
+        return await metrics_service.get_historical_metrics(
+            db, target_client_id, period, start_date, end_date, workflow_id
+        )
+    except ValueError as e:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Cache refresh failed: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
         )
 
 
-@router.get("/admin/data-freshness")
+@router.get("/data-freshness")
 @format_response(message="Data freshness information retrieved successfully")
 async def get_data_freshness(
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get data freshness information for all clients (admin only)"""
+    """Get data freshness information - admin sees all, client sees own"""
+    
     try:
         from sqlalchemy import select, func
         from app.models import Client, WorkflowExecution, MetricsAggregation
         from app.services.cache.redis import redis_client
         
-        # Get all clients
-        clients_stmt = select(Client)
-        clients_result = await db.execute(clients_stmt)
-        clients = clients_result.scalars().all()
+        # Get accessible clients based on role
+        accessible_clients = await RoleBasedDataFilter.filter_clients_by_role(
+            current_user, db
+        )
         
         freshness_data = []
         
-        for client in clients:
+        for client in accessible_clients:
             # Get last sync time from executions
             last_sync_stmt = select(func.max(WorkflowExecution.last_synced_at)).where(
                 WorkflowExecution.client_id == client.id
@@ -663,7 +505,7 @@ async def get_data_freshness(
         return {
             "clients": freshness_data,
             "summary": {
-                "total_clients": len(clients),
+                "total_clients": len(accessible_clients),
                 "healthy_clients": len([c for c in freshness_data if c["overall_health"] == "healthy"]),
                 "degraded_clients": len([c for c in freshness_data if c["overall_health"] == "degraded"]),
                 "cached_clients": len([c for c in freshness_data if c["has_cache"]]),
@@ -678,16 +520,106 @@ async def get_data_freshness(
         )
 
 
-@router.post("/admin/trigger-aggregation")
+@router.post("/refresh-cache")
+@sanitize_response()
+@format_response(message="Metrics cache refreshed successfully")
+async def refresh_cache(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
+):
+    """Refresh cache - admin can refresh all or specific client, client can refresh own"""
+    
+    try:
+        from app.services.cache.redis import redis_client
+        
+        if RolePermissions.is_admin(current_user.role):
+            if client_id:
+                # Admin refreshing specific client
+                await redis_client.clear_pattern(f"enhanced_client_metrics:{client_id}")
+                await redis_client.clear_pattern(f"client_metrics:{client_id}")
+                await metrics_service.get_client_metrics(db, client_id, use_cache=False)
+                
+                return {
+                    "message": f"Cache refreshed for client {client_id}",
+                    "client_id": client_id,
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+            else:
+                # Admin refreshing all
+                await redis_client.clear_pattern("enhanced_client_metrics:*")
+                await redis_client.clear_pattern("client_metrics:*")
+                await redis_client.clear_pattern("admin_metrics:*")
+                
+                # Get all clients and warm cache
+                from sqlalchemy import select
+                from app.models import Client
+                
+                stmt = select(Client)
+                result = await db.execute(stmt)
+                clients = result.scalars().all()
+                
+                warmed_clients = []
+                for client in clients:
+                    try:
+                        await metrics_service.get_client_metrics(db, client.id, use_cache=False)
+                        warmed_clients.append(client.id)
+                    except Exception as e:
+                        logger.warning(f"Failed to warm cache for client {client.id}: {e}")
+                
+                # Warm admin metrics cache
+                await metrics_service.get_admin_metrics(db)
+                
+                return {
+                    "message": "Cache refreshed for all clients",
+                    "warmed_clients": len(warmed_clients),
+                    "total_clients": len(clients),
+                    "timestamp": datetime.utcnow().isoformat()
+                }
+        
+        elif RolePermissions.is_client(current_user.role):
+            # Client refreshing their own cache
+            if not current_user.client_id:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="No client associated with user"
+                )
+            
+            target_client_id = current_user.client_id
+            await redis_client.clear_pattern(f"enhanced_client_metrics:{target_client_id}")
+            await redis_client.clear_pattern(f"client_metrics:{target_client_id}")
+            await metrics_service.get_client_metrics(db, target_client_id, use_cache=False)
+            
+            return {
+                "message": "Cache refreshed for your client",
+                "client_id": target_client_id,
+                "timestamp": datetime.utcnow().isoformat()
+            }
+        
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Invalid role"
+            )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Cache refresh failed: {str(e)}"
+        )
+
+
+@router.post("/trigger-aggregation")
 @validate_input(max_string_length=50)
 @sanitize_response()
-@format_response(message="Daily aggregation triggered successfully")
-async def trigger_daily_aggregation(
+@format_response(message="Aggregation triggered successfully")
+async def trigger_aggregation(
+    target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD), defaults to yesterday"),
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN])),
-    target_date: Optional[str] = Query(None, description="Target date (YYYY-MM-DD), defaults to yesterday")
+    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ):
-    """Manually trigger daily aggregation for testing (admin only)"""
+    """Trigger aggregation (admin only)"""
+    
     try:
         from app.tasks.aggregation_tasks import compute_daily_aggregations
         from datetime import date, timedelta
@@ -702,7 +634,7 @@ async def trigger_daily_aggregation(
         task = compute_daily_aggregations.delay(computation_date.isoformat())
         
         return {
-            "message": f"Daily aggregation triggered for {computation_date.isoformat()}",
+            "message": f"Aggregation triggered for {computation_date.isoformat()}",
             "task_id": task.id,
             "target_date": computation_date.isoformat(),
             "status": "queued"
@@ -713,69 +645,3 @@ async def trigger_daily_aggregation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to trigger aggregation: {str(e)}"
         )
-
-
-@router.post("/admin/trigger-historical-aggregation")
-@sanitize_response()
-@format_response(message="Historical aggregation triggered successfully")
-async def trigger_historical_aggregation(
-    db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN])),
-    days_back: int = Query(7, description="Number of days back to aggregate")
-):
-    """Trigger aggregation for multiple historical days (admin only)"""
-    try:
-        from app.tasks.aggregation_tasks import compute_daily_aggregations
-        from datetime import date, timedelta
-        
-        task_ids = []
-        today = date.today()
-        
-        # Trigger aggregation for the last N days
-        for i in range(1, days_back + 1):
-            target_date = today - timedelta(days=i)
-            task = compute_daily_aggregations.delay(target_date.isoformat())
-            task_ids.append({
-                "date": target_date.isoformat(),
-                "task_id": task.id
-            })
-        
-        return {
-            "message": f"Historical aggregation triggered for {days_back} days",
-            "tasks": task_ids,
-            "total_tasks": len(task_ids)
-        }
-        
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to trigger historical aggregation: {str(e)}"
-        )
-
-
-@router.get("/admin/scheduler-status")
-@format_response(message="Scheduler status retrieved successfully")
-async def get_scheduler_status(
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
-):
-    """Get Celery scheduler status (admin only)"""
-    try:
-        from app.core.celery_app import celery_app
-        inspect = celery_app.control.inspect()
-        stats = inspect.stats()
-        active_tasks = inspect.active()
-        scheduled_tasks = inspect.scheduled()
-        
-        return {
-            "celery_workers": stats or {},
-            "active_tasks": active_tasks or {},
-            "scheduled_tasks": scheduled_tasks or {},
-            "beat_schedule": celery_app.conf.beat_schedule
-        }
-    except Exception as e:
-        return {
-            "error": f"Failed to get Celery status: {str(e)}",
-            "celery_workers": {},
-            "active_tasks": {},
-            "scheduled_tasks": {}
-        }

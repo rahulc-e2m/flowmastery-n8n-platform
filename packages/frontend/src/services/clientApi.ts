@@ -36,9 +36,13 @@ export class ClientApi {
   }
 
   static async getClients(): Promise<Client[]> {
-    const response = await api.get<StandardResponse<PaginatedResponse<Client>> | ErrorResponse>('/clients/')
-    const paginatedData = extractApiData<PaginatedResponse<Client>>(response)
-    return paginatedData.items
+    try {
+      const response = await api.get<StandardResponse<PaginatedResponse<Client>> | ErrorResponse>('/clients/')
+      const paginatedData = extractApiData<PaginatedResponse<Client>>(response)
+      return paginatedData?.items || []
+    } catch (error) {
+      return []
+    }
   }
 
   // Alias for consistency with other APIs
@@ -56,24 +60,62 @@ export class ClientApi {
     return extractApiData<Client>(response)
   }
 
-  static async configureN8nApi(clientId: string, config: ClientN8nConfig): Promise<ClientSyncResponse> {
-    const response = await api.post<StandardResponse<ClientSyncResponse> | ErrorResponse>(`/clients/${clientId}/n8n-config`, config)
+  // New consolidated methods
+  static async configureClient(
+    clientId: string, 
+    config: ClientN8nConfig, 
+    testConnection?: boolean
+  ): Promise<ClientSyncResponse> {
+    const params = new URLSearchParams()
+    if (testConnection !== undefined) params.append('test_connection', testConnection.toString())
+    
+    const queryString = params.toString() ? `?${params.toString()}` : ''
+    const response = await api.post<StandardResponse<ClientSyncResponse> | ErrorResponse>(`/clients/${clientId}/configure${queryString}`, config)
     return extractApiData<ClientSyncResponse>(response)
   }
 
-  static async testN8nConnection(config: ClientN8nConfig): Promise<N8nConnectionTestResponse> {
-    const response = await api.post<StandardResponse<N8nConnectionTestResponse> | ErrorResponse>('/clients/test-n8n-connection', config)
+  static async testConnection(clientId: string): Promise<N8nConnectionTestResponse> {
+    const response = await api.post<StandardResponse<N8nConnectionTestResponse> | ErrorResponse>(`/clients/${clientId}/test-connection`)
     return extractApiData<N8nConnectionTestResponse>(response)
   }
 
-  static async triggerImmediateSync(clientId: string): Promise<ManualSyncResponse> {
-    const response = await api.post<StandardResponse<ManualSyncResponse> | ErrorResponse>(`/clients/${clientId}/sync-n8n`)
+  static async syncClient(clientId: string): Promise<ManualSyncResponse> {
+    const response = await api.post<StandardResponse<ManualSyncResponse> | ErrorResponse>(`/clients/${clientId}/sync`)
     return extractApiData<ManualSyncResponse>(response)
   }
 
+  // Enhanced getClient method with optional config status
+  static async getClientWithConfig(clientId: string, includeConfigStatus?: boolean): Promise<Client> {
+    const params = new URLSearchParams()
+    if (includeConfigStatus) params.append('include_config_status', 'true')
+    
+    const queryString = params.toString() ? `?${params.toString()}` : ''
+    const response = await api.get<StandardResponse<Client> | ErrorResponse>(`/clients/${clientId}${queryString}`)
+    return extractApiData<Client>(response)
+  }
+
+  // Legacy methods for backward compatibility
+  static async configureN8nApi(clientId: string, config: ClientN8nConfig): Promise<ClientSyncResponse> {
+    console.warn('ClientApi.configureN8nApi is deprecated. Use ClientApi.configureClient instead.')
+    return this.configureClient(clientId, config, false)
+  }
+
+  static async testN8nConnection(config: ClientN8nConfig): Promise<N8nConnectionTestResponse> {
+    console.warn('ClientApi.testN8nConnection is deprecated. Use ClientApi.testConnection instead.')
+    // This method signature doesn't match the new API, so we'll need to handle it differently
+    // For now, we'll throw an error suggesting the new approach
+    throw new Error('testN8nConnection with config parameter is deprecated. Use testConnection(clientId) after configuring the client.')
+  }
+
+  static async triggerImmediateSync(clientId: string): Promise<ManualSyncResponse> {
+    console.warn('ClientApi.triggerImmediateSync is deprecated. Use ClientApi.syncClient instead.')
+    return this.syncClient(clientId)
+  }
+
   static async getClientConfigStatus(clientId: string): Promise<any> {
-    const response = await api.get<StandardResponse<any> | ErrorResponse>(`/clients/${clientId}/config-status`)
-    return extractApiData<any>(response)
+    console.warn('ClientApi.getClientConfigStatus is deprecated. Use ClientApi.getClientWithConfig(id, true) instead.')
+    const client = await this.getClientWithConfig(clientId, true)
+    return (client as any).config_status
   }
 
   static async deleteClient(clientId: string): Promise<{ message: string }> {

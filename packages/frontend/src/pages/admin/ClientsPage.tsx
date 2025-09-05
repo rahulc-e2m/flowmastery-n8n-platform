@@ -47,7 +47,7 @@ export function ClientsPage() {
   const [isTestingConnection, setIsTestingConnection] = useState(false)
   const queryClient = useQueryClient()
 
-  const { data: clients, isLoading } = useQuery({
+  const { data: clients = [], isLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: ClientApi.getClients,
   })
@@ -66,7 +66,7 @@ export function ClientsPage() {
 
   const configureN8nMutation = useMutation({
     mutationFn: ({ clientId, config }: { clientId: string; config: ClientN8nConfig }) =>
-      ClientApi.configureN8nApi(clientId, config),
+      ClientApi.configureClient(clientId, config, false),
     onSuccess: (data: any) => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       setConfigDialogOpen(false)
@@ -94,7 +94,7 @@ export function ClientsPage() {
   })
 
   const triggerSyncMutation = useMutation({
-    mutationFn: ClientApi.triggerImmediateSync,
+    mutationFn: ClientApi.syncClient,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['clients'] })
       toast.success('Immediate sync completed successfully!')
@@ -140,7 +140,9 @@ export function ClientsPage() {
     setConnectionTestResult(null)
     
     try {
-      const result = await ClientApi.testN8nConnection(data)
+      // First configure the client, then test connection
+      await ClientApi.configureClient(selectedClient!.id, data, true)
+      const result = await ClientApi.testConnection(selectedClient!.id)
       setConnectionTestResult(result)
       
       if (result.status === 'success') {

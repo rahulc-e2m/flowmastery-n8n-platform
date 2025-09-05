@@ -1,13 +1,14 @@
 """Client management endpoints"""
 
-from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import List, Dict, Any, Optional
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
 from app.core.dependencies import get_current_user, verify_client_access
 from app.core.user_roles import UserRole, RolePermissions
+from app.core.role_based_filter import RoleBasedDataFilter
 from app.services.client_service import ClientService
 from app.schemas.client import (
     ClientCreate,
@@ -55,24 +56,29 @@ async def create_client(
 
 @router.get("/", response_model=ClientListResponse)
 async def list_clients(
+    client_id: Optional[str] = Query(None, description="Specific client ID (admin only)"),
     db: AsyncSession = Depends(get_db),
-    admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """List all clients (admin only)"""
-    client_service = ClientService()
-    clients = await client_service.get_all_clients(db, use_cache=True)
+    """List clients - admin sees all or specific, client sees own"""
+    from app.core.role_based_filter import RoleBasedDataFilter
+    from app.schemas.api_standard import PaginatedResponse
     
+    # Get accessible clients based on role
+    accessible_clients = await RoleBasedDataFilter.filter_clients_by_role(
+        current_user, db, client_id
+    )
+    
+    client_service = ClientService()
     response_clients = []
-    for client in clients:
+    
+    for client in accessible_clients:
         response = ClientResponse.model_validate(client)
         # Check both API URL and encrypted key for complete configuration
         response.has_n8n_api_key = bool(client.n8n_api_url and client.n8n_api_key_encrypted)
         response_clients.append(response)
     
-    # Return the response in the format expected by ClientListResponse
-    from app.schemas.api_standard import PaginatedResponse
-    from datetime import datetime
-    
+    # Create paginated data
     paginated_data: PaginatedResponse[ClientResponse] = PaginatedResponse[ClientResponse](
         items=response_clients,
         total=len(response_clients),
@@ -81,23 +87,21 @@ async def list_clients(
         total_pages=1
     )
     
-    return ClientListResponse(
-        status="success",
-        data=paginated_data,
-        message="Clients retrieved successfully",
-        timestamp=datetime.utcnow(),
-        request_id=None
-    )
+    # Return properly formatted ClientListResponse
+    from app.schemas.responses import ClientListResponse
+    return ClientListResponse(data=paginated_data)
 
 
-@router.get("/{client_id}", response_model=ClientResponse)
+@router.get("/{client_id}")
 @format_response(message="Client retrieved successfully")
 async def get_client(
     client_id: str,
+    include_config_status: bool = Query(False, description="Include detailed configuration status"),
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user())
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
 ):
-    """Get client details"""
+    """Get client details with optional config status - replaces /client/{id} + /client/{id}/config-status"""
+    
     # Verify client access
     if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
@@ -117,6 +121,16 @@ async def get_client(
     response = ClientResponse.model_validate(client)
     # Check both API URL and encrypted key for complete configuration
     response.has_n8n_api_key = bool(client.n8n_api_url and client.n8n_api_key_encrypted)
+    
+    # Add config status if requested
+    if include_config_status:
+        from app.services.client_config_validator import client_config_validator
+        config_status = await client_config_validator.get_client_config_status(db, client)
+        
+        # Add config status to response
+        response_dict = response.model_dump()
+        response_dict["config_status"] = config_status
+        return response_dict
     
     return response
 
@@ -151,17 +165,33 @@ async def update_client(
     return response
 
 
-@router.post("/{client_id}/n8n-config", response_model=ClientSyncResponse)
+@router.post("/{client_id}/configure", response_model=ClientSyncResponse)
 @validate_input(validate_urls=True, max_string_length=1000)
 @sanitize_response()
-async def configure_n8n_api(
+@format_response(message="Client configured successfully")
+async def configure_client(
     client_id: str,
     n8n_config: ClientN8nConfig,
+    test_connection: bool = Query(False, description="Test connection after configuration"),
     db: AsyncSession = Depends(get_db),
     admin_user: User = Depends(get_current_user(required_roles=[UserRole.ADMIN]))
 ) -> ClientSyncResponse:
-    """Configure n8n API settings for a client and immediately sync data (admin only)"""
+    """Configure n8n API settings for a client with optional connection test - replaces /n8n-config"""
     client_service = ClientService()
+    
+    # Test connection first if requested
+    if test_connection:
+        test_result = await ClientService.test_n8n_connection(
+            n8n_config.n8n_api_url,
+            n8n_config.n8n_api_key
+        )
+        
+        if not test_result.get("connection_healthy", False):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"n8n connection test failed: {test_result.get('message', 'Unknown error')}"
+            )
+    
     client = await client_service.configure_n8n_api(db, client_id, n8n_config, admin_user)
     
     if not client:
@@ -218,14 +248,16 @@ async def test_n8n_connection(
     return N8nConnectionTestResponse(**result)
 
 
-@router.get("/{client_id}/config-status")
-@format_response(message="Client configuration status retrieved successfully")
-async def get_client_config_status(
+
+@router.post("/{client_id}/test-connection", response_model=N8nConnectionTestResponse)
+@format_response(message="Client connection tested successfully")
+async def test_client_connection(
     client_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user())
-) -> Dict[str, Any]:
-    """Get detailed configuration status for a client"""
+    current_user: User = Depends(RoleBasedDataFilter.get_admin_or_client_user())
+) -> N8nConnectionTestResponse:
+    """Test stored n8n connection for client"""
+    
     # Verify client access
     if not RolePermissions.is_admin(current_user.role) and current_user.client_id != client_id:
         raise HTTPException(
@@ -242,13 +274,40 @@ async def get_client_config_status(
             detail="Client not found"
         )
     
-    from app.services.client_config_validator import client_config_validator
-    config_status = await client_config_validator.get_client_config_status(db, client)
+    if not client.n8n_api_url or not client.n8n_api_key_encrypted:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Client n8n configuration not found. Please configure n8n API first."
+        )
     
-    return config_status
+    try:
+        # Get decrypted API key
+        api_key = await ClientService.get_n8n_api_key(db, client_id)
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Client n8n API key could not be decrypted. Please reconfigure n8n API."
+            )
+        
+        # Test the connection
+        result = await ClientService.test_n8n_connection(
+            client.n8n_api_url,
+            api_key
+        )
+        
+        return N8nConnectionTestResponse(**result)
+        
+    except Exception as e:
+        return N8nConnectionTestResponse(
+            connection_healthy=False,
+            message=f"Connection test failed: {str(e)}",
+            response_time_ms=0,
+            n8n_version=None,
+            workflows_count=0
+        )
 
 
-@router.post("/{client_id}/sync-n8n")
+@router.post("/{client_id}/sync")
 @format_response(message="Immediate sync triggered successfully")
 async def trigger_immediate_sync(
     client_id: str,

@@ -115,7 +115,6 @@ class MetricsService(MetricsServiceLayerMixin):
             if use_cache:
                 cached_metrics = await self._get_metrics_cache(cache_key)
                 if cached_metrics:
-                    logger.debug(f"Cache hit for client metrics {client_id}")
                     return ClientMetrics(**cached_metrics)
             
             client_service = ClientService()
@@ -200,7 +199,6 @@ class MetricsService(MetricsServiceLayerMixin):
                 # Cache the computed metrics with shorter TTL to ensure freshness
                 if use_cache:
                     await self._set_metrics_cache(cache_key, metrics.model_dump(), ttl=120)  # 2 minutes
-                    logger.debug(f"Cached client metrics for client {client_id}")
                 
                 return metrics
                 

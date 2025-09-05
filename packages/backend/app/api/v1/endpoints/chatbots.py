@@ -115,7 +115,6 @@ async def get_all_chatbots(
     cache_key = "all_chatbots"
     cached_result = await ChatbotServiceMixin._get_chatbot_cache(cache_key)
     if cached_result:
-        logger.debug("Cache hit for all chatbots")
         return ChatbotListResponse(**cached_result)
     
     try:

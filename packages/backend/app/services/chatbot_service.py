@@ -45,15 +45,12 @@ class ChatbotService:
         )
     
     @staticmethod
-    async def get_user_chatbots(db: AsyncSession, user: User) -> ChatbotListResponse:
-        """Get chatbots for a specific user's client"""
-        if not user.client_id:
-            return ChatbotListResponse(chatbots=[], total=0)
-        
+    async def get_client_chatbots(db: AsyncSession, client_id: str) -> ChatbotListResponse:
+        """Get chatbots for a specific client"""
         stmt = (
             select(Chatbot)
             .options(selectinload(Chatbot.client))
-            .where(Chatbot.client_id == user.client_id)
+            .where(Chatbot.client_id == client_id)
             .order_by(Chatbot.created_at.desc())
         )
         result = await db.execute(stmt)
@@ -78,6 +75,14 @@ class ChatbotService:
             chatbots=chatbot_responses,
             total=len(chatbot_responses)
         )
+
+    @staticmethod
+    async def get_user_chatbots(db: AsyncSession, user: User) -> ChatbotListResponse:
+        """Get chatbots for a specific user's client"""
+        if not user.client_id:
+            return ChatbotListResponse(chatbots=[], total=0)
+        
+        return await ChatbotService.get_client_chatbots(db, user.client_id)
     
     @staticmethod
     async def get_chatbot_by_id(db: AsyncSession, chatbot_id: str, user: User) -> Optional[ChatbotResponse]:

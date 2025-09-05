@@ -92,25 +92,8 @@ def get_current_user(
     return _get_current_user
 
 
-# Convenience functions for backward compatibility and common use cases
-async def get_current_admin_user(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    """Get the current user and ensure they are an admin"""
-    return await get_current_user(required_roles=[UserRole.ADMIN])(request, db)
-
-
-async def get_current_client_user(
-    request: Request,
-    db: AsyncSession = Depends(get_db)
-) -> User:
-    """Get the current user and ensure they are a client"""
-    return await get_current_user(required_roles=[UserRole.CLIENT])(request, db)
-
-
-async def get_client_for_user(
-    current_user: User = Depends(get_current_user(required_roles=[UserRole.CLIENT])),
+async def get_current_client(
+    current_user: User = Depends(get_current_user()),
     db: AsyncSession = Depends(get_db)
 ) -> Client:
     """Get the client associated with the current user"""
@@ -159,20 +142,6 @@ def verify_client_access(client_id: str):
     return _verify_client_access
 
 
-
-
-
-# Additional convenience functions for common role combinations
-def get_any_authenticated_user():
-    """Get any authenticated user regardless of role"""
-    return get_current_user()
-
-
-def get_admin_or_client_user():
-    """Get user that is either admin or client"""
-    return get_current_user(required_roles=[UserRole.ADMIN, UserRole.CLIENT])
-
-
 async def get_optional_user(
     request: Request,
     db: AsyncSession = Depends(get_db)
@@ -200,3 +169,13 @@ async def get_optional_user(
         return user
     except Exception:
         return None
+
+
+def get_admin_or_client_user():
+    """Convenience function for endpoints that allow both admin and client access"""
+    return get_current_user(required_roles=[UserRole.ADMIN, UserRole.CLIENT])
+
+
+def get_any_authenticated_user():
+    """Convenience function for endpoints that allow any authenticated user"""
+    return get_current_user()

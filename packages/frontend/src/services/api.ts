@@ -3,10 +3,6 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
-// Debug: Log the actual environment variable value
-console.log('Environment VITE_API_URL:', import.meta.env.VITE_API_URL)
-console.log('Using API_BASE_URL:', API_BASE_URL)
-
 export interface N8nApiResponse {
   response: string
   message_id: string
@@ -132,6 +128,83 @@ class ApiService {
         chatbot_id: chatbotId,
       }),
     })
+  }
+}
+
+// System API for admin operations
+export interface SyncRequest {
+  type: 'client' | 'all' | 'quick'
+  client_id?: string
+  options?: Record<string, any>
+}
+
+export interface SyncResult {
+  message: string
+  task_id?: string
+  result?: any
+}
+
+export interface CacheStats {
+  redis_info: Record<string, any>
+  cache_summary: Record<string, any>
+  client_cache_status: Array<{
+    client_id: string
+    client_name: string
+    cache_status: string
+  }>
+}
+
+export interface CacheResult {
+  message: string
+  cleared_keys: number
+}
+
+export interface TaskStatus {
+  task_id: string
+  status: 'pending' | 'running' | 'completed' | 'failed'
+  result?: any
+  error?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface WorkerStats {
+  active_workers: number
+  total_tasks: number
+  pending_tasks: number
+  completed_tasks: number
+  failed_tasks: number
+}
+
+export class SystemApi {
+  static async sync(request: SyncRequest): Promise<SyncResult> {
+    return ApiService.request<SyncResult>('/api/v1/system/sync', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    })
+  }
+
+  static async getCacheStats(): Promise<CacheStats> {
+    return ApiService.request<CacheStats>('/api/v1/system/cache/stats')
+  }
+
+  static async clearCache(clientId?: string, pattern?: string): Promise<CacheResult> {
+    const params = new URLSearchParams()
+    if (clientId) params.append('client_id', clientId)
+    if (pattern) params.append('pattern', pattern)
+    
+    const queryString = params.toString() ? `?${params.toString()}` : ''
+    return ApiService.request<CacheResult>(`/api/v1/system/cache${queryString}`, {
+      method: 'DELETE',
+    })
+  }
+
+  static async getTaskStatus(taskId: string): Promise<TaskStatus> {
+    return ApiService.request<TaskStatus>(`/api/v1/system/tasks/${taskId}`)
+  }
+
+  static async getWorkerStats(): Promise<WorkerStats> {
+    return ApiService.request<WorkerStats>('/api/v1/system/worker-stats')
   }
 }
 

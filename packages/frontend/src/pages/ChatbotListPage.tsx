@@ -22,7 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import { ClientApi } from '@/services/clientApi'
-import { ChatbotApi, type Chatbot, type CreateChatbotData } from '@/services/chatbotApi'
+import { AutomationApi, type Chatbot, type CreateChatbotData } from '@/services/chatbotApi'
 
 export function ChatbotListPage() {
   const { isAdmin, user } = useAuth()
@@ -37,10 +37,10 @@ export function ChatbotListPage() {
     client_id: ''
   })
 
-  // Fetch chatbots
+  // Fetch chatbots using new consolidated API
   const { data: chatbotsData, isLoading } = useQuery({
-    queryKey: ['chatbots'],
-    queryFn: isAdmin ? ChatbotApi.getAll : ChatbotApi.getMine
+    queryKey: ['automation', 'chatbots'],
+    queryFn: () => AutomationApi.getChatbots()
   })
 
   const chatbots = chatbotsData?.chatbots || []
@@ -54,9 +54,9 @@ export function ChatbotListPage() {
 
   // Create chatbot mutation
   const createMutation = useMutation({
-    mutationFn: ChatbotApi.create,
+    mutationFn: AutomationApi.createChatbot,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chatbots'] })
+      queryClient.invalidateQueries({ queryKey: ['automation', 'chatbots'] })
       setShowCreateDialog(false)
       resetForm()
       toast.success('Chatbot created successfully')
@@ -69,9 +69,9 @@ export function ChatbotListPage() {
   // Update chatbot mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: { id: string; data: Partial<CreateChatbotData> }) =>
-      ChatbotApi.update(id, data),
+      AutomationApi.updateChatbot(id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chatbots'] })
+      queryClient.invalidateQueries({ queryKey: ['automation', 'chatbots'] })
       setEditingChatbot(null)
       resetForm()
       toast.success('Chatbot updated successfully')
@@ -83,9 +83,9 @@ export function ChatbotListPage() {
 
   // Delete chatbot mutation
   const deleteMutation = useMutation({
-    mutationFn: ChatbotApi.delete,
+    mutationFn: AutomationApi.deleteChatbot,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['chatbots'] })
+      queryClient.invalidateQueries({ queryKey: ['automation', 'chatbots'] })
       toast.success('Chatbot deleted successfully')
     },
     onError: (error: any) => {

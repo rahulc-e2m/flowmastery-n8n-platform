@@ -38,36 +38,32 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'
 export function MetricsPage() {
   const { isAdmin, isClient } = useAuth()
 
-  // Admin queries
-  const { data: adminMetrics, isLoading: adminLoading } = useQuery({
-    queryKey: ['admin-metrics'],
-    queryFn: MetricsApi.getAllClientsMetrics,
-    enabled: isAdmin,
+  // Consolidated queries - works for both admin and client
+  const { data: overviewMetrics, isLoading: overviewLoading } = useQuery({
+    queryKey: ['metrics-overview'],
+    queryFn: () => MetricsApi.getOverview(),
     refetchInterval: 30000,
   })
 
-  const { data: clients } = useQuery({
+  const { data: workflowMetrics, isLoading: workflowsLoading } = useQuery({
+    queryKey: ['metrics-workflows'],
+    queryFn: () => MetricsApi.getWorkflows(),
+    refetchInterval: 30000,
+  })
+
+  const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: ClientApi.getClients,
     enabled: isAdmin,
   })
 
-
-
-  // Client queries
-  const { data: clientMetrics, isLoading: clientMetricsLoading } = useQuery({
-    queryKey: ['my-metrics'],
-    queryFn: MetricsApi.getMyMetrics,
-    enabled: isClient,
-    refetchInterval: 30000,
-  })
-
-  const { data: clientWorkflows, isLoading: clientWorkflowsLoading } = useQuery({
-    queryKey: ['my-workflows'],
-    queryFn: MetricsApi.getMyWorkflowMetrics,
-    enabled: isClient,
-    refetchInterval: 30000,
-  })
+  // Map consolidated data to expected format for backward compatibility
+  const adminMetrics = isAdmin ? overviewMetrics : undefined
+  const clientMetrics = isClient ? overviewMetrics : undefined
+  const clientWorkflows = workflowMetrics
+  const adminLoading = overviewLoading
+  const clientMetricsLoading = overviewLoading
+  const clientWorkflowsLoading = workflowsLoading
 
   if (isAdmin) {
     return (

@@ -40,7 +40,7 @@ interface Conversation {
   last_user_message: string
 }
 
-import { ChatbotApi } from '@/services/chatbotApi'
+import { AutomationApi } from '@/services/chatbotApi'
 
 export function ChatbotPage() {
   const { id } = useParams<{ id: string }>()
@@ -54,14 +54,14 @@ export function ChatbotPage() {
   const [conversationId, setConversationId] = useState<string | null>(null)
   const [showScrollButton, setShowScrollButton] = useState(false)
   const [activeTab, setActiveTab] = useState('chat')
-  const [shouldLoadHistory, setShouldLoadHistory] = useState(true)
+  const [shouldLoadHistory, setShouldLoadHistory] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
 
   // Fetch chatbot details
   const { data: chatbot, isLoading: isChatbotLoading } = useQuery({
     queryKey: ['chatbot', id],
-    queryFn: () => ChatbotApi.getById(id!),
+    queryFn: () => AutomationApi.getChatbot(id!),
     enabled: !!id
   })
 
@@ -69,26 +69,11 @@ export function ChatbotPage() {
   const { data: chatHistory } = useQuery({
     queryKey: ['chatHistory', id, conversationId],
     queryFn: async () => {
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const url = conversationId
-        ? `${API_BASE_URL}/api/v1/chat/${id}/history?conversation_id=${conversationId}`
-        : `${API_BASE_URL}/api/v1/chat/${id}/history`
-
-      const response = await fetch(url, {
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch chat history')
-      }
-
-      const result = await response.json()
-      console.log('Chat history API response:', result) // Debug log
-
-      // The backend returns data wrapped in a response format
-      return result.data || result
+      // Only pass conversation_id filter if we have a specific conversation selected
+      const filters = conversationId ? { conversation_id: conversationId } : undefined
+      return AutomationApi.getChatHistory(id!, filters)
     },
-    enabled: !!id && shouldLoadHistory && conversationId !== null,
+    enabled: !!id && shouldLoadHistory && !!conversationId,
     refetchOnWindowFocus: false
   })
 
@@ -96,20 +81,7 @@ export function ChatbotPage() {
   const { data: conversations, isLoading: conversationsLoading } = useQuery({
     queryKey: ['conversations', id],
     queryFn: async () => {
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${API_BASE_URL}/api/v1/chat/${id}/conversations`, {
-        credentials: 'include'
-      })
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch conversations')
-      }
-
-      const result = await response.json()
-      console.log('Conversations API response:', result) // Debug log
-
-      // The backend returns data wrapped in a response format
-      return result.data || result
+      return AutomationApi.getChatConversations(id!)
     },
     enabled: !!id,
     refetchOnWindowFocus: false
@@ -123,7 +95,6 @@ export function ChatbotPage() {
 
   // Debug effect to log conversations data
   useEffect(() => {
-    console.log('Conversations data updated:', conversations)
   }, [conversations])
 
   // Load chat history into messages state
@@ -183,26 +154,12 @@ export function ChatbotPage() {
     setIsLoading(true)
 
     try {
-      // Use our backend API instead of calling webhook directly
-      const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
-      const response = await fetch(`${API_BASE_URL}/api/v1/chat/`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Include cookies for authentication
-        body: JSON.stringify({
-          message: userMessage.content,
-          chatbot_id: id,
-          conversation_id: conversationId
-        })
+      // Use AutomationApi for sending messages
+      const data = await AutomationApi.sendMessage({
+        message: userMessage.content,
+        chatbot_id: id,
+        conversation_id: conversationId
       })
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data = await response.json()
 
       // Use the response from our backend API
       const botResponseText = data.response || 'No response received'
@@ -229,7 +186,6 @@ export function ChatbotPage() {
       // Don't refetch history immediately to avoid overwriting current messages
       // The messages are already persisted on the backend
     } catch (error: any) {
-      console.error('Error sending message:', error)
       const errorMessage: ChatMessage = {
         id: `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
         type: 'bot',
@@ -273,7 +229,6 @@ export function ChatbotPage() {
       setActiveTab('chat')
       toast.success('Conversation loaded')
     } catch (error) {
-      console.error('Error loading conversation:', error)
       toast.error('Failed to load conversation')
     }
   }
@@ -470,9 +425,9 @@ export function ChatbotPage() {
                                 : 'bg-background border border-border/50 text-foreground'
                                 }`}>
                                 {message.type === 'bot' ? (
-                                  <MarkdownMessage 
-                                    content={message.content} 
-                                    className="text-sm leading-relaxed" 
+                                  <MarkdownMessage
+                                    content={message.content}
+                                    className="text-sm leading-relaxed"
                                   />
                                 ) : (
                                   <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{message.content}</p>

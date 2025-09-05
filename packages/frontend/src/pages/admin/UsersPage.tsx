@@ -42,7 +42,7 @@ export function UsersPage() {
     queryFn: AuthApi.getInvitations,
   })
 
-  const { data: clients } = useQuery({
+  const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: ClientApi.getClients,
   })

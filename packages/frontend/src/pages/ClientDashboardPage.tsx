@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { MetricsApi } from '@/services/metricsApi'
 import { ClientApi } from '@/services/clientApi'
 import { useAuth } from '@/contexts/AuthContext'
@@ -39,11 +39,15 @@ import {
 export function ClientDashboardPage() {
   const { clientId } = useParams<{ clientId: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { isAdmin } = useAuth()
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedWorkflows, setSelectedWorkflows] = useState<string[]>([])
   const [selectedExecutions, setSelectedExecutions] = useState<string[]>([])
   const [activeTab, setActiveTab] = useState('workflows')
+  
+  // Check if we came from the dashboard
+  const fromDashboard = location.state?.fromDashboard
 
   const clientIdStr = clientId || ''
 
@@ -186,24 +190,26 @@ export function ClientDashboardPage() {
       >
         <div className="flex items-center space-x-4">
           <div className="flex items-center space-x-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => navigate('/dashboard')}
               className="flex items-center space-x-2"
             >
               <ArrowLeft className="w-4 h-4" />
               <span>Dashboard</span>
             </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => navigate('/metrics')}
-              className="flex items-center space-x-2"
-            >
-              <BarChart3 className="w-4 h-4" />
-              <span>Metrics</span>
-            </Button>
+            {!fromDashboard && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate('/metrics')}
+                className="flex items-center space-x-2"
+              >
+                <BarChart3 className="w-4 h-4" />
+                <span>Metrics</span>
+              </Button>
+            )}
           </div>
           <div>
             <div className="flex items-center space-x-3 mb-2">

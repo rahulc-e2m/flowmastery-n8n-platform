@@ -60,15 +60,15 @@ export function WorkflowsPage({ workflowType }: WorkflowsPageProps) {
   const [minutes, setMinutes] = React.useState<number>(30)
   const clientId = isAdmin && clientFilter && clientFilter !== 'all' ? clientFilter : undefined
 
-  const { data: clients } = useQuery({
+  const { data: clients = [] } = useQuery({
     queryKey: ['clients'],
     queryFn: ClientApi.getClients,
     enabled: isAdmin,
   })
 
   const { data, isLoading, refetch } = useQuery({
-    queryKey: ['workflows', clientId ?? 'mine', activeFilter],
-    queryFn: () => (isAdmin ? WorkflowsApi.listAll(clientId, activeFilter) : WorkflowsApi.listMine(activeFilter)),
+    queryKey: ['workflows', clientId, activeFilter === 'active'],
+    queryFn: () => WorkflowsApi.getWorkflows(clientId, activeFilter === 'active' ? true : activeFilter === 'inactive' ? false : undefined),
   })
 
   // Client-side filtering function
@@ -437,9 +437,6 @@ function ChatbotInterface() {
       // Store the last response for debugging
       setLastResponse(data)
       
-      // Log the full response for debugging
-      console.log('Full n8n webhook response:', data)
-      
       // Enhanced response parsing to handle various n8n response formats
       let botResponseText = ''
       
@@ -492,7 +489,6 @@ function ChatbotInterface() {
       
       // If we still don't have a response, show the structure to the user
       if (!botResponseText) {
-        console.warn('Could not parse n8n response. Available fields:', Object.keys(data))
         botResponseText = `I received a response, but couldn't parse it. Response structure: ${JSON.stringify(Object.keys(data))}. Please check the n8n workflow output format.`
       }
       
@@ -505,7 +501,6 @@ function ChatbotInterface() {
 
       setMessages(prev => [...prev, botMessage])
     } catch (error) {
-      console.error('Error calling webhook:', error)
       const errorMessage = {
         id: (Date.now() + 1).toString(),
         text: 'Sorry, I\'m having trouble connecting to my brain right now. Please check the configuration or try again later.',

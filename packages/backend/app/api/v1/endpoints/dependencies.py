@@ -16,7 +16,7 @@ from app.schemas.dependency import (
 from app.core.decorators import validate_input, sanitize_response
 from app.core.response_formatter import format_response
 
-router = APIRouter(prefix="/dependencies", tags=["dependencies"])
+router = APIRouter(tags=["dependencies"])
 
 
 def get_dependency_service(db: AsyncSession = Depends(get_db)) -> DependencyService:

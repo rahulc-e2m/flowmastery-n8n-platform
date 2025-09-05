@@ -214,8 +214,9 @@ def create_app() -> FastAPI:
             db_healthy = False
             try:
                 from app.database import engine
+                from sqlalchemy import text
                 async with engine.begin() as conn:
-                    await conn.execute("SELECT 1")
+                    await conn.execute(text("SELECT 1"))
                 db_healthy = True
             except Exception as e:
                 logger.warning(f"Database health check failed: {e}")

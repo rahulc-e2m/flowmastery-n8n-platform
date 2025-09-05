@@ -37,43 +37,37 @@ const COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#06B6D4'
 export function DashboardPage() {
   const { isAdmin, isClient } = useAuth()
 
-  // Admin dashboard data
-  const { data: adminMetrics, isLoading: adminLoading } = useQuery({
-    queryKey: ['admin-metrics'],
-    queryFn: MetricsApi.getAllClientsMetrics,
-    enabled: isAdmin,
+  // Consolidated dashboard data - works for both admin and client
+  const { data: overviewMetrics, isLoading: overviewLoading } = useQuery({
+    queryKey: ['metrics-overview'],
+    queryFn: () => MetricsApi.getOverview(),
     refetchInterval: 30000, // 30 seconds
     staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
   })
 
-  const { data: clients, isLoading: clientsLoading } = useQuery({
+  const { data: workflowMetrics, isLoading: workflowsLoading } = useQuery({
+    queryKey: ['metrics-workflows'],
+    queryFn: () => MetricsApi.getWorkflows(),
+    refetchInterval: 30000,
+    staleTime: 5 * 60 * 1000,
+  })
+
+  const { data: clients = [], isLoading: clientsLoading } = useQuery({
     queryKey: ['clients'],
     queryFn: ClientApi.getClients,
     enabled: isAdmin,
   })
 
-  // Client dashboard data
-  const { data: clientMetrics, isLoading: clientMetricsLoading } = useQuery({
-    queryKey: ['my-metrics'],
-    queryFn: MetricsApi.getMyMetrics,
-    enabled: isClient,
-    refetchInterval: 30000, // 30 seconds
-    staleTime: 5 * 60 * 1000, // Consider data stale after 5 minutes
-  })
-
-  const { data: clientWorkflows, isLoading: clientWorkflowsLoading } = useQuery({
-    queryKey: ['my-workflows'],
-    queryFn: MetricsApi.getMyWorkflowMetrics,
-    enabled: isClient,
-    refetchInterval: 30000,
-    staleTime: 5 * 60 * 1000,
-  })
+  // Legacy support - map consolidated data to expected format
+  const adminMetrics = isAdmin ? overviewMetrics : undefined
+  const clientMetrics = isClient ? overviewMetrics : undefined
+  const clientWorkflows = workflowMetrics
 
   if (isAdmin) {
     return <AdminDashboard 
       metrics={adminMetrics} 
       clients={clients}
-      isLoading={adminLoading || clientsLoading} 
+      isLoading={overviewLoading || clientsLoading} 
     />
   }
 
@@ -81,7 +75,7 @@ export function DashboardPage() {
     return <ClientDashboard 
       metrics={clientMetrics}
       workflows={clientWorkflows}
-      isLoading={clientMetricsLoading || clientWorkflowsLoading}
+      isLoading={overviewLoading || workflowsLoading}
     />
   }
 
@@ -227,7 +221,7 @@ function AdminDashboard({ metrics, isLoading }: any) {
               <ClientMetricsCard
                 client={client}
                 index={index}
-                onClick={() => navigate(`/client/${client.client_id}`)}
+                onClick={() => navigate(`/client/${client.client_id}`, { state: { fromDashboard: true } })}
               />
             </motion.div>
           ))}

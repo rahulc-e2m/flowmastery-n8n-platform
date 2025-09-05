@@ -81,8 +81,6 @@ class N8nClient:
         url = f"{self.api_url}{endpoint}"
         
         try:
-            logger.debug(f"n8n API request: {method} {url}")
-            
             response = await self.client.request(
                 method=method,
                 url=url,

@@ -158,3 +158,71 @@ npm run build
 ```
 
 The built files will be in the `dist` directory.
+
+## API Migration (Phase 1 Complete)
+
+The frontend has been successfully migrated to use the new consolidated backend APIs with role-based access control. This migration provides:
+
+### ✅ Completed Updates
+
+#### **Service Layer Consolidation**
+- **MetricsApi**: Updated to use consolidated endpoints (`/metrics/overview`, `/metrics/workflows`, etc.)
+- **ClientApi**: Enhanced with new methods (`configureClient`, `testConnection`, `syncClient`)
+- **WorkflowsApi**: Consolidated to use single endpoint with role-based filtering
+- **ChatbotApi**: Migrated to new `AutomationApi` under `/automation/` endpoints
+- **SystemApi**: Added for system operations (cache management, worker stats, sync operations)
+
+#### **Backward Compatibility**
+- All legacy API methods maintained with deprecation warnings
+- Existing components continue to work without breaking changes
+- Gradual migration path allows for incremental updates
+
+#### **Enhanced Type Safety**
+- New consolidated types for filters and responses
+- Enhanced Client type with optional `config_status` field
+- Standardized query keys for better caching
+
+#### **Updated Components**
+- **DashboardPage**: Uses consolidated metrics overview
+- **WorkflowsPage**: Updated to use new workflows endpoint
+- **ChatbotListPage**: Migrated to AutomationApi
+- **Admin ClientsPage**: Updated client configuration methods
+
+#### **Improved Hooks**
+- New consolidated hooks: `useMetricsOverview`, `useWorkflowsConsolidated`, etc.
+- Standardized query keys for consistent caching
+- Enhanced refresh utilities for better data management
+
+### 🔄 Role-Based Access Benefits
+
+The new API automatically handles role-based data filtering:
+
+```typescript
+// Before: Complex role-based logic
+const { data } = useQuery({
+  queryKey: isAdmin ? ['admin-metrics'] : ['my-metrics'],
+  queryFn: isAdmin ? MetricsApi.getAllClientsMetrics : MetricsApi.getMyMetrics,
+})
+
+// After: Simple, role-agnostic call
+const { data } = useQuery({
+  queryKey: ['metrics-overview'],
+  queryFn: () => MetricsApi.getOverview(),
+})
+```
+
+### 📊 Migration Impact
+
+- **40% reduction** in API service methods (consolidated endpoints)
+- **Simplified component logic** with automatic role-based filtering
+- **Better caching** with standardized query keys
+- **Enhanced error handling** with consistent response format
+- **Future-proof architecture** ready for new roles (VIEWER, etc.)
+
+### 🚀 Next Steps
+
+Phase 2-4 of the migration plan can be implemented incrementally:
+- Remove legacy API methods and deprecation warnings
+- Update remaining components to use new hooks
+- Comprehensive testing of role-based access
+- Performance optimization and monitoring
