@@ -20,6 +20,8 @@ import HomePage from '@/pages/HomePage'
 import { SettingsPage } from '@/pages/SettingsPage'
 import { DependenciesPage } from '@/pages/DependenciesPage'
 import { AdminDependenciesPage } from '@/pages/admin/AdminDependenciesPage'
+import { VistARAPage } from '@/pages/VistARAPage'
+import { WorkflowDetailPage } from '@/pages/WorkflowDetailPage'
 
 // Create a client
 const queryClient = new QueryClient({
@@ -242,6 +244,26 @@ function AppRoutes() {
           <ProtectedRoute requireAdmin>
             <DashboardLayout>
               <AdminDependenciesPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vistara"
+        element={
+          <ProtectedRoute requireAdmin>
+            <DashboardLayout>
+              <VistARAPage />
+            </DashboardLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vistara/workflow/:workflowId"
+        element={
+          <ProtectedRoute requireAdmin>
+            <DashboardLayout>
+              <WorkflowDetailPage />
             </DashboardLayout>
           </ProtectedRoute>
         }

@@ -6,6 +6,8 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import auth, clients, metrics, workflows, cache, tasks, guides
 from app.api.v1.endpoints.chatbots import router as chatbots_router
 from app.api.v1.endpoints.system import router as system_router
+from app.api.v1.endpoints.vistara_workflows import router as vistara_workflows_router
+from app.api.v1.endpoints.vistara_categories import router as vistara_categories_router
 
 api_router = APIRouter()
 
@@ -25,3 +27,7 @@ api_router.include_router(tasks.router, prefix="/tasks", tags=["tasks"])
 
 # User guidance endpoints
 api_router.include_router(guides.router, prefix="/guides", tags=["guides"])
+
+# Vistara endpoints
+api_router.include_router(vistara_workflows_router, prefix="/vistara/workflows", tags=["vistara-workflows"])
+api_router.include_router(vistara_categories_router, prefix="/vistara/categories", tags=["vistara-categories"])

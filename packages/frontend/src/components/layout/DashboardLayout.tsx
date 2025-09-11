@@ -20,6 +20,7 @@ import {
   Zap,
 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { VistaraIcon } from '@/components/VistaraIcon'
 import { MetricsApi } from '@/services/metricsApi'
 import { Button } from '@/components/ui/button'
 
@@ -43,6 +44,7 @@ import {
 interface DashboardLayoutProps {
   children: React.ReactNode
 }
+
 
 export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
@@ -153,6 +155,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       show: isAdmin,
       description: 'User management'
     },
+    {
+      name: 'Vistara Insights',
+      href: '/vistara',
+      icon: VistaraIcon,
+      show: isAdmin,
+      description: 'Curated workflow analytics',
+      isLogoOnly: true
+    },
   ]
 
   const isActive = (href: string) => {
@@ -227,30 +237,40 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     whileHover="hover"
                     whileTap={{ scale: 0.98 }}
                   >
-                    <motion.div
-                      className={`
-                        p-1.5 rounded-lg transition-colors
-                        ${isItemActive 
-                          ? 'bg-primary/20 text-primary' 
-                          : 'bg-muted/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground'
-                        }
-                      `}
-                      whileHover={{ scale: 1.1 }}
-                    >
-                      <item.icon className="w-4 h-4" />
-                    </motion.div>
-                    {!sidebarCollapsed && (
-                      <div className="flex-1">
-                        <div className="font-medium flex items-center">
-                          {item.name}
-                          {item.hasSubMenu && (
-                            <ChevronDown className={`w-3 h-3 ml-2 text-muted-foreground transition-transform ${
-                              clickedItem === item.name ? 'rotate-180' : ''
-                            }`} />
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground">{item.description}</div>
+                    {item.isLogoOnly ? (
+                      // Logo-only rendering for Vistara
+                      <div className="flex justify-center items-center w-full py-2">
+                        <item.icon className="w-4 h-4" isLogoOnly={!sidebarCollapsed} />
                       </div>
+                    ) : (
+                      // Regular navigation item rendering
+                      <>
+                        <motion.div
+                          className={`
+                            p-1.5 rounded-lg transition-colors
+                            ${isItemActive 
+                              ? 'bg-primary/20 text-primary' 
+                              : 'bg-muted/50 text-muted-foreground group-hover:bg-accent group-hover:text-foreground'
+                            }
+                          `}
+                          whileHover={{ scale: 1.1 }}
+                        >
+                          <item.icon className="w-4 h-4" />
+                        </motion.div>
+                        {!sidebarCollapsed && (
+                          <div className="flex-1">
+                            <div className="font-medium flex items-center">
+                              {item.name}
+                              {item.hasSubMenu && (
+                                <ChevronDown className={`w-3 h-3 ml-2 text-muted-foreground transition-transform ${
+                                  clickedItem === item.name ? 'rotate-180' : ''
+                                }`} />
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{item.description}</div>
+                          </div>
+                        )}
+                      </>
                     )}
                     {isItemActive && !sidebarCollapsed && (
                       <motion.div

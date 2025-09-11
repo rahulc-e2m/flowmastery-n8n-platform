@@ -11,6 +11,8 @@ from .sync_state import SyncState
 from .guide import Guide
 from .chatbot import Chatbot
 from .chat_message import ChatMessage
+from .vistara_workflow import VistaraWorkflow, WorkflowCategory
+from .vistara_category import VistaraCategory
 
 __all__ = [
     "Base", 
@@ -27,5 +29,8 @@ __all__ = [
     "SyncState",
     "Guide",
     "Chatbot",
-    "ChatMessage"
+    "ChatMessage",
+    "VistaraWorkflow",
+    "WorkflowCategory",
+    "VistaraCategory"
 ]
