@@ -51,10 +51,9 @@ async def lifespan(app: FastAPI):
     try:
         # Test database connection
         async with engine.begin() as conn:
-            # Create tables if they don't exist (for development)
-            # In production, use Alembic migrations
-            if settings.DEBUG:
-                await conn.run_sync(Base.metadata.create_all)
+            # Note: Database tables should be created via Alembic migrations
+            # Run manually: docker-compose exec backend alembic upgrade head
+            pass
         print("✅ Database connection established")
     except Exception as e:
         print(f"⚠️  Database connection failed: {e}")
